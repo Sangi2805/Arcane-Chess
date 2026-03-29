@@ -11,7 +11,7 @@ Instructions:
 
 Project Group Members:
 
-* Group Member Name 1 (Student ID #, email)
+* Sangaranarayanan 202583140 ssangaranara@mun.ca
 * Group Member Name 2 (Student ID #, email)
 
 Project URL
