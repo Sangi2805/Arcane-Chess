@@ -1,4 +1,4 @@
-# AI6001_Arcane-Chess-Arena
+# AI6001_Arcane-Chess
 
 Instructions:
 
