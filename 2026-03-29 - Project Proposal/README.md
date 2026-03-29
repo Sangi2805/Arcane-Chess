@@ -1,5 +1,3 @@
 # Project Proposal
-
-Your project proposal should be written here. It should be about 1 page in length giving as many details as possible about the project including game functionality and brief architecture overview.
-
-It should be completed by the due date in the folder name
+Project Proposal: Arcane-Chess
+The goal of this project is to develop a browser-based chess application that evolves over multiple versions, starting from a simple playable system and gradually adding intelligent and immersive features. The inspiration comes from platforms like Chess.com and Lichess, but the focus of this project is to first build a strong player vs engine experience and then enhance it with feedback and visualization features over time.
