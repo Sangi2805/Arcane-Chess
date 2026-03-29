@@ -1,4 +1,4 @@
-# AI6001_Project_Name_Here
+# AI6001_Arcane-Chess-Arena
 
 Instructions:
 
