@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arcane Chess</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero panel">
+        <div>
+          <p class="eyebrow">Phase 2 Playable Core</p>
+          <h1>Arcane Chess</h1>
+          <p class="lead">
+            Challenge Stockfish inside the first playable milestone of Arcane
+            Chess. Choose your side, tune the engine, and duel on a responsive
+            fantasy board.
+          </p>
+        </div>
+
+        <div class="hero-status">
+          <div class="status-group">
+            <span class="label">Game Status</span>
+            <strong id="status-text">Loading game...</strong>
+          </div>
+          <div class="status-group">
+            <span class="label">Feedback</span>
+            <strong id="feedback-text">Preparing the board.</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="play-area">
+        <article class="panel controls-panel">
+          <div class="controls-header">
+            <h2>Match Setup</h2>
+            <button id="new-game-button" type="button">New Game</button>
+          </div>
+
+          <label class="control">
+            <span>Difficulty</span>
+            <select id="difficulty-select">
+              <option value="easy">Easy</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="hard">Hard</option>
+              <option value="grandmaster">Grand Master</option>
+            </select>
+          </label>
+
+          <fieldset class="control side-choice">
+            <legend>Play As</legend>
+            <label>
+              <input type="radio" name="player-color" value="white" checked />
+              <span>White</span>
+            </label>
+            <label>
+              <input type="radio" name="player-color" value="black" />
+              <span>Black</span>
+            </label>
+          </fieldset>
+
+          <div class="summary-grid">
+            <div class="summary-card">
+              <span class="label">You</span>
+              <strong id="player-side">White</strong>
+            </div>
+            <div class="summary-card">
+              <span class="label">Engine</span>
+              <strong id="engine-side">Black</strong>
+            </div>
+            <div class="summary-card">
+              <span class="label">Turn</span>
+              <strong id="turn-indicator">White</strong>
+            </div>
+            <div class="summary-card">
+              <span class="label">Last Move</span>
+              <strong id="last-move-text">None</strong>
+            </div>
+          </div>
+
+          <div id="promotion-panel" class="promotion-panel hidden">
+            <span class="label">Choose Promotion</span>
+            <div class="promotion-actions">
+              <button type="button" data-promotion="q">Queen</button>
+              <button type="button" data-promotion="r">Rook</button>
+              <button type="button" data-promotion="b">Bishop</button>
+              <button type="button" data-promotion="n">Knight</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel board-panel">
+          <div class="board-shell">
+            <div id="board" class="board" aria-label="Arcane Chess Board"></div>
+          </div>
+        </article>
+
+        <article class="panel moves-panel">
+          <div class="controls-header">
+            <h2>Move Chronicle</h2>
+            <span id="api-health" class="pill">API</span>
+          </div>
+          <div id="move-list" class="move-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

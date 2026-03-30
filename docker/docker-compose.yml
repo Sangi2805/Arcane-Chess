@@ -1,0 +1,23 @@
+services:
+  arcane-chess:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "4000:4000"
+    env_file:
+      - ../.env
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:
+
