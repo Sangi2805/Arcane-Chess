@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Arcane Chess
 
 Arcane Chess is a browser-based chess project. Phase 2 delivers the first fully playable local milestone: a responsive 2D board in the browser, legal move validation through `chess.js`, and bot play against Stockfish.
@@ -141,3 +142,33 @@ If you run `npm install` from `server/`, both are included automatically from `p
 ```bash
 docker compose -f docker/docker-compose.yml up --build
 ```
+=======
+# AI6001_Arcane-Chess
+
+Instructions:
+
+* Click the `Use this template` green button in the top-right of the repo
+* Create a new *PRIVATE* repository from this template
+* Add user `davechurchill` as a collaborator (Settings > Manage Access > Add People)
+* Click the pencil icon in the top-right of this section to edit straight from the GitHub website
+* Edit your `README.md` file to include your group info, and remove this instruction section
+* Once your project has been submitted, you can change it to public
+
+Project Group Members:
+
+* Sangaranarayanan Sangaranarayanan Viswanathan 202583140 ssangaranara@mun.ca
+* Md Shahriar Rashid 202580849 msrashid@mun.ca
+
+Project URL
+
+* Paste your hosted web application URL here so I can test it
+
+Project Videos:
+
+* Project Presentation: YouTube URL
+
+Project Setup / Installation:
+
+* Your project setup and installation instructions go here
+* Feel free to include screenshots if you want
+>>>>>>> c00a71464d80fa91ff795d1d36a8f100111933ac
