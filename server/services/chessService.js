@@ -9,7 +9,22 @@ const COLOR_LABELS = {
 
 const DEFAULT_PROMOTION = "q";
 
-const createChessGame = (fen) => new Chess(fen);
+const createChessGame = () => new Chess();
+
+const restoreChessGame = ({ fen, pgn } = {}) => {
+  const chess = createChessGame();
+
+  if (pgn) {
+    chess.loadPgn(pgn);
+    return chess;
+  }
+
+  if (fen) {
+    chess.load(fen);
+  }
+
+  return chess;
+};
 
 const getColorLabel = (color) => COLOR_LABELS[color] || "white";
 
@@ -200,5 +215,6 @@ module.exports = {
   applyMove,
   createChessGame,
   getChessServiceStatus,
+  restoreChessGame,
   serializeGame
 };

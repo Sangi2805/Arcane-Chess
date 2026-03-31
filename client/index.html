@@ -16,7 +16,7 @@
     <main class="shell">
       <section class="hero panel">
         <div>
-          <p class="eyebrow">Phase 2 Playable Core</p>
+          <p class="eyebrow">Phase 3 Product Foundation</p>
           <h1>Arcane Chess</h1>
           <p class="lead">
             Challenge Stockfish inside the first playable milestone of Arcane
@@ -40,8 +40,26 @@
       <section class="play-area">
         <article class="panel controls-panel">
           <div class="controls-header">
-            <h2>Match Setup</h2>
-            <button id="new-game-button" type="button">New Game</button>
+            <div>
+              <h2>Match Setup</h2>
+              <p id="guest-subtitle" class="panel-subtitle">
+                Forging guest continuity...
+              </p>
+            </div>
+            <div class="controls-actions">
+              <button id="new-game-button" type="button">New Game</button>
+              <button id="save-game-button" class="button-secondary" type="button">
+                Save Game
+              </button>
+            </div>
+          </div>
+
+          <div class="guest-card">
+            <span class="label">Guest Profile</span>
+            <strong id="guest-name">Preparing guest sigil...</strong>
+            <span id="guest-meta" class="card-copy">
+              Linking local continuity and archives.
+            </span>
           </div>
 
           <label class="control">
@@ -107,10 +125,100 @@
             <h2>Move Chronicle</h2>
             <span id="api-health" class="pill">API</span>
           </div>
-          <div id="move-list" class="move-list"></div>
+
+          <div class="record-tabs" role="tablist" aria-label="Game records">
+            <button
+              type="button"
+              class="record-tab active"
+              data-record-view="moves"
+            >
+              Moves
+            </button>
+            <button type="button" class="record-tab" data-record-view="saves">
+              Resume
+            </button>
+            <button type="button" class="record-tab" data-record-view="history">
+              History
+            </button>
+          </div>
+
+          <section class="record-view" data-view-panel="moves">
+            <div id="move-list" class="move-list"></div>
+          </section>
+
+          <section class="record-view hidden" data-view-panel="saves">
+            <div class="record-section-header">
+              <span class="label">Resume Game</span>
+              <span id="saved-games-count" class="section-count">0 saved</span>
+            </div>
+            <div id="saved-games-list" class="record-list"></div>
+          </section>
+
+          <section class="record-view hidden" data-view-panel="history">
+            <div class="record-section-header">
+              <span class="label">Completed Games</span>
+              <span id="history-count" class="section-count">0 recorded</span>
+            </div>
+            <div id="history-list" class="record-list"></div>
+          </section>
         </article>
       </section>
     </main>
+
+    <div id="history-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-history></div>
+      <div
+        class="modal-card panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-detail-title"
+      >
+        <div class="controls-header modal-header">
+          <h2 id="history-detail-title">Completed Game</h2>
+          <button
+            id="close-history-button"
+            class="button-secondary button-small"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="history-summary-grid">
+          <div class="summary-card">
+            <span class="label">Result</span>
+            <strong id="history-detail-result">-</strong>
+          </div>
+          <div class="summary-card">
+            <span class="label">Difficulty</span>
+            <strong id="history-detail-difficulty">-</strong>
+          </div>
+          <div class="summary-card">
+            <span class="label">Player Side</span>
+            <strong id="history-detail-player">-</strong>
+          </div>
+          <div class="summary-card">
+            <span class="label">Completed</span>
+            <strong id="history-detail-completed">-</strong>
+          </div>
+        </div>
+
+        <div class="history-detail-grid">
+          <div class="history-block">
+            <span class="label">Status</span>
+            <p id="history-detail-status" class="detail-copy">-</p>
+          </div>
+          <div class="history-block">
+            <span class="label">PGN</span>
+            <pre id="history-detail-pgn" class="history-pgn">-</pre>
+          </div>
+          <div class="history-block history-moves-block">
+            <span class="label">Move List</span>
+            <div id="history-detail-moves" class="history-move-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script src="./app.js" defer></script>
   </body>
