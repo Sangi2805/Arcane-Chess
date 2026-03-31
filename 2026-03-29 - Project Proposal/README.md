@@ -1,10 +1,10 @@
 # Project Proposal
 Project Proposal: Arcane-Chess
 
-The goal of this project is to develop a browser-based chess application that evolves over multiple versions, starting from a simple playable system and gradually adding intelligent and immersive features. The inspiration comes from platforms like Chess.com and Lichess, but the focus of this project is to first build a strong player vs engine experience and then enhance it with feedback and visualization features over time.
+The goal of this project is to develop a browser-based chess application that evolves over multiple versions, starting from a simple playable system and gradually adding intelligent and immersive features. While the main focus is the single-player engine experience, player-versus-player multiplayer functionality will also be explored.
 
-Version 1 will start of as a classic chess web application where the user can play against a bot of chosen difficulty. The interface will include a standard 2D chessboard with drag and drop movement and legal move validation. This version will focus more on the backend of the game engine. Prioritizing the structure , modularity and code quality over the interactive aspects of the game.
+Users will play against a built-in chess engine with adjustable difficulty. The primary interface is a 2D chessboard with drag-and-drop mechanics and legal move validation. The backend engine prioritizes structure, modularity, and high code quality.
 
-Version 2 will introduce a move-feedback system that will rate the user's moves as 'Good Move', 'Inaccurracy', or 'Blunder', based on the engines evaluation. The goal of this feature is to make the game more engaging and educational for beginners. The feedback will display why the move is good or bad by showing the future moves that might follow.
+The application will feature a real-time move feedback system to educate players. The engine will analyze user moves and rate them as a 'Good Move', 'Inaccuracy', or 'Blunder'. To explain the rating, the system will display the optimal future moves that might follow.
 
-Version 3 will expand the project further by adding a synchronized 3D chessboard and possibly player vs player functionality. The 3D board will visualize moves with cinematic effects, creating a more immersive experience while still maintaining the standard 2D board for core interaction. Multiplayer support may also be explored in this phase, but it is not the main priority.
+A 3D chessboard will synchronize with the 2D board to render moves with fantasy dark academia cinematic effects.
