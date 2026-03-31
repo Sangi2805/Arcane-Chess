@@ -2,29 +2,46 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const DIFFICULTY_PRESETS = {
+  // Keep the spread wide so each mode feels materially different in actual play.
   easy: {
     label: "Easy",
-    skillLevel: 4,
-    depth: 6,
-    moveTime: 250
+    skillLevel: 1,
+    depth: 3,
+    moveTime: 120,
+    drawOffer: {
+      minHalfMoves: 14,
+      maxMaterialGap: 3
+    }
   },
   intermediate: {
     label: "Intermediate",
-    skillLevel: 8,
-    depth: 10,
-    moveTime: 500
+    skillLevel: 6,
+    depth: 7,
+    moveTime: 350,
+    drawOffer: {
+      minHalfMoves: 20,
+      maxMaterialGap: 2
+    }
   },
   hard: {
     label: "Hard",
-    skillLevel: 14,
-    depth: 14,
-    moveTime: 900
+    skillLevel: 12,
+    depth: 11,
+    moveTime: 900,
+    drawOffer: {
+      minHalfMoves: 28,
+      maxMaterialGap: 1
+    }
   },
   grandmaster: {
     label: "Grand Master",
     skillLevel: 20,
-    depth: 18,
-    moveTime: 1500
+    depth: 16,
+    moveTime: 1800,
+    drawOffer: {
+      minHalfMoves: 36,
+      maxMaterialGap: 1
+    }
   }
 };
 

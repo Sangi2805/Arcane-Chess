@@ -23,7 +23,13 @@ const PIECES = {
 const difficultySelect = document.getElementById("difficulty-select");
 const newGameButton = document.getElementById("new-game-button");
 const saveGameButton = document.getElementById("save-game-button");
+const offerDrawButton = document.getElementById("offer-draw-button");
+const resignButton = document.getElementById("resign-button");
+const boardShell = document.querySelector(".board-shell");
 const boardElement = document.getElementById("board");
+const gameOverBanner = document.getElementById("game-over-banner");
+const gameOverTitle = document.getElementById("game-over-title");
+const gameOverMessage = document.getElementById("game-over-message");
 const moveListElement = document.getElementById("move-list");
 const statusText = document.getElementById("status-text");
 const feedbackText = document.getElementById("feedback-text");
@@ -86,17 +92,84 @@ const escapeHtml = (value) =>
 const formatColor = (color) =>
   color ? `${color.charAt(0).toUpperCase()}${color.slice(1)}` : "-";
 
-const formatResult = (result) => {
+const formatResult = (result, playerColor) => {
   switch (result) {
     case "white-win":
-      return "White Victory";
+      return playerColor ? (playerColor === "white" ? "Won" : "Lost") : "White won";
     case "black-win":
-      return "Black Victory";
+      return playerColor ? (playerColor === "black" ? "Won" : "Lost") : "Black won";
     case "draw":
       return "Draw";
+    case "not-started":
+      return "Not started";
     default:
       return "In Progress";
   }
+};
+
+const formatHistoryHeadline = (record = {}) => {
+  const result = formatResult(record.result, record.playerColor);
+
+  if (!record.playerColor || result === "In Progress") {
+    return result;
+  }
+
+  if (result === "Draw") {
+    return `Drew as ${formatColor(record.playerColor)}`;
+  }
+
+  return `${result} as ${formatColor(record.playerColor)}`;
+};
+
+const getWinnerFromResult = (result) => {
+  if (result === "white-win") {
+    return "White";
+  }
+
+  if (result === "black-win") {
+    return "Black";
+  }
+
+  return null;
+};
+
+const getGameOverCopy = (gameState) => {
+  if (!gameState?.isGameOver) {
+    return null;
+  }
+
+  if (gameState.status.code === "checkmate") {
+    const winner = getWinnerFromResult(gameState.result);
+
+    return {
+      title: "Game Over",
+      message: winner ? `${winner} wins by checkmate` : "Checkmate"
+    };
+  }
+
+  if (gameState.status.code === "resignation") {
+    return {
+      title: "Game Over",
+      message: gameState.status.message
+    };
+  }
+
+  return {
+    title: "Game Over",
+    message: "Draw"
+  };
+};
+
+const getDefaultFeedbackMessage = (gameState) => {
+  if (!gameState?.hasStarted) {
+    return "Move feedback not yet enabled. Start a new game or resume a saved one.";
+  }
+
+  if (gameState.isGameOver) {
+    return "Game complete. Start a new game or review the result in History.";
+  }
+
+  return "Move feedback not yet enabled for this phase.";
 };
 
 const formatTimestamp = (value) => {
@@ -114,6 +187,7 @@ const normalizeHistoryRecord = (record = {}) => ({
   result: record.result || "in-progress",
   difficulty: record.difficulty || record.level || "-",
   playerColor: record.playerColor || record.playerSide || "-",
+  engineColor: record.engineColor || "-",
   completedAt: record.completedAt || record.updatedAt || record.createdAt || null,
   statusMessage:
     record.statusMessage || record.status?.message || record.statusCode || "-",
@@ -168,27 +242,34 @@ const getGuestHeaders = () =>
   state.guest?.guestId ? { "X-Guest-Id": state.guest.guestId } : {};
 
 const renderGuestProfile = () => {
-  guestName.textContent = state.guest?.displayName || "Preparing guest sigil...";
+  guestName.textContent = "Playing as Guest";
 
   if (!state.persistence.available) {
-    guestSubtitle.textContent = "Guest continuity is local until MongoDB returns.";
-    guestMeta.textContent = `Guest ${state.guest?.guestId || "-"} is recognized, but persistence is offline (${state.persistence.status}).`;
+    guestSubtitle.textContent = "Guest mode is local until MongoDB returns.";
+    guestMeta.textContent =
+      "Saved games and history stay on this browser when persistence is available.";
     return;
   }
 
-  guestSubtitle.textContent = "Guest continuity and archives are active.";
-  guestMeta.textContent = `${state.guest?.guestId || "-"} is linked to saved games and completed history.`;
+  guestSubtitle.textContent = "Guest mode is active on this browser.";
+  guestMeta.textContent =
+    "Save and resume untimed games here without creating an account.";
 };
 
 const syncActionButtons = () => {
+  const inProgress =
+    Boolean(state.game?.hasStarted) && Boolean(state.game) && !state.game.isGameOver;
   const saveDisabled =
     state.busy ||
     !state.game ||
+    !state.game.hasStarted ||
     !state.persistence.available ||
     state.game.isGameOver;
 
   newGameButton.disabled = state.busy;
   saveGameButton.disabled = saveDisabled;
+  offerDrawButton.disabled = state.busy || !inProgress;
+  resignButton.disabled = state.busy || !inProgress;
   difficultySelect.disabled = state.busy;
 
   colorInputs.forEach((input) => {
@@ -306,12 +387,82 @@ const getLegalTargets = () => {
 const clearPromotionPrompt = () => {
   state.pendingPromotion = null;
   promotionPanel.classList.add("hidden");
+  promotionPanel.style.left = "";
+  promotionPanel.style.top = "";
+  promotionPanel.style.visibility = "";
 };
 
-const openPromotionPrompt = (moveChoices) => {
-  state.pendingPromotion = moveChoices;
-  promotionPanel.classList.remove("hidden");
+const openPromotionPrompt = (moveChoices, anchorSquare) => {
+  state.pendingPromotion = {
+    moveChoices,
+    anchorSquare
+  };
   feedbackText.textContent = "Choose a promotion piece.";
+};
+
+const renderGameOverBanner = () => {
+  const gameOverCopy = getGameOverCopy(state.game);
+
+  if (!gameOverCopy) {
+    gameOverBanner.classList.add("hidden");
+    gameOverBanner.setAttribute("aria-hidden", "true");
+    return;
+  }
+
+  gameOverTitle.textContent = gameOverCopy.title;
+  gameOverMessage.textContent = gameOverCopy.message;
+  gameOverBanner.classList.remove("hidden");
+  gameOverBanner.setAttribute("aria-hidden", "false");
+};
+
+const renderPromotionPrompt = () => {
+  if (!state.pendingPromotion?.moveChoices?.length || !boardShell) {
+    clearPromotionPrompt();
+    return;
+  }
+
+  const anchorSquare = boardElement.querySelector(
+    `[data-square="${state.pendingPromotion.anchorSquare}"]`
+  );
+
+  if (!anchorSquare) {
+    clearPromotionPrompt();
+    return;
+  }
+
+  promotionPanel.classList.remove("hidden");
+  promotionPanel.style.visibility = "hidden";
+
+  const boardRect = boardShell.getBoundingClientRect();
+  const squareRect = anchorSquare.getBoundingClientRect();
+  const panelWidth = promotionPanel.offsetWidth || 196;
+  const panelHeight = promotionPanel.offsetHeight || 148;
+  const margin = 12;
+  const preferredLeft =
+    squareRect.left - boardRect.left + squareRect.width / 2 - panelWidth / 2;
+  const maxLeft = Math.max(margin, boardRect.width - panelWidth - margin);
+  const left = Math.min(Math.max(preferredLeft, margin), maxLeft);
+  const anchorIsNearTop = squareRect.top - boardRect.top < boardRect.height / 2;
+  const preferredTop = anchorIsNearTop
+    ? squareRect.bottom - boardRect.top + margin
+    : squareRect.top - boardRect.top - panelHeight - margin;
+  const maxTop = Math.max(margin, boardRect.height - panelHeight - margin);
+  const top = Math.min(Math.max(preferredTop, margin), maxTop);
+
+  promotionPanel.style.left = `${Math.round(left)}px`;
+  promotionPanel.style.top = `${Math.round(top)}px`;
+  promotionPanel.style.visibility = "";
+};
+
+const renderBoardOverlays = () => {
+  renderGameOverBanner();
+
+  if (state.pendingPromotion?.moveChoices?.length) {
+    renderPromotionPrompt();
+    return;
+  }
+
+  promotionPanel.classList.add("hidden");
 };
 
 const renderMoveRows = (moveList = [], emptyMessage = "No moves recorded yet.") => {
@@ -375,7 +526,7 @@ const renderSavedGames = () => {
               formatColor(game.engineColor)
             )}</strong>
             <span>${escapeHtml(game.status.message)}</span>
-            <span>${escapeHtml(game.difficulty)} difficulty • ${escapeHtml(
+            <span>${escapeHtml(game.difficulty)} difficulty - ${escapeHtml(
               `${game.moveCount} moves`
             )}</span>
             <span>Saved ${escapeHtml(formatTimestamp(game.updatedAt))}</span>
@@ -393,7 +544,6 @@ const renderSavedGames = () => {
     )
     .join("");
 };
-
 const renderHistory = () => {
   historyCount.textContent = `${state.history.length} recorded`;
 
@@ -422,9 +572,12 @@ const renderHistory = () => {
       (record) => `
         <article class="record-card">
           <div class="record-card-copy">
-            <strong>${escapeHtml(formatResult(record.result))}</strong>
+            <strong>${escapeHtml(formatHistoryHeadline(record))}</strong>
             <span>${escapeHtml(record.statusMessage)}</span>
-            <span>${escapeHtml(record.difficulty)} difficulty • ${escapeHtml(
+            <span>${escapeHtml(formatColor(record.playerColor))} vs ${escapeHtml(
+              formatColor(record.engineColor)
+            )}</span>
+            <span>${escapeHtml(record.difficulty)} difficulty - ${escapeHtml(
               `${record.moveCount} moves`
             )}</span>
             <span>Completed ${escapeHtml(formatTimestamp(record.completedAt))}</span>
@@ -516,14 +669,18 @@ const updateSummary = () => {
     state.game.settings.playerColor === "white" ? "White" : "Black";
   engineSide.textContent =
     state.game.settings.engineColor === "white" ? "White" : "Black";
-  turnIndicator.textContent =
-    state.game.turn === "white" ? "White" : "Black";
+  turnIndicator.textContent = state.game.turn ? formatColor(state.game.turn) : "-";
   lastMoveText.textContent = state.game.lastMove?.san || "None";
+};
+
+const renderBoardSurface = () => {
+  renderBoard();
+  renderBoardOverlays();
 };
 
 const render = () => {
   renderGuestProfile();
-  renderBoard();
+  renderBoardSurface();
   renderMoveList();
   renderSavedGames();
   renderHistory();
@@ -551,18 +708,22 @@ const applyGameState = (gameState, feedbackMessage) => {
   setPersistence(gameState.persistence);
   render();
 
-  if (feedbackMessage) {
+  const gameOverCopy = getGameOverCopy(gameState);
+
+  if (gameOverCopy) {
+    feedbackText.textContent = gameOverCopy.message;
+  } else if (feedbackMessage) {
     feedbackText.textContent = feedbackMessage;
   } else if (gameState.lastMove?.captured) {
     feedbackText.textContent = `${gameState.lastMove.san} captured a piece.`;
   } else {
-    feedbackText.textContent = gameState.status.message;
+    feedbackText.textContent = getDefaultFeedbackMessage(gameState);
   }
 };
 
 const loadGame = async () => {
   const gameState = await request("/api/game");
-  applyGameState(gameState, "Board ready.");
+  applyGameState(gameState);
 };
 
 const loadSavedGames = async () => {
@@ -603,7 +764,7 @@ const ensureGuestSession = async () => {
       available: false,
       status: "guest-offline"
     });
-    feedbackText.textContent = `${error.message} Guest continuity has fallen back to local storage only.`;
+    feedbackText.textContent = `${error.message} Guest mode has fallen back to local storage only.`;
   }
 };
 
@@ -672,10 +833,60 @@ const resumeSavedGame = async (gameId) => {
   }
 };
 
+const resignCurrentGame = async () => {
+  if (!window.confirm("Resign the current game?")) {
+    return;
+  }
+
+  setBusy(true, "Ending the match by resignation...");
+
+  try {
+    const gameState = await request("/api/game/resign", {
+      method: "POST"
+    });
+
+    setApiHealth(true);
+    applyGameState(gameState, "Game ended by resignation.");
+    await refreshCollections();
+    setRecordView("history");
+  } catch (error) {
+    setApiHealth(false);
+    feedbackText.textContent = error.message;
+  } finally {
+    setBusy(false);
+  }
+};
+
+const offerDraw = async () => {
+  setBusy(true, "Offering a draw...");
+
+  try {
+    const payload = await request("/api/game/draw", {
+      method: "POST"
+    });
+
+    setApiHealth(true);
+    applyGameState(payload.game, payload.message);
+
+    if (payload.accepted) {
+      await refreshCollections();
+      setRecordView("history");
+    }
+  } catch (error) {
+    setApiHealth(false);
+    feedbackText.textContent = error.message;
+  } finally {
+    setBusy(false);
+  }
+};
+
 const populateHistoryDetail = (record) => {
   const normalizedRecord = normalizeHistoryRecord(record);
 
-  historyDetailResult.textContent = formatResult(normalizedRecord.result);
+  historyDetailResult.textContent = formatResult(
+    normalizedRecord.result,
+    normalizedRecord.playerColor
+  );
   historyDetailDifficulty.textContent = normalizedRecord.difficulty;
   historyDetailPlayer.textContent = formatColor(normalizedRecord.playerColor);
   historyDetailCompleted.textContent = formatTimestamp(normalizedRecord.completedAt);
@@ -762,6 +973,12 @@ const handleSquareClick = (square) => {
     return;
   }
 
+  if (!state.game.hasStarted) {
+    feedbackText.textContent =
+      "Start a new game or resume a saved one. Move feedback arrives next phase.";
+    return;
+  }
+
   if (state.game.isGameOver) {
     feedbackText.textContent = "The game is over. Start a new one or review it in history.";
     return;
@@ -780,7 +997,7 @@ const handleSquareClick = (square) => {
     if (ownPiece && state.game.legalMoves[square]?.length) {
       state.selectedSquare = square;
       feedbackText.textContent = `Selected ${square}. Choose a legal destination.`;
-      renderBoard();
+      renderBoardSurface();
     } else {
       feedbackText.textContent = "Select one of your pieces with a legal move.";
     }
@@ -792,7 +1009,7 @@ const handleSquareClick = (square) => {
     state.selectedSquare = null;
     clearPromotionPrompt();
     feedbackText.textContent = "Selection cleared.";
-    renderBoard();
+    renderBoardSurface();
     return;
   }
 
@@ -800,7 +1017,7 @@ const handleSquareClick = (square) => {
     state.selectedSquare = square;
     clearPromotionPrompt();
     feedbackText.textContent = `Selected ${square}.`;
-    renderBoard();
+    renderBoardSurface();
     return;
   }
 
@@ -812,8 +1029,8 @@ const handleSquareClick = (square) => {
   }
 
   if (matchingMoves.length > 1) {
-    openPromotionPrompt(matchingMoves);
-    renderBoard();
+    openPromotionPrompt(matchingMoves, square);
+    renderBoardSurface();
     return;
   }
 
@@ -854,11 +1071,11 @@ boardElement.addEventListener("click", (event) => {
 promotionPanel.addEventListener("click", (event) => {
   const action = event.target.closest("[data-promotion]");
 
-  if (!action || !state.pendingPromotion?.length || !state.selectedSquare) {
+  if (!action || !state.pendingPromotion?.moveChoices?.length || !state.selectedSquare) {
     return;
   }
 
-  const chosenMove = state.pendingPromotion.find(
+  const chosenMove = state.pendingPromotion.moveChoices.find(
     (move) => move.promotion === action.dataset.promotion
   );
 
@@ -910,9 +1127,22 @@ historyModalCard?.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.pendingPromotion?.moveChoices?.length) {
+    event.preventDefault();
+    clearPromotionPrompt();
+    renderBoardOverlays();
+    return;
+  }
+
   if (event.key === "Escape" && state.historyModalOpen) {
     event.preventDefault();
     closeHistoryDetail();
+  }
+});
+
+window.addEventListener("resize", () => {
+  if (state.pendingPromotion?.moveChoices?.length || state.game?.isGameOver) {
+    renderBoardOverlays();
   }
 });
 
@@ -922,5 +1152,7 @@ closeHistoryButton.addEventListener("click", (event) => {
 });
 newGameButton.addEventListener("click", startNewGame);
 saveGameButton.addEventListener("click", saveCurrentGame);
+offerDrawButton.addEventListener("click", offerDraw);
+resignButton.addEventListener("click", resignCurrentGame);
 
 initialize();

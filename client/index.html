@@ -31,7 +31,7 @@
             <strong id="status-text">Loading game...</strong>
           </div>
           <div class="status-group">
-            <span class="label">Feedback</span>
+            <span class="label">Match Notes</span>
             <strong id="feedback-text">Preparing the board.</strong>
           </div>
         </div>
@@ -43,7 +43,7 @@
             <div>
               <h2>Match Setup</h2>
               <p id="guest-subtitle" class="panel-subtitle">
-                Forging guest continuity...
+                Preparing guest mode...
               </p>
             </div>
             <div class="controls-actions">
@@ -54,9 +54,8 @@
             </div>
           </div>
 
-          <div class="guest-card">
-            <span class="label">Guest Profile</span>
-            <strong id="guest-name">Preparing guest sigil...</strong>
+          <div class="guest-banner">
+            <strong id="guest-name">Playing as Guest</strong>
             <span id="guest-meta" class="card-copy">
               Linking local continuity and archives.
             </span>
@@ -103,20 +102,38 @@
             </div>
           </div>
 
-          <div id="promotion-panel" class="promotion-panel hidden">
-            <span class="label">Choose Promotion</span>
-            <div class="promotion-actions">
-              <button type="button" data-promotion="q">Queen</button>
-              <button type="button" data-promotion="r">Rook</button>
-              <button type="button" data-promotion="b">Bishop</button>
-              <button type="button" data-promotion="n">Knight</button>
-            </div>
+          <div class="game-actions">
+            <button id="offer-draw-button" class="button-secondary" type="button">
+              Offer Draw
+            </button>
+            <button id="resign-button" class="button-secondary button-danger" type="button">
+              Resign
+            </button>
           </div>
+
         </article>
 
         <article class="panel board-panel">
           <div class="board-shell">
             <div id="board" class="board" aria-label="Arcane Chess Board"></div>
+            <div
+              id="game-over-banner"
+              class="game-over-banner hidden"
+              aria-live="polite"
+              aria-hidden="true"
+            >
+              <strong id="game-over-title">Game Over</strong>
+              <span id="game-over-message">Result pending.</span>
+            </div>
+            <div id="promotion-panel" class="promotion-panel promotion-popover hidden">
+              <span class="label">Choose Promotion</span>
+              <div class="promotion-actions">
+                <button type="button" class="button-secondary" data-promotion="q">Queen</button>
+                <button type="button" class="button-secondary" data-promotion="r">Rook</button>
+                <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
+                <button type="button" class="button-secondary" data-promotion="n">Knight</button>
+              </div>
+            </div>
           </div>
         </article>
 

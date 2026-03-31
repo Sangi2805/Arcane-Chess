@@ -25,6 +25,10 @@ const countHalfMoves = (moveList = []) =>
   );
 
 const getResultFromSnapshot = ({ snapshot }) => {
+  if (snapshot.result && snapshot.result !== "not-started") {
+    return snapshot.result;
+  }
+
   if (!snapshot.isGameOver) {
     return "in-progress";
   }

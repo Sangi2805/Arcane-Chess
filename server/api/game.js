@@ -4,7 +4,9 @@ const {
   createNewGame,
   getSerializableState,
   makePlayerMove,
+  offerDraw,
   performEngineMove,
+  resignGame,
   resetGame
 } = require("../game/gameManager");
 const { getGuestIdFromRequest, sendApiError } = require("./requestContext");
@@ -48,6 +50,26 @@ router.post("/engine", async (request, response) => {
     response.json(gameState);
   } catch (error) {
     sendApiError(response, error);
+  }
+});
+
+router.post("/resign", async (request, response) => {
+  try {
+    const gameState = await resignGame(getGuestIdFromRequest(request));
+
+    response.json(gameState);
+  } catch (error) {
+    sendApiError(response, error, 400);
+  }
+});
+
+router.post("/draw", async (request, response) => {
+  try {
+    const outcome = await offerDraw(getGuestIdFromRequest(request));
+
+    response.json(outcome);
+  } catch (error) {
+    sendApiError(response, error, 400);
   }
 });
 

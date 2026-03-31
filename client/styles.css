@@ -90,6 +90,18 @@ button:disabled {
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
+.button-danger {
+  color: #ffece8;
+  background: rgba(96, 28, 21, 0.82);
+  border: 1px solid rgba(244, 139, 130, 0.34);
+}
+
+.button-danger:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 24px rgba(96, 28, 21, 0.28);
+}
+
 .button-small {
   padding: 10px 14px;
 }
@@ -269,6 +281,7 @@ h1 {
   display: grid;
   place-items: center;
   overflow: hidden;
+  container-type: size;
 }
 
 .moves-panel {
@@ -301,12 +314,16 @@ h1 {
   margin-bottom: 14px;
 }
 
-.guest-card {
+.guest-banner {
   margin-bottom: 14px;
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.06);
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 223, 173, 0.14);
+}
+
+.guest-banner strong {
+  display: block;
 }
 
 .card-copy {
@@ -336,17 +353,39 @@ h1 {
   gap: 10px;
 }
 
-.promotion-panel {
+.game-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 14px;
-  padding: 14px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.06);
+}
+
+.promotion-panel {
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(35, 23, 15, 0.96);
+  border: 1px solid rgba(240, 194, 105, 0.34);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.34);
 }
 
 .promotion-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.promotion-popover {
+  position: absolute;
+  width: min(196px, calc(100% - 24px));
+  z-index: 4;
+}
+
+.promotion-popover .label {
+  margin-bottom: 10px;
+}
+
+.promotion-popover button {
+  padding: 10px 12px;
 }
 
 .record-tabs {
@@ -446,10 +485,18 @@ h1 {
 }
 
 .board-shell {
+  position: relative;
   aspect-ratio: 1;
-  width: min(100%, calc(100dvh - var(--board-height-offset)));
+  width: 100%;
   max-width: 100%;
   max-height: 100%;
+}
+
+@supports (width: 1cqw) {
+  .board-shell {
+    width: min(100cqw, 100cqh);
+    height: min(100cqw, 100cqh);
+  }
 }
 
 .board {
@@ -461,6 +508,37 @@ h1 {
   border-radius: 24px;
   border: 1px solid rgba(255, 223, 173, 0.2);
   background: var(--panel-strong);
+}
+
+.game-over-banner {
+  position: absolute;
+  inset: 16px 16px auto;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(35, 23, 15, 0.9);
+  border: 1px solid rgba(240, 194, 105, 0.36);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.34);
+  text-align: center;
+  z-index: 3;
+}
+
+.game-over-banner.hidden {
+  display: none;
+}
+
+.game-over-banner strong {
+  font-family: "Cinzel", serif;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.game-over-banner span {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .square {
@@ -718,6 +796,7 @@ h1 {
 
   .board-shell {
     width: min(100%, 640px);
+    height: auto;
     max-height: none;
   }
 }
@@ -725,7 +804,7 @@ h1 {
 @media (max-width: 640px) {
   .hero-status,
   .summary-grid,
-  .promotion-actions,
+  .game-actions,
   .history-summary-grid {
     grid-template-columns: 1fr;
   }
@@ -735,6 +814,10 @@ h1 {
   }
 
   .record-card {
+    grid-template-columns: 1fr;
+  }
+
+  .promotion-actions {
     grid-template-columns: 1fr;
   }
 }

@@ -6,6 +6,14 @@ const COLOR_LABELS = {
   w: "white",
   b: "black"
 };
+const PIECE_VALUES = {
+  p: 1,
+  n: 3,
+  b: 3,
+  r: 5,
+  q: 9,
+  k: 0
+};
 
 const DEFAULT_PROMOTION = "q";
 
@@ -109,6 +117,24 @@ const getBoardSquares = (chess) => {
   });
 
   return squares;
+};
+
+const getMaterialBalance = (chess) => {
+  const board = chess.board();
+
+  return board.reduce((balance, rank) => {
+    return (
+      balance +
+      rank.reduce((rankBalance, piece) => {
+        if (!piece) {
+          return rankBalance;
+        }
+
+        const value = PIECE_VALUES[piece.type] || 0;
+        return rankBalance + (piece.color === "w" ? value : -value);
+      }, 0)
+    );
+  }, 0);
 };
 
 const getMoveList = (chess) => {
@@ -215,6 +241,7 @@ module.exports = {
   applyMove,
   createChessGame,
   getChessServiceStatus,
+  getMaterialBalance,
   restoreChessGame,
   serializeGame
 };
