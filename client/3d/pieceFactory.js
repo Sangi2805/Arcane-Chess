@@ -2,22 +2,23 @@ import * as THREE from "/vendor/three/three.module.js";
 
 const PIECE_PALETTES = {
   white: {
-    base: "#e6dbc9",
-    accent: "#bda789",
-    glow: "#18120d",
-    sheen: "#f6efe2"
+    base: "#ece1d2",
+    accent: "#c5ab88",
+    glow: "#1a120d",
+    sheen: "#fff6e8"
   },
   black: {
-    base: "#111315",
-    accent: "#555d66",
-    glow: "#07090c",
-    sheen: "#8f99a4"
+    base: "#171b20",
+    accent: "#69717d",
+    glow: "#06080c",
+    sheen: "#c0cad7"
   }
 };
 
-const registerMaterial = (material) => {
+const registerMaterial = (material, { selectionBoostMultiplier = 1 } = {}) => {
   material.userData.baseEmissiveIntensity = material.emissiveIntensity ?? 0;
   material.userData.baseOpacity = material.opacity ?? 1;
+  material.userData.selectionBoostMultiplier = selectionBoostMultiplier;
   return material;
 };
 
@@ -28,34 +29,38 @@ const createMaterials = (color) => {
   return {
     core: registerMaterial(new THREE.MeshPhysicalMaterial({
       color: palette.base,
-      roughness: isWhite ? 0.72 : 0.46,
-      metalness: isWhite ? 0.01 : 0.08,
-      clearcoat: isWhite ? 0.16 : 0.22,
-      clearcoatRoughness: isWhite ? 0.74 : 0.58,
-      specularIntensity: isWhite ? 0.42 : 0.34,
-      sheen: isWhite ? 0.04 : 0.02,
+      roughness: isWhite ? 0.34 : 0.24,
+      metalness: isWhite ? 0.02 : 0.24,
+      clearcoat: isWhite ? 0.54 : 0.62,
+      clearcoatRoughness: isWhite ? 0.2 : 0.18,
+      specularIntensity: isWhite ? 0.76 : 0.56,
+      sheen: isWhite ? 0.2 : 0.1,
       sheenColor: palette.sheen,
-      sheenRoughness: isWhite ? 0.72 : 0.68,
-      emissive: isWhite ? "#15100c" : "#05070a",
-      emissiveIntensity: isWhite ? 0.003 : 0.005,
+      sheenRoughness: isWhite ? 0.46 : 0.42,
+      emissive: isWhite ? "#1a120d" : "#05070a",
+      emissiveIntensity: isWhite ? 0.012 : 0.018,
       transparent: false,
       opacity: 1
-    })),
+    }), {
+      selectionBoostMultiplier: isWhite ? 1.08 : 1.12
+    }),
     trim: registerMaterial(new THREE.MeshPhysicalMaterial({
       color: palette.accent,
-      roughness: isWhite ? 0.48 : 0.34,
-      metalness: isWhite ? 0.14 : 0.2,
-      clearcoat: isWhite ? 0.2 : 0.28,
-      clearcoatRoughness: isWhite ? 0.56 : 0.42,
-      specularIntensity: isWhite ? 0.36 : 0.3,
-      sheen: isWhite ? 0.03 : 0.02,
+      roughness: isWhite ? 0.2 : 0.16,
+      metalness: isWhite ? 0.24 : 0.48,
+      clearcoat: isWhite ? 0.5 : 0.66,
+      clearcoatRoughness: isWhite ? 0.22 : 0.18,
+      specularIntensity: isWhite ? 0.54 : 0.48,
+      sheen: isWhite ? 0.08 : 0.04,
       sheenColor: palette.sheen,
-      sheenRoughness: 0.62,
+      sheenRoughness: 0.48,
       emissive: palette.glow,
-      emissiveIntensity: isWhite ? 0.006 : 0.008,
+      emissiveIntensity: isWhite ? 0.016 : 0.022,
       transparent: false,
       opacity: 1
-    }))
+    }), {
+      selectionBoostMultiplier: isWhite ? 1.32 : 1.4
+    })
   };
 };
 

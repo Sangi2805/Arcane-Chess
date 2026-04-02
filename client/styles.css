@@ -1577,13 +1577,13 @@ h1 {
   overflow: hidden;
   border-radius: 24px;
   background:
-    radial-gradient(circle at 50% 14%, rgba(255, 235, 194, 0.08), transparent 28%),
-    radial-gradient(circle at 20% 24%, rgba(111, 139, 198, 0.22), transparent 34%),
-    radial-gradient(circle at 82% 78%, rgba(214, 161, 74, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(20, 15, 20, 0.98), rgba(8, 7, 11, 1));
+    radial-gradient(circle at 50% 12%, rgba(255, 237, 206, 0.12), transparent 26%),
+    radial-gradient(circle at 18% 24%, rgba(86, 115, 176, 0.24), transparent 34%),
+    radial-gradient(circle at 84% 78%, rgba(219, 161, 83, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(19, 14, 18, 0.99), rgba(7, 7, 11, 1));
   box-shadow:
     inset 0 0 0 1px rgba(255, 223, 173, 0.1),
-    0 28px 56px rgba(0, 0, 0, 0.32);
+    0 28px 56px rgba(0, 0, 0, 0.36);
 }
 
 .board-shell::before,
@@ -1698,10 +1698,10 @@ h1 {
   transform: translateZ(0);
   backface-visibility: hidden;
   background:
-    radial-gradient(circle at 50% 18%, rgba(255, 244, 226, 0.08), transparent 28%),
-    radial-gradient(circle at 18% 24%, rgba(114, 91, 69, 0.14), transparent 34%),
-    radial-gradient(circle at 82% 80%, rgba(87, 68, 50, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(18, 15, 13, 0.94), rgba(8, 8, 7, 0.98));
+    radial-gradient(circle at 50% 16%, rgba(255, 244, 226, 0.11), transparent 26%),
+    radial-gradient(circle at 16% 22%, rgba(103, 124, 177, 0.16), transparent 34%),
+    radial-gradient(circle at 84% 78%, rgba(112, 82, 52, 0.16), transparent 36%),
+    linear-gradient(180deg, rgba(17, 14, 12, 0.96), rgba(7, 7, 8, 0.99));
 }
 
 .board-3d-canvas {
@@ -1838,13 +1838,13 @@ body.board-mode-3d {
   max-height: none;
   border-radius: 22px;
   background:
-    radial-gradient(circle at 50% 12%, rgba(255, 244, 226, 0.08), transparent 24%),
-    radial-gradient(circle at 18% 24%, rgba(117, 94, 72, 0.18), transparent 34%),
-    radial-gradient(circle at 82% 78%, rgba(75, 60, 44, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(20, 17, 14, 0.98), rgba(8, 8, 7, 1));
+    radial-gradient(circle at 50% 10%, rgba(255, 243, 220, 0.13), transparent 22%),
+    radial-gradient(circle at 18% 22%, rgba(91, 114, 166, 0.2), transparent 34%),
+    radial-gradient(circle at 82% 78%, rgba(136, 96, 56, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(19, 16, 14, 0.99), rgba(7, 7, 8, 1));
   box-shadow:
     inset 0 0 0 1px rgba(255, 235, 207, 0.1),
-    0 32px 72px rgba(0, 0, 0, 0.38);
+    0 36px 84px rgba(0, 0, 0, 0.44);
   transition: box-shadow 260ms ease, border-color 260ms ease, background 260ms ease;
 }
 
@@ -1855,8 +1855,8 @@ body.board-mode-3d {
 .shell[data-board-view-mode="3d"] .board-shell::after {
   box-shadow:
     inset 0 1px 0 rgba(255, 239, 211, 0.08),
-    inset 0 0 72px rgba(0, 0, 0, 0.12),
-    inset 0 -48px 66px rgba(0, 0, 0, 0.22);
+    inset 0 0 90px rgba(0, 0, 0, 0.16),
+    inset 0 -58px 82px rgba(0, 0, 0, 0.26);
 }
 
 .shell[data-board-view-mode="3d"] .board-panel-toolbar {
