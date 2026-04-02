@@ -12,6 +12,7 @@ const app = express();
 const port = Number(process.env.PORT) || 4000;
 const clientOrigin = process.env.CLIENT_ORIGIN || `http://localhost:${port}`;
 const clientPath = path.resolve(__dirname, "..", "client");
+const threeBuildPath = path.resolve(__dirname, "node_modules", "three", "build");
 
 app.use(
   cors({
@@ -20,6 +21,7 @@ app.use(
 );
 app.use(express.json());
 app.use(express.static(clientPath));
+app.use("/vendor/three", express.static(threeBuildPath));
 
 app.use("/api", apiRouter);
 
@@ -42,4 +44,3 @@ const startServer = async () => {
 };
 
 startServer();
-

@@ -17,6 +17,12 @@ const PIECE_VALUES = {
 
 const DEFAULT_PROMOTION = "q";
 
+const createStatus = (code, message, extras = {}) => ({
+  code,
+  message,
+  ...extras
+});
+
 const createChessGame = () => new Chess();
 
 const restoreChessGame = ({ fen, pgn } = {}) => {
@@ -171,55 +177,70 @@ const getLastMove = (chess) => {
   };
 };
 
-const getGameStatus = (chess) => {
-  if (chess.isCheckmate()) {
-    return {
-      code: "checkmate",
-      message: `Checkmate. ${
-        chess.turn() === "w" ? "Black" : "White"
-      } wins.`
-    };
-  }
-
+const getDrawStatus = (chess) => {
   if (chess.isStalemate()) {
-    return {
-      code: "draw",
-      message: "Draw by stalemate."
-    };
+    return createStatus("stalemate", "Stalemate.", {
+      outcomeLabel: "Stalemate",
+      drawReason: "stalemate"
+    });
   }
 
   if (chess.isThreefoldRepetition()) {
-    return {
-      code: "draw",
-      message: "Draw by threefold repetition."
-    };
+    return createStatus("draw-repetition", "Draw by repetition.", {
+      outcomeLabel: "Draw by repetition",
+      drawReason: "repetition"
+    });
   }
 
   if (chess.isInsufficientMaterial()) {
-    return {
-      code: "draw",
-      message: "Draw by insufficient material."
-    };
+    return createStatus("draw-insufficient-material", "Draw by insufficient material.", {
+      outcomeLabel: "Draw by insufficient material",
+      drawReason: "insufficient-material"
+    });
+  }
+
+  if (chess.isDrawByFiftyMoves()) {
+    return createStatus("draw-fifty-move", "Draw by fifty-move rule.", {
+      outcomeLabel: "Draw by fifty-move rule",
+      drawReason: "fifty-move-rule"
+    });
   }
 
   if (chess.isDraw()) {
-    return {
-      code: "draw",
-      message: "Draw."
-    };
+    return createStatus("draw", "Draw.", {
+      outcomeLabel: "Draw",
+      drawReason: "generic-draw"
+    });
+  }
+
+  return null;
+};
+
+const getGameStatus = (chess) => {
+  if (chess.isCheckmate()) {
+    return createStatus(
+      "checkmate",
+      `Checkmate. ${chess.turn() === "w" ? "Black" : "White"} wins.`,
+      {
+        outcomeLabel: "Checkmate"
+      }
+    );
+  }
+
+  const drawStatus = getDrawStatus(chess);
+
+  if (drawStatus) {
+    return drawStatus;
   }
 
   if (chess.isCheck()) {
-    return {
-      code: "check",
-      message: `${chess.turn() === "w" ? "White" : "Black"} to move - Check.`
-    };
+    return createStatus(
+      "check",
+      `${chess.turn() === "w" ? "White" : "Black"} to move - Check.`
+    );
   }
 
-  return {
-    code: "active",
-    message: `${chess.turn() === "w" ? "White" : "Black"} to move.`
-  };
+  return createStatus("active", `${chess.turn() === "w" ? "White" : "Black"} to move.`);
 };
 
 const serializeGame = (chess) => ({

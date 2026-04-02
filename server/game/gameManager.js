@@ -14,6 +14,10 @@ const {
   recordCompletedGame,
   saveGameSnapshot
 } = require("../services/persistenceService");
+const {
+  evaluateEngineMove,
+  evaluateMove
+} = require("../services/evaluationService");
 const { getMongoStatus, isMongoAvailable } = require("../db/mongo");
 
 const DEFAULT_SETTINGS = {
@@ -54,44 +58,46 @@ const getResignationOutcome = (color) => ({
   result: color === "white" ? "black-win" : "white-win",
   status: {
     code: "resignation",
-    message: `${formatColor(color)} resigned`
-  }
+    message: `${formatColor(color)} resigned`,
+    outcomeLabel: "Resignation"
+  },
+  resultLabel: "Resignation",
+  drawReason: null
 });
 
 const getBoardOutcome = (snapshot) => {
   if (snapshot.status.code === "checkmate") {
     return {
       result: snapshot.turn === "white" ? "black-win" : "white-win",
-      status: {
-        code: "checkmate",
-        message: "Checkmate"
-      }
+      status: snapshot.status,
+      resultLabel: snapshot.status.outcomeLabel || "Checkmate",
+      drawReason: null
     };
   }
 
   if (snapshot.status.code === "check") {
     return {
       result: "in-progress",
-      status: {
-        code: "check",
-        message: "Check"
-      }
+      status: snapshot.status,
+      resultLabel: null,
+      drawReason: null
     };
   }
 
   if (snapshot.isGameOver) {
     return {
       result: "draw",
-      status: {
-        code: "draw",
-        message: "Draw"
-      }
+      status: snapshot.status,
+      resultLabel: snapshot.status.outcomeLabel || "Draw",
+      drawReason: snapshot.status.drawReason || null
     };
   }
 
   return {
     result: "in-progress",
-    status: IN_PROGRESS_STATUS
+    status: IN_PROGRESS_STATUS,
+    resultLabel: null,
+    drawReason: null
   };
 };
 
@@ -113,7 +119,9 @@ const getResolvedGameState = (game, snapshot) => {
       status: NOT_STARTED_STATUS,
       isGameOver: false,
       legalMoves: {},
-      turn: null
+      turn: null,
+      resultLabel: null,
+      drawReason: null
     };
   }
 
@@ -126,7 +134,7 @@ const getResolvedGameState = (game, snapshot) => {
   };
 };
 
-const buildSerializableState = (game) => {
+const buildSerializableState = (game, extras = {}) => {
   const snapshot = serializeGame(game.chess);
   const resolvedState = getResolvedGameState(game, snapshot);
 
@@ -146,7 +154,11 @@ const buildSerializableState = (game) => {
     turn: resolvedState.turn,
     legalMoves: resolvedState.legalMoves,
     isGameOver: resolvedState.isGameOver,
-    status: resolvedState.status
+    status: resolvedState.status,
+    resultLabel: resolvedState.resultLabel || null,
+    drawReason: resolvedState.drawReason || null,
+    coachFeedback: null,
+    ...extras
   };
 };
 
@@ -171,7 +183,10 @@ const createGame = ({
     updatedAt: snapshot?.updatedAt || now,
     historyRecorded: snapshot?.historyRecorded || false,
     hasStarted,
-    manualOutcome: null
+    manualOutcome: null,
+    pendingCoachReview: null,
+    pendingEngineTurn: null,
+    resolvedEngineTurn: null
   };
 
   activeGames.set(game.guestId, game);
@@ -189,8 +204,50 @@ const touchGame = (game) => {
   game.updatedAt = new Date().toISOString();
 };
 
+const clearPendingAsyncState = (game) => {
+  game.pendingCoachReview = null;
+  game.pendingEngineTurn = null;
+  game.resolvedEngineTurn = null;
+};
+
+const createIdleGame = ({ guestId, settings = {} } = {}) =>
+  createGame({
+    guestId,
+    settings,
+    hasStarted: false
+  });
+
+const clearActiveGame = async (guestId, { settings = null } = {}) => {
+  const normalizedGuestId = getGuestId(guestId);
+  const currentGame = activeGames.get(normalizedGuestId);
+
+  if (currentGame && isGameFinished(currentGame)) {
+    await persistCompletedGameIfNeeded(currentGame);
+  }
+
+  const nextSettings = normalizeSettings(settings || currentGame?.settings || DEFAULT_SETTINGS);
+  const game = createIdleGame({
+    guestId: normalizedGuestId,
+    settings: nextSettings
+  });
+
+  return buildSerializableState(game);
+};
+
 const getSerializableState = (guestId) => {
   const game = ensureGame(guestId);
+
+  return buildSerializableState(game);
+};
+
+const getLiveSerializableState = async (guestId) => {
+  const game = ensureGame(guestId);
+
+  if (game.hasStarted && isGameFinished(game)) {
+    return clearActiveGame(game.guestId, {
+      settings: game.settings
+    });
+  }
 
   return buildSerializableState(game);
 };
@@ -228,17 +285,15 @@ const createNewGame = async ({ guestId, settings = {} } = {}) => {
   });
 
   if (game.settings.playerColor === "black") {
-    await performEngineMove(game.guestId);
+    await performEngineMove(game.guestId, {
+      includeCoachFeedback: false
+    });
   }
 
   return getSerializableState(game.guestId);
 };
 
-const resetGame = async (guestId) =>
-  createNewGame({
-    guestId,
-    settings: DEFAULT_SETTINGS
-  });
+const resetGame = async (guestId) => clearActiveGame(guestId);
 
 const makePlayerMove = async ({ guestId, from, to, promotion }) => {
   const game = ensureGame(guestId);
@@ -255,6 +310,7 @@ const makePlayerMove = async ({ guestId, from, to, promotion }) => {
     throw new Error("It is not the player's turn.");
   }
 
+  const beforeFen = game.chess.fen();
   const move = applyMove(game.chess, { from, to, promotion });
 
   if (!move) {
@@ -262,18 +318,87 @@ const makePlayerMove = async ({ guestId, from, to, promotion }) => {
   }
 
   touchGame(game);
+  clearPendingAsyncState(game);
 
-  if (!game.chess.isGameOver() && getTurn(game) === getEngineColor(game)) {
-    await performEngineMove(game.guestId);
+  const moveToken = randomUUID();
+  const gameContinues = !game.chess.isGameOver();
+  const shouldQueueEngine =
+    gameContinues && getTurn(game) === getEngineColor(game);
+
+  if (gameContinues) {
+    game.pendingCoachReview = {
+      moveToken,
+      beforeFen,
+      afterFen: game.chess.fen(),
+      playerColor: game.settings.playerColor,
+      playedMove: {
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion || undefined,
+        san: move.san
+      },
+      promise: null
+    };
+    game.pendingCoachReview.promise = evaluateMove(game.pendingCoachReview).catch(
+      (error) => {
+        console.warn("Arcane Coach evaluation skipped:", error.message);
+        return null;
+      }
+    );
+  }
+
+  if (shouldQueueEngine) {
+    const pendingEngineTurn = {
+      moveToken,
+      promise: null
+    };
+
+    game.pendingEngineTurn = pendingEngineTurn;
+    pendingEngineTurn.promise = performEngineMove(game.guestId)
+      .then((gameState) => {
+        if (game.pendingEngineTurn === pendingEngineTurn) {
+          game.resolvedEngineTurn = {
+            moveToken,
+            game: gameState,
+            error: null
+          };
+          game.pendingEngineTurn = null;
+        }
+
+        return gameState;
+      })
+      .catch((error) => {
+        if (game.pendingEngineTurn === pendingEngineTurn) {
+          game.resolvedEngineTurn = {
+            moveToken,
+            game: null,
+            error
+          };
+          game.pendingEngineTurn = null;
+        }
+
+        throw error;
+      });
   } else {
     await persistCompletedGameIfNeeded(game);
   }
 
-  return getSerializableState(game.guestId);
+  return {
+    game: buildSerializableState(game),
+    moveToken,
+    pending: {
+      coach: Boolean(game.pendingCoachReview),
+      engine: shouldQueueEngine
+    }
+  };
 };
 
-const performEngineMove = async (guestId) => {
+const performEngineMove = async (
+  guestId,
+  { includeCoachFeedback = true } = {}
+) => {
   const game = ensureGame(guestId);
+  const activePendingEngineTurn = game.pendingEngineTurn;
 
   if (!game.hasStarted) {
     return getSerializableState(game.guestId);
@@ -288,12 +413,26 @@ const performEngineMove = async (guestId) => {
     return getSerializableState(game.guestId);
   }
 
-  const bestMove = await engineService.getBestMove({
-    fen: game.chess.fen(),
-    difficulty: game.settings.difficulty
+  const beforeFen = game.chess.fen();
+  const preset = engineService.getDifficultyPreset(game.settings.difficulty);
+  const engineAnalysis = await engineService.getPositionAnalysis({
+    fen: beforeFen,
+    depth: preset.depth,
+    moveTime: preset.moveTime,
+    skillLevel: preset.skillLevel
   });
+  const bestMove = engineAnalysis.bestMove
+    ? {
+        ...engineAnalysis.bestMove,
+        difficulty: preset
+      }
+    : null;
 
   if (!bestMove) {
+    if (!activePendingEngineTurn) {
+      game.pendingEngineTurn = null;
+    }
+
     return getSerializableState(game.guestId);
   }
 
@@ -304,9 +443,97 @@ const performEngineMove = async (guestId) => {
   }
 
   touchGame(game);
+
+  if (!activePendingEngineTurn) {
+    game.pendingEngineTurn = null;
+  }
+
   await persistCompletedGameIfNeeded(game);
 
-  return getSerializableState(game.guestId);
+  let coachFeedback = null;
+
+  if (includeCoachFeedback && !game.chess.isGameOver()) {
+    coachFeedback = await evaluateEngineMove({
+      beforeFen,
+      afterFen: game.chess.fen(),
+      playerColor: game.settings.playerColor,
+      beforeAnalysis: engineAnalysis
+    }).catch((error) => {
+      console.warn("Arcane Coach engine commentary skipped:", error.message);
+      return null;
+    });
+
+    if (coachFeedback) {
+      coachFeedback.playedMove = {
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion || undefined,
+        san: move.san
+      };
+    }
+  }
+
+  return buildSerializableState(game, {
+    coachFeedback
+  });
+};
+
+const resolveCoachFeedback = async ({ guestId, moveToken }) => {
+  const game = ensureGame(guestId);
+  const review = game.pendingCoachReview;
+
+  if (!review || review.moveToken !== moveToken) {
+    return {
+      stale: true,
+      moveToken,
+      coachFeedback: null
+    };
+  }
+
+  const coachFeedback = await review.promise;
+
+  return {
+    stale: game.pendingCoachReview !== review,
+    moveToken,
+    coachFeedback: game.pendingCoachReview === review ? coachFeedback : null
+  };
+};
+
+const resolvePendingEngineMove = async ({ guestId, moveToken }) => {
+  const game = ensureGame(guestId);
+
+  if (game.pendingEngineTurn?.moveToken === moveToken) {
+    const gameState = await game.pendingEngineTurn.promise;
+
+    return {
+      stale: false,
+      moveToken,
+      game: gameState
+    };
+  }
+
+  if (game.resolvedEngineTurn?.moveToken === moveToken) {
+    const resolvedTurn = game.resolvedEngineTurn;
+    game.resolvedEngineTurn = null;
+
+    if (resolvedTurn.error) {
+      throw resolvedTurn.error;
+    }
+
+    return {
+      stale: false,
+      moveToken,
+      game: resolvedTurn.game
+    };
+  }
+
+  if (!game.pendingEngineTurn || game.pendingEngineTurn.moveToken !== moveToken) {
+    return {
+      stale: true,
+      moveToken,
+      game: getSerializableState(game.guestId)
+    };
+  }
 };
 
 const resignGame = async (guestId) => {
@@ -320,6 +547,7 @@ const resignGame = async (guestId) => {
     throw new Error("The game is already over. Start a new game.");
   }
 
+  clearPendingAsyncState(game);
   game.manualOutcome = getResignationOutcome(game.settings.playerColor);
   touchGame(game);
   await persistCompletedGameIfNeeded(game);
@@ -365,11 +593,16 @@ const offerDraw = async (guestId) => {
     };
   }
 
+  clearPendingAsyncState(game);
   game.manualOutcome = {
     result: "draw",
+    resultLabel: "Draw agreed",
+    drawReason: "agreed",
     status: {
       code: "draw-agreed",
-      message: "Draw"
+      message: "Draw agreed.",
+      outcomeLabel: "Draw agreed",
+      drawReason: "agreed"
     }
   };
   touchGame(game);
@@ -444,9 +677,12 @@ const resumeSavedGame = async ({ guestId, gameId }) => {
 module.exports = {
   createNewGame,
   getSerializableState,
+  getLiveSerializableState,
   makePlayerMove,
   offerDraw,
   performEngineMove,
+  resolveCoachFeedback,
+  resolvePendingEngineMove,
   resetGame,
   resignGame,
   saveCurrentGame,

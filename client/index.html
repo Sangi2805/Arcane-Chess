@@ -15,7 +15,7 @@
   <body>
     <main class="shell">
       <section class="hero panel">
-        <div>
+        <div class="hero-copy">
           <p class="eyebrow">Phase 3 Product Foundation</p>
           <h1>Arcane Chess</h1>
           <p class="lead">
@@ -26,14 +26,60 @@
         </div>
 
         <div class="hero-status">
-          <div class="status-group">
-            <span class="label">Game Status</span>
-            <strong id="status-text">Loading game...</strong>
-          </div>
-          <div class="status-group">
-            <span class="label">Match Notes</span>
-            <strong id="feedback-text">Preparing the board.</strong>
-          </div>
+          <article id="coach-panel" class="status-group coach-panel" aria-live="polite">
+            <div class="coach-avatar-stage">
+              <div class="coach-avatar-frame" aria-hidden="true">
+                <div class="coach-avatar-effects">
+                  <span class="coach-avatar-halo"></span>
+                  <span class="coach-rune-ring coach-rune-ring-primary"></span>
+                  <span class="coach-rune-ring coach-rune-ring-secondary"></span>
+                  <span class="coach-avatar-scan"></span>
+                  <span class="coach-avatar-flare"></span>
+                </div>
+                <div class="coach-avatar">
+                  <img
+                    id="coach-avatar-image"
+                    class="coach-avatar-image"
+                    src="./assets/arcane-coach-avatar.svg"
+                    alt="Arcane Coach portrait"
+                  />
+                  <span class="coach-avatar-core"></span>
+                </div>
+              </div>
+            </div>
+            <div class="coach-dialog">
+              <div class="coach-heading">
+                <span class="label">Coach Channel</span>
+                <strong class="coach-title">Arcane Coach</strong>
+                <span id="status-text" class="coach-status-line">Loading game...</span>
+              </div>
+              <div class="coach-speech">
+                <div class="coach-bubble">
+                  <div class="coach-bubble-copy">
+                    <div class="coach-message-row">
+                      <strong id="feedback-text" class="coach-message">Preparing the board.</strong>
+                      <span id="feedback-thinking" class="coach-thinking hidden" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </span>
+                    </div>
+                    <p id="feedback-explanation" class="coach-explanation">
+                      Your coach will review each completed move against Stockfish.
+                    </p>
+                  </div>
+                  <div class="coach-footer">
+                    <span id="feedback-classification" class="feedback-badge hidden">
+                      Good Move
+                    </span>
+                    <p id="feedback-suggestion" class="coach-suggestion hidden">
+                      Better move: Nf3
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -114,7 +160,31 @@
         </article>
 
         <article class="panel board-panel">
+          <div class="board-panel-toolbar">
+            <div class="board-view-toolbar" role="group" aria-label="Board view mode">
+              <span class="board-view-label">View</span>
+              <div class="board-view-toggle">
+                <button
+                  id="board-view-2d"
+                  type="button"
+                  class="board-view-button active"
+                  data-board-view="2d"
+                >
+                  2D
+                </button>
+                <button
+                  id="board-view-3d"
+                  type="button"
+                  class="board-view-button"
+                  data-board-view="3d"
+                >
+                  3D
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="board-shell">
+            <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
             <div id="board" class="board" aria-label="Arcane Chess Board"></div>
             <div
               id="game-over-banner"
@@ -180,6 +250,53 @@
           </section>
         </article>
       </section>
+
+      <div id="immersive-hud" class="immersive-hud" aria-hidden="true">
+        <div class="immersive-controls">
+          <span class="immersive-mode-chip">Immersive 3D</span>
+          <div class="immersive-control-row">
+            <button
+              id="immersive-exit-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              Return to 2D
+            </button>
+            <button
+              id="immersive-new-game-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              New Game
+            </button>
+          </div>
+          <div class="immersive-control-row">
+            <button
+              id="immersive-offer-draw-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              Offer Draw
+            </button>
+            <button
+              id="immersive-resign-button"
+              class="button-secondary button-small button-danger"
+              type="button"
+            >
+              Resign
+            </button>
+          </div>
+        </div>
+
+        <div class="immersive-status" role="status" aria-live="polite">
+          <strong id="immersive-status-heading" class="immersive-status-heading">
+            Preparing immersive board...
+          </strong>
+          <span id="immersive-status-meta" class="immersive-status-meta">
+            The duel summary will appear here.
+          </span>
+        </div>
+      </div>
     </main>
 
     <div id="history-modal" class="modal hidden" aria-hidden="true">
@@ -237,6 +354,7 @@
       </div>
     </div>
 
+    <script type="module" src="./3d/index.js"></script>
     <script src="./app.js" defer></script>
   </body>
 </html>

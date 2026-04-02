@@ -50,6 +50,16 @@ const gameHistorySchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    resultLabel: {
+      type: String,
+      default: null,
+      trim: true
+    },
+    drawReason: {
+      type: String,
+      default: null,
+      trim: true
+    },
     pgn: {
       type: String,
       default: ""

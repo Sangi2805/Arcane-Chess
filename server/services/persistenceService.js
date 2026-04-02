@@ -24,6 +24,9 @@ const countHalfMoves = (moveList = []) =>
     0
   );
 
+const trimTerminalPeriod = (value) =>
+  typeof value === "string" ? value.replace(/\.$/, "") : null;
+
 const getResultFromSnapshot = ({ snapshot }) => {
   if (snapshot.result && snapshot.result !== "not-started") {
     return snapshot.result;
@@ -39,6 +42,25 @@ const getResultFromSnapshot = ({ snapshot }) => {
 
   return "draw";
 };
+
+const getResultLabelFromSnapshot = ({ snapshot }) => {
+  if (snapshot.resultLabel) {
+    return snapshot.resultLabel;
+  }
+
+  if (snapshot.status?.outcomeLabel) {
+    return snapshot.status.outcomeLabel;
+  }
+
+  if (snapshot.result === "draw") {
+    return trimTerminalPeriod(snapshot.status?.message) || "Draw";
+  }
+
+  return null;
+};
+
+const getDrawReasonFromSnapshot = ({ snapshot }) =>
+  snapshot.drawReason || snapshot.status?.drawReason || null;
 
 const buildSavedGamePayload = ({ guestId, gameId, settings, snapshot }) => ({
   guestId,
@@ -70,6 +92,8 @@ const buildSavedGameSummary = (record) => ({
 const buildHistorySummary = (record) => ({
   gameId: record.gameId,
   result: record.result,
+  resultLabel: record.resultLabel || null,
+  drawReason: record.drawReason || null,
   statusCode: record.statusCode,
   statusMessage: record.statusMessage,
   difficulty: record.difficulty,
@@ -159,6 +183,8 @@ const recordCompletedGame = async ({ guestId, gameId, settings, snapshot }) => {
         guestId,
         gameId,
         result: getResultFromSnapshot({ snapshot }),
+        resultLabel: getResultLabelFromSnapshot({ snapshot }),
+        drawReason: getDrawReasonFromSnapshot({ snapshot }),
         statusCode: snapshot.status.code,
         statusMessage: snapshot.status.message,
         pgn: snapshot.pgn,

@@ -45,12 +45,57 @@ const DIFFICULTY_PRESETS = {
   }
 };
 
+const DEFAULT_THREADS = 1;
+const DEFAULT_HASH = 16;
+
+const createMoveFromUci = (uciMove) => {
+  if (!uciMove || uciMove === "(none)" || uciMove.length < 4) {
+    return null;
+  }
+
+  return {
+    from: uciMove.slice(0, 2),
+    to: uciMove.slice(2, 4),
+    promotion: uciMove.slice(4, 5) || undefined
+  };
+};
+
+const parseAnalysisLine = (line) => {
+  if (!line.startsWith("info ")) {
+    return null;
+  }
+
+  const cpMatch = line.match(/\bscore cp (-?\d+)/);
+  const mateMatch = line.match(/\bscore mate (-?\d+)/);
+
+  if (!cpMatch && !mateMatch) {
+    return null;
+  }
+
+  const pvMatch = line.match(/\bpv (.+)$/);
+
+  return {
+    score: cpMatch
+      ? {
+          type: "cp",
+          value: Number(cpMatch[1])
+        }
+      : {
+          type: "mate",
+          value: Number(mateMatch[1])
+        },
+    pv: pvMatch ? pvMatch[1].trim().split(/\s+/).filter(Boolean) : []
+  };
+};
+
 class EngineService {
   constructor() {
     this.engine = null;
     this.buffer = "";
     this.listeners = [];
+    this.lineObservers = [];
     this.queue = Promise.resolve();
+    this.readyPromise = null;
     this.enginePath = path.resolve(
       __dirname,
       "..",
@@ -66,54 +111,133 @@ class EngineService {
   }
 
   async getBestMove({ fen, difficulty }) {
+    const preset = this.getDifficultyPreset(difficulty);
     const nextTask = this.queue
       .catch(() => undefined)
-      .then(() => this.runBestMoveSearch({ fen, difficulty }));
+      .then(() =>
+        this.runPositionAnalysis({
+          fen,
+          depth: preset.depth,
+          moveTime: preset.moveTime,
+          skillLevel: preset.skillLevel
+        })
+      );
+
+    this.queue = nextTask;
+
+    const analysis = await nextTask;
+
+    if (!analysis.bestMove) {
+      return null;
+    }
+
+    return {
+      ...analysis.bestMove,
+      difficulty: preset
+    };
+  }
+
+  async getPositionAnalysis({
+    fen,
+    depth = 8,
+    moveTime = 150,
+    skillLevel = 20,
+    searchMoves = []
+  }) {
+    const nextTask = this.queue
+      .catch(() => undefined)
+      .then(() =>
+        this.runPositionAnalysis({
+          fen,
+          depth,
+          moveTime,
+          skillLevel,
+          searchMoves
+        })
+      );
 
     this.queue = nextTask;
 
     return nextTask;
   }
 
-  async runBestMoveSearch({ fen, difficulty }) {
+  async runPositionAnalysis({
+    fen,
+    depth,
+    moveTime,
+    skillLevel,
+    searchMoves = []
+  }) {
     await this.ensureReady();
-
-    const preset = this.getDifficultyPreset(difficulty);
-
-    this.send(`setoption name Skill Level value ${preset.skillLevel}`);
-    this.send("setoption name Threads value 1");
-    this.send("setoption name Hash value 16");
+    this.configureEngine({ skillLevel });
     this.send("ucinewgame");
     this.send("isready");
     await this.waitForLine((line) => line === "readyok", 15000);
 
-    this.send(`position fen ${fen}`);
-    this.send(`go depth ${preset.depth} movetime ${preset.moveTime}`);
+    let latestInfo = null;
+    const observer = (line) => {
+      const parsed = parseAnalysisLine(line);
 
-    const bestMoveLine = await this.waitForLine(
-      (line) => line.startsWith("bestmove "),
-      20000
-    );
-    const bestMove = bestMoveLine.split(" ")[1];
-
-    if (!bestMove || bestMove === "(none)") {
-      return null;
-    }
-
-    return {
-      from: bestMove.slice(0, 2),
-      to: bestMove.slice(2, 4),
-      promotion: bestMove.slice(4, 5) || undefined,
-      difficulty: preset
+      if (parsed) {
+        latestInfo = parsed;
+      }
     };
+
+    this.lineObservers.push(observer);
+    this.send(`position fen ${fen}`);
+    this.send(
+      [
+        "go",
+        ...(searchMoves.length ? ["searchmoves", ...searchMoves] : []),
+        "depth",
+        String(depth),
+        "movetime",
+        String(moveTime)
+      ].join(" ")
+    );
+
+    try {
+      const bestMoveLine = await this.waitForLine(
+        (line) => line.startsWith("bestmove "),
+        20000
+      );
+      const bestMoveUci = bestMoveLine.split(" ")[1];
+
+      return {
+        bestMoveUci,
+        bestMove: createMoveFromUci(bestMoveUci),
+        score: latestInfo?.score || null,
+        pv: latestInfo?.pv || []
+      };
+    } finally {
+      this.removeLineObserver(observer);
+    }
+  }
+
+  configureEngine({ skillLevel }) {
+    this.send(`setoption name Skill Level value ${skillLevel}`);
+    this.send(`setoption name Threads value ${DEFAULT_THREADS}`);
+    this.send(`setoption name Hash value ${DEFAULT_HASH}`);
+  }
+
+  removeLineObserver(observer) {
+    this.lineObservers = this.lineObservers.filter(
+      (candidate) => candidate !== observer
+    );
   }
 
   async ensureReady() {
-    if (this.engine && !this.engine.killed) {
+    if (this.engine && !this.engine.killed && !this.readyPromise) {
       return;
     }
 
-    await this.spawnEngine();
+    if (!this.readyPromise) {
+      this.readyPromise = this.spawnEngine().finally(() => {
+        this.readyPromise = null;
+      });
+    }
+
+    await this.readyPromise;
   }
 
   spawnEngine() {
@@ -126,6 +250,7 @@ class EngineService {
       this.engine = engine;
       this.buffer = "";
       this.listeners = [];
+      this.lineObservers = [];
 
       engine.stdout.on("data", (chunk) => this.consumeOutput(chunk.toString()));
       engine.stderr.on("data", (chunk) => this.consumeOutput(chunk.toString()));
@@ -155,6 +280,14 @@ class EngineService {
       .map((line) => line.trim())
       .filter(Boolean)
       .forEach((line) => {
+        this.lineObservers.forEach((observer) => {
+          try {
+            observer(line);
+          } catch (error) {
+            // Ignore observer errors so the primary engine flow stays alive.
+          }
+        });
+
         this.listeners = this.listeners.filter((listener) => {
           if (!listener.predicate(line)) {
             return true;
@@ -194,8 +327,12 @@ class EngineService {
 }
 
 const engineService = new EngineService();
+engineService.ensureReady().catch((error) => {
+  console.warn("Stockfish engine warm-up skipped:", error.message);
+});
 
 module.exports = {
   engineService,
+  EngineService,
   DIFFICULTY_PRESETS
 };
