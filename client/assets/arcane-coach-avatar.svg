@@ -1,0 +1,45 @@
+<svg width="320" height="400" viewBox="0 0 320 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="frame" x1="34" y1="18" x2="286" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0C269"/>
+      <stop offset="0.45" stop-color="#D39C44"/>
+      <stop offset="1" stop-color="#7A5120"/>
+    </linearGradient>
+    <radialGradient id="backdrop" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(160 174) rotate(90) scale(168 138)">
+      <stop stop-color="#46301E"/>
+      <stop offset="0.58" stop-color="#23160F"/>
+      <stop offset="1" stop-color="#140D09"/>
+    </radialGradient>
+    <radialGradient id="orbGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(160 168) rotate(90) scale(96)">
+      <stop stop-color="#FFF3D6"/>
+      <stop offset="0.38" stop-color="#F0C269"/>
+      <stop offset="1" stop-color="#B5732C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hood" x1="160" y1="152" x2="160" y2="332" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22150F"/>
+      <stop offset="1" stop-color="#0D0806"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="34" y="18" width="252" height="364" rx="120" fill="url(#frame)"/>
+  <rect x="48" y="32" width="224" height="336" rx="108" fill="url(#backdrop)"/>
+
+  <g opacity="0.85">
+    <circle cx="160" cy="168" r="82" fill="url(#orbGlow)"/>
+    <circle cx="160" cy="168" r="48" fill="#F3C876" fill-opacity="0.28"/>
+    <circle cx="160" cy="168" r="24" fill="#FFF6E3" fill-opacity="0.9"/>
+    <circle cx="145" cy="150" r="11" fill="#FFF9EF" fill-opacity="0.9"/>
+  </g>
+
+  <path d="M161 128C188 128 212 142 226 172C239 200 243 233 246 274C228 248 207 236 182 236H138C113 236 92 248 74 274C77 233 81 200 94 172C108 142 132 128 161 128Z" fill="url(#hood)"/>
+  <path d="M110 322C122 286 139 248 160 248C181 248 198 286 210 322H110Z" fill="#120B08"/>
+  <path d="M129 194C137 186 147 182 160 182C173 182 183 186 191 194C185 218 175 230 160 230C145 230 135 218 129 194Z" fill="#F1D0A4" fill-opacity="0.72"/>
+  <path d="M138 205C145 210 152 212 160 212C168 212 175 210 182 205" stroke="#75481E" stroke-width="6" stroke-linecap="round"/>
+
+  <path d="M78 102L103 118L128 102L118 130L141 148L111 149L103 178L94 149L65 148L88 130L78 102Z" fill="#F0C269" fill-opacity="0.7"/>
+  <path d="M242 108L258 118L274 108L268 126L282 138L263 139L258 158L252 139L233 138L248 126L242 108Z" fill="#F0C269" fill-opacity="0.5"/>
+  <path d="M160 56L169 74L188 78L174 91L177 110L160 101L143 110L146 91L132 78L151 74L160 56Z" fill="#FFF4DE" fill-opacity="0.75"/>
+
+  <circle cx="160" cy="168" r="96" stroke="#F4D296" stroke-opacity="0.28" stroke-width="2"/>
+  <circle cx="160" cy="168" r="108" stroke="#F4D296" stroke-opacity="0.14" stroke-width="2"/>
+</svg>
