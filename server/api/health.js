@@ -13,7 +13,7 @@ router.get("/", (request, response) => {
     database: getMongoStatus(),
     timestamp: new Date().toISOString(),
     features: {
-      guestAuth: "guest-continuity",
+      auth: "session-and-guest",
       chessService: getChessServiceStatus(),
       stockfish: "enabled",
       persistence: isMongoAvailable() ? "mongo-ready" : "mongo-unavailable"

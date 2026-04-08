@@ -7,7 +7,7 @@ const {
 } = require("../game/gameManager");
 const { getMongoStatus, isMongoAvailable } = require("../db/mongo");
 const { listSavedGames } = require("../services/persistenceService");
-const { requireGuestId, sendApiError } = require("./requestContext");
+const { getRequestActor, sendApiError } = require("./requestContext");
 
 const router = express.Router();
 
@@ -18,7 +18,7 @@ const getPersistencePayload = () => ({
 
 router.get("/", async (request, response) => {
   try {
-    const guestId = requireGuestId(request);
+    const actor = getRequestActor(request);
 
     if (!isMongoAvailable()) {
       response.json({
@@ -28,7 +28,7 @@ router.get("/", async (request, response) => {
       return;
     }
 
-    const items = await listSavedGames(guestId);
+    const items = await listSavedGames(actor);
 
     response.json({
       items,
@@ -41,12 +41,12 @@ router.get("/", async (request, response) => {
 
 router.post("/", async (request, response) => {
   try {
-    const guestId = requireGuestId(request);
-    const savedGame = await saveCurrentGame(guestId);
+    const actor = getRequestActor(request);
+    const savedGame = await saveCurrentGame(actor);
 
     response.status(201).json({
       savedGame,
-      game: getSerializableState(guestId),
+      game: getSerializableState(actor),
       persistence: getPersistencePayload()
     });
   } catch (error) {
@@ -56,9 +56,9 @@ router.post("/", async (request, response) => {
 
 router.post("/:gameId/resume", async (request, response) => {
   try {
-    const guestId = requireGuestId(request);
+    const actor = getRequestActor(request);
     const gameState = await resumeSavedGame({
-      guestId,
+      actor,
       gameId: request.params.gameId
     });
 

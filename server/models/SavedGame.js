@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { Schema } = mongoose;
 
 const moveEntrySchema = new mongoose.Schema(
   {
@@ -61,10 +62,27 @@ const lastMoveSchema = new mongoose.Schema(
 
 const savedGameSchema = new mongoose.Schema(
   {
-    guestId: {
+    ownerType: {
+      type: String,
+      enum: ["guest", "user"],
+      required: true,
+      index: true
+    },
+    ownerId: {
       type: String,
       required: true,
       index: true,
+      trim: true
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true
+    },
+    guestId: {
+      type: String,
+      default: null,
       trim: true
     },
     gameId: {
@@ -101,6 +119,14 @@ const savedGameSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    timeControl: {
+      type: Schema.Types.Mixed,
+      default: null
+    },
+    clockState: {
+      type: Schema.Types.Mixed,
+      default: null
+    },
     status: {
       type: statusSchema,
       required: true
@@ -121,7 +147,7 @@ const savedGameSchema = new mongoose.Schema(
   }
 );
 
-savedGameSchema.index({ guestId: 1, isResumable: 1, updatedAt: -1 });
+savedGameSchema.index({ ownerType: 1, ownerId: 1, isResumable: 1, updatedAt: -1 });
 
 module.exports =
   mongoose.models.SavedGame || mongoose.model("SavedGame", savedGameSchema);

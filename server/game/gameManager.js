@@ -15,6 +15,16 @@ const {
   saveGameSnapshot
 } = require("../services/persistenceService");
 const {
+  createClockState,
+  getClockStateView,
+  hydrateClockState,
+  isTimedTimeControl,
+  normalizeTimeControl,
+  pauseClockState,
+  resumeClockState,
+  switchClockTurn
+} = require("../services/clockService");
+const {
   evaluateEngineMove,
   evaluateMove
 } = require("../services/evaluationService");
@@ -22,7 +32,8 @@ const { getMongoStatus, isMongoAvailable } = require("../db/mongo");
 
 const DEFAULT_SETTINGS = {
   difficulty: "easy",
-  playerColor: "white"
+  playerColor: "white",
+  timeControl: normalizeTimeControl()
 };
 
 const activeGames = new Map();
@@ -38,10 +49,33 @@ const NOT_STARTED_STATUS = {
 
 const normalizeSettings = (settings = {}) => ({
   difficulty: settings.difficulty || DEFAULT_SETTINGS.difficulty,
-  playerColor: settings.playerColor === "black" ? "black" : "white"
+  playerColor: settings.playerColor === "black" ? "black" : "white",
+  timeControl: normalizeTimeControl(settings.timeControl)
 });
 
-const getGuestId = (guestId) => guestId || DEFAULT_GUEST_ID;
+const normalizeActor = (actor = {}) => {
+  if (actor.type === "user" && actor.userId) {
+    const userId = String(actor.userId);
+
+    return {
+      type: "user",
+      actorId: userId,
+      userId,
+      guestId: null,
+      key: `user:${userId}`
+    };
+  }
+
+  const guestId = actor.guestId || actor.actorId || DEFAULT_GUEST_ID;
+
+  return {
+    type: "guest",
+    actorId: guestId,
+    userId: null,
+    guestId,
+    key: `guest:${guestId}`
+  };
+};
 
 const getEngineColor = (game) =>
   game.settings.playerColor === "white" ? "black" : "white";
@@ -64,6 +98,117 @@ const getResignationOutcome = (color) => ({
   resultLabel: "Resignation",
   drawReason: null
 });
+
+const hasTimeoutWinningMaterial = (chess, color) => {
+  const pieceCounts = {
+    pawns: 0,
+    rooks: 0,
+    queens: 0,
+    bishops: 0,
+    knights: 0
+  };
+
+  chess.board().forEach((rank) => {
+    rank.forEach((piece) => {
+      if (
+        !piece ||
+        (color === "white" ? piece.color !== "w" : piece.color !== "b") ||
+        piece.type === "k"
+      ) {
+        return;
+      }
+
+      switch (piece.type) {
+        case "p":
+          pieceCounts.pawns += 1;
+          break;
+        case "r":
+          pieceCounts.rooks += 1;
+          break;
+        case "q":
+          pieceCounts.queens += 1;
+          break;
+        case "b":
+          pieceCounts.bishops += 1;
+          break;
+        case "n":
+          pieceCounts.knights += 1;
+          break;
+        default:
+          break;
+      }
+    });
+  });
+
+  if (pieceCounts.pawns || pieceCounts.rooks || pieceCounts.queens) {
+    return true;
+  }
+
+  if (pieceCounts.bishops >= 2) {
+    return true;
+  }
+
+  if (pieceCounts.bishops >= 1 && pieceCounts.knights >= 1) {
+    return true;
+  }
+
+  if (pieceCounts.knights >= 3) {
+    return true;
+  }
+
+  return false;
+};
+
+const getTimeoutOutcome = (game, expiredColor) => {
+  const winnerColor = expiredColor === "white" ? "black" : "white";
+
+  if (!hasTimeoutWinningMaterial(game.chess, winnerColor)) {
+    return {
+      result: "draw",
+      status: {
+        code: "draw-timeout-insufficient-material",
+        message: `${formatColor(expiredColor)} flagged, but ${formatColor(
+          winnerColor
+        )} lacked mating material.`,
+        outcomeLabel: "Draw by timeout vs insufficient material",
+        drawReason: "timeout-insufficient-material"
+      },
+      resultLabel: "Draw by timeout vs insufficient material",
+      drawReason: "timeout-insufficient-material"
+    };
+  }
+
+  return {
+    result: winnerColor === "white" ? "white-win" : "black-win",
+    status: {
+      code: "timeout",
+      message: `${formatColor(expiredColor)} lost on time`,
+      outcomeLabel: "Timeout"
+    },
+    resultLabel: "Timeout",
+    drawReason: null
+  };
+};
+
+const getClaimDrawOutcome = (drawClaim = {}) => {
+  const primaryReason = drawClaim.reasons?.[0];
+
+  if (!drawClaim.available || !primaryReason) {
+    throw new Error("No draw claim is currently available.");
+  }
+
+  return {
+    result: "draw",
+    status: {
+      code: primaryReason.statusCode,
+      message: `${primaryReason.outcomeLabel}.`,
+      outcomeLabel: primaryReason.outcomeLabel,
+      drawReason: primaryReason.code
+    },
+    resultLabel: primaryReason.outcomeLabel,
+    drawReason: primaryReason.code
+  };
+};
 
 const getBoardOutcome = (snapshot) => {
   if (snapshot.status.code === "checkmate") {
@@ -101,7 +246,37 @@ const getBoardOutcome = (snapshot) => {
   };
 };
 
-const isGameFinished = (game) => Boolean(game.manualOutcome) || game.chess.isGameOver();
+const getLiveSnapshot = (game) => serializeGame(game.chess);
+
+const syncGameClockState = (game, now = Date.now()) => {
+  if (
+    !game?.hasStarted ||
+    game.manualOutcome ||
+    !isTimedTimeControl(game.settings?.timeControl) ||
+    !game.clockState
+  ) {
+    return false;
+  }
+
+  const clockView = getClockStateView(game.clockState, now);
+
+  if (!clockView?.enabled) {
+    game.clockState = null;
+    return false;
+  }
+
+  if (!clockView.isExpired) {
+    return false;
+  }
+
+  game.clockState = pauseClockState(game.clockState, now);
+  game.manualOutcome = getTimeoutOutcome(game, clockView.expiredColor);
+  touchGame(game);
+
+  return true;
+};
+
+const isGameFinished = (game) => Boolean(game.manualOutcome) || getLiveSnapshot(game).isGameOver;
 
 const getResolvedGameState = (game, snapshot) => {
   if (game.manualOutcome) {
@@ -135,12 +310,20 @@ const getResolvedGameState = (game, snapshot) => {
 };
 
 const buildSerializableState = (game, extras = {}) => {
+  const now = extras.now || Date.now();
   const snapshot = serializeGame(game.chess);
   const resolvedState = getResolvedGameState(game, snapshot);
+  const shouldPauseClock =
+    resolvedState.isGameOver || resolvedState.result === "not-started";
+  const clockState = shouldPauseClock
+    ? getClockStateView(pauseClockState(game.clockState, now), now)
+    : getClockStateView(game.clockState, now);
 
   return {
     id: game.id,
+    actorType: game.actor.type,
     guestId: game.guestId,
+    userId: game.userId,
     createdAt: game.createdAt,
     updatedAt: game.updatedAt,
     hasStarted: game.hasStarted,
@@ -151,6 +334,8 @@ const buildSerializableState = (game, extras = {}) => {
     },
     persistence: getPersistencePayload(),
     ...snapshot,
+    timeControl: game.settings.timeControl || null,
+    clockState: clockState || null,
     turn: resolvedState.turn,
     legalMoves: resolvedState.legalMoves,
     isGameOver: resolvedState.isGameOver,
@@ -163,40 +348,59 @@ const buildSerializableState = (game, extras = {}) => {
 };
 
 const createGame = ({
-  guestId,
+  actor,
   settings = {},
   snapshot = null,
   hasStarted = false
 } = {}) => {
+  const normalizedActor = normalizeActor(actor);
   const normalizedSettings = normalizeSettings(settings);
   const chess = snapshot
     ? restoreChessGame({ fen: snapshot.fen, pgn: snapshot.pgn })
     : createChessGame();
   const now = new Date().toISOString();
+  const activeColor = serializeGame(chess).turn;
+  const clockState = hasStarted
+    ? hydrateClockState(
+        snapshot?.clockState,
+        normalizedSettings.timeControl,
+        activeColor
+      )
+    : null;
 
   const game = {
     id: snapshot?.gameId || randomUUID(),
-    guestId: getGuestId(guestId),
+    actor: normalizedActor,
+    guestId: normalizedActor.guestId,
+    userId: normalizedActor.userId,
     chess,
     settings: normalizedSettings,
     createdAt: snapshot?.createdAt || now,
     updatedAt: snapshot?.updatedAt || now,
     historyRecorded: snapshot?.historyRecorded || false,
     hasStarted,
+    clockState,
     manualOutcome: null,
     pendingCoachReview: null,
     pendingEngineTurn: null,
     resolvedEngineTurn: null
   };
 
-  activeGames.set(game.guestId, game);
+  activeGames.set(game.actor.key, game);
 
   return game;
 };
 
-const ensureGame = (guestId) =>
-  activeGames.get(getGuestId(guestId)) ||
-  createGame({ guestId: getGuestId(guestId) });
+const ensureGame = (actor) => {
+  const normalizedActor = normalizeActor(actor);
+
+  return (
+    activeGames.get(normalizedActor.key) ||
+    createGame({
+      actor: normalizedActor
+    })
+  );
+};
 
 const getTurn = (game) => serializeGame(game.chess).turn;
 
@@ -210,16 +414,16 @@ const clearPendingAsyncState = (game) => {
   game.resolvedEngineTurn = null;
 };
 
-const createIdleGame = ({ guestId, settings = {} } = {}) =>
+const createIdleGame = ({ actor, settings = {} } = {}) =>
   createGame({
-    guestId,
+    actor,
     settings,
     hasStarted: false
   });
 
-const clearActiveGame = async (guestId, { settings = null } = {}) => {
-  const normalizedGuestId = getGuestId(guestId);
-  const currentGame = activeGames.get(normalizedGuestId);
+const clearActiveGame = async (actor, { settings = null } = {}) => {
+  const normalizedActor = normalizeActor(actor);
+  const currentGame = activeGames.get(normalizedActor.key);
 
   if (currentGame && isGameFinished(currentGame)) {
     await persistCompletedGameIfNeeded(currentGame);
@@ -227,26 +431,26 @@ const clearActiveGame = async (guestId, { settings = null } = {}) => {
 
   const nextSettings = normalizeSettings(settings || currentGame?.settings || DEFAULT_SETTINGS);
   const game = createIdleGame({
-    guestId: normalizedGuestId,
+    actor: normalizedActor,
     settings: nextSettings
   });
 
   return buildSerializableState(game);
 };
 
-const getSerializableState = (guestId) => {
-  const game = ensureGame(guestId);
+const getSerializableState = (actor) => {
+  const game = ensureGame(actor);
+  syncGameClockState(game);
 
   return buildSerializableState(game);
 };
 
-const getLiveSerializableState = async (guestId) => {
-  const game = ensureGame(guestId);
+const getLiveSerializableState = async (actor) => {
+  const game = ensureGame(actor);
+  const timedOut = syncGameClockState(game);
 
-  if (game.hasStarted && isGameFinished(game)) {
-    return clearActiveGame(game.guestId, {
-      settings: game.settings
-    });
+  if (timedOut || (game.hasStarted && isGameFinished(game))) {
+    await persistCompletedGameIfNeeded(game);
   }
 
   return buildSerializableState(game);
@@ -257,9 +461,13 @@ const persistCompletedGameIfNeeded = async (game) => {
     return;
   }
 
+  if (game.clockState) {
+    game.clockState = pauseClockState(game.clockState);
+  }
+
   try {
     await recordCompletedGame({
-      guestId: game.guestId,
+      actor: game.actor,
       gameId: game.id,
       settings: {
         ...game.settings,
@@ -277,26 +485,31 @@ const persistCompletedGameIfNeeded = async (game) => {
   }
 };
 
-const createNewGame = async ({ guestId, settings = {} } = {}) => {
+const createNewGame = async ({ actor, settings = {} } = {}) => {
   const game = createGame({
-    guestId,
+    actor,
     settings,
     hasStarted: true
   });
 
   if (game.settings.playerColor === "black") {
-    await performEngineMove(game.guestId, {
+    await performEngineMove(game.actor, {
       includeCoachFeedback: false
     });
   }
 
-  return getSerializableState(game.guestId);
+  return getSerializableState(game.actor);
 };
 
-const resetGame = async (guestId) => clearActiveGame(guestId);
+const resetGame = async (actor) => clearActiveGame(actor);
 
-const makePlayerMove = async ({ guestId, from, to, promotion }) => {
-  const game = ensureGame(guestId);
+const makePlayerMove = async ({ actor, from, to, promotion }) => {
+  const game = ensureGame(actor);
+  const playerColor = game.settings.playerColor;
+
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+  }
 
   if (!game.hasStarted) {
     throw new Error("Start a new game or resume a saved game first.");
@@ -317,13 +530,37 @@ const makePlayerMove = async ({ guestId, from, to, promotion }) => {
     throw new Error("Illegal move.");
   }
 
+  const moveTimestamp = Date.now();
+
+  if (game.clockState) {
+    game.clockState = switchClockTurn(
+      game.clockState,
+      playerColor,
+      getTurn(game),
+      moveTimestamp
+    );
+  }
+
   touchGame(game);
   clearPendingAsyncState(game);
 
+  const liveSnapshot = getLiveSnapshot(game);
+  if (liveSnapshot.isGameOver && game.clockState) {
+    game.clockState = pauseClockState(game.clockState, moveTimestamp);
+  }
   const moveToken = randomUUID();
-  const gameContinues = !game.chess.isGameOver();
+  const gameContinues = !liveSnapshot.isGameOver;
+  const shouldPauseForDrawClaim =
+    liveSnapshot.ruleState?.drawClaim?.available &&
+    liveSnapshot.turn === getEngineColor(game);
   const shouldQueueEngine =
-    gameContinues && getTurn(game) === getEngineColor(game);
+    gameContinues &&
+    !shouldPauseForDrawClaim &&
+    liveSnapshot.turn === getEngineColor(game);
+
+  if (shouldPauseForDrawClaim && game.clockState) {
+    game.clockState = pauseClockState(game.clockState, moveTimestamp);
+  }
 
   if (gameContinues) {
     game.pendingCoachReview = {
@@ -354,7 +591,7 @@ const makePlayerMove = async ({ guestId, from, to, promotion }) => {
     };
 
     game.pendingEngineTurn = pendingEngineTurn;
-    pendingEngineTurn.promise = performEngineMove(game.guestId)
+    pendingEngineTurn.promise = performEngineMove(game.actor)
       .then((gameState) => {
         if (game.pendingEngineTurn === pendingEngineTurn) {
           game.resolvedEngineTurn = {
@@ -394,23 +631,31 @@ const makePlayerMove = async ({ guestId, from, to, promotion }) => {
 };
 
 const performEngineMove = async (
-  guestId,
+  actor,
   { includeCoachFeedback = true } = {}
 ) => {
-  const game = ensureGame(guestId);
+  const game = ensureGame(actor);
   const activePendingEngineTurn = game.pendingEngineTurn;
 
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+  }
+
   if (!game.hasStarted) {
-    return getSerializableState(game.guestId);
+    return getSerializableState(game.actor);
   }
 
   if (isGameFinished(game)) {
     await persistCompletedGameIfNeeded(game);
-    return getSerializableState(game.guestId);
+    return getSerializableState(game.actor);
   }
 
   if (getTurn(game) !== getEngineColor(game)) {
-    return getSerializableState(game.guestId);
+    return getSerializableState(game.actor);
+  }
+
+  if (game.clockState && !game.clockState.runningSince) {
+    game.clockState = resumeClockState(game.clockState);
   }
 
   const beforeFen = game.chess.fen();
@@ -433,7 +678,12 @@ const performEngineMove = async (
       game.pendingEngineTurn = null;
     }
 
-    return getSerializableState(game.guestId);
+    return getSerializableState(game.actor);
+  }
+
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+    return getSerializableState(game.actor);
   }
 
   const move = applyMove(game.chess, bestMove);
@@ -442,17 +692,32 @@ const performEngineMove = async (
     throw new Error("Engine returned an invalid move.");
   }
 
+  const moveTimestamp = Date.now();
+
+  if (game.clockState) {
+    game.clockState = switchClockTurn(
+      game.clockState,
+      getEngineColor(game),
+      getTurn(game),
+      moveTimestamp
+    );
+  }
+
   touchGame(game);
 
   if (!activePendingEngineTurn) {
     game.pendingEngineTurn = null;
   }
 
+  const liveSnapshot = getLiveSnapshot(game);
+  if (liveSnapshot.isGameOver && game.clockState) {
+    game.clockState = pauseClockState(game.clockState, moveTimestamp);
+  }
   await persistCompletedGameIfNeeded(game);
 
   let coachFeedback = null;
 
-  if (includeCoachFeedback && !game.chess.isGameOver()) {
+  if (includeCoachFeedback && !liveSnapshot.isGameOver) {
     coachFeedback = await evaluateEngineMove({
       beforeFen,
       afterFen: game.chess.fen(),
@@ -478,8 +743,8 @@ const performEngineMove = async (
   });
 };
 
-const resolveCoachFeedback = async ({ guestId, moveToken }) => {
-  const game = ensureGame(guestId);
+const resolveCoachFeedback = async ({ actor, moveToken }) => {
+  const game = ensureGame(actor);
   const review = game.pendingCoachReview;
 
   if (!review || review.moveToken !== moveToken) {
@@ -499,8 +764,8 @@ const resolveCoachFeedback = async ({ guestId, moveToken }) => {
   };
 };
 
-const resolvePendingEngineMove = async ({ guestId, moveToken }) => {
-  const game = ensureGame(guestId);
+const resolvePendingEngineMove = async ({ actor, moveToken }) => {
+  const game = ensureGame(actor);
 
   if (game.pendingEngineTurn?.moveToken === moveToken) {
     const gameState = await game.pendingEngineTurn.promise;
@@ -531,13 +796,17 @@ const resolvePendingEngineMove = async ({ guestId, moveToken }) => {
     return {
       stale: true,
       moveToken,
-      game: getSerializableState(game.guestId)
+      game: getSerializableState(game.actor)
     };
   }
 };
 
-const resignGame = async (guestId) => {
-  const game = ensureGame(guestId);
+const resignGame = async (actor) => {
+  const game = ensureGame(actor);
+
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+  }
 
   if (!game.hasStarted) {
     throw new Error("Start a new game or resume a saved game first.");
@@ -548,11 +817,14 @@ const resignGame = async (guestId) => {
   }
 
   clearPendingAsyncState(game);
+  if (game.clockState) {
+    game.clockState = pauseClockState(game.clockState);
+  }
   game.manualOutcome = getResignationOutcome(game.settings.playerColor);
   touchGame(game);
   await persistCompletedGameIfNeeded(game);
 
-  return getSerializableState(game.guestId);
+  return getSerializableState(game.actor);
 };
 
 // Phase 3 draw handling stays intentionally simple: the engine only accepts
@@ -574,8 +846,12 @@ const shouldAcceptDrawOffer = (game) => {
   );
 };
 
-const offerDraw = async (guestId) => {
-  const game = ensureGame(guestId);
+const offerDraw = async (actor) => {
+  const game = ensureGame(actor);
+
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+  }
 
   if (!game.hasStarted) {
     throw new Error("Start a new game or resume a saved game first.");
@@ -589,11 +865,14 @@ const offerDraw = async (guestId) => {
     return {
       accepted: false,
       message: "Draw offer declined. Play continues.",
-      game: getSerializableState(game.guestId)
+      game: getSerializableState(game.actor)
     };
   }
 
   clearPendingAsyncState(game);
+  if (game.clockState) {
+    game.clockState = pauseClockState(game.clockState);
+  }
   game.manualOutcome = {
     result: "draw",
     resultLabel: "Draw agreed",
@@ -611,12 +890,49 @@ const offerDraw = async (guestId) => {
   return {
     accepted: true,
     message: "Draw offer accepted.",
-    game: getSerializableState(game.guestId)
+    game: getSerializableState(game.actor)
   };
 };
 
-const saveCurrentGame = async (guestId) => {
-  const game = ensureGame(guestId);
+const claimDraw = async (actor) => {
+  const game = ensureGame(actor);
+
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+  }
+
+  if (!game.hasStarted) {
+    throw new Error("Start a new game or resume a saved game first.");
+  }
+
+  if (isGameFinished(game)) {
+    throw new Error("The game is already over. Start a new game.");
+  }
+
+  const snapshot = getLiveSnapshot(game);
+  const drawClaim = snapshot.ruleState?.drawClaim;
+
+  if (!drawClaim?.available) {
+    throw new Error("No draw claim is currently available in this position.");
+  }
+
+  clearPendingAsyncState(game);
+  if (game.clockState) {
+    game.clockState = pauseClockState(game.clockState);
+  }
+  game.manualOutcome = getClaimDrawOutcome(drawClaim);
+  touchGame(game);
+  await persistCompletedGameIfNeeded(game);
+
+  return getSerializableState(game.actor);
+};
+
+const saveCurrentGame = async (actor) => {
+  const game = ensureGame(actor);
+
+  if (syncGameClockState(game)) {
+    await persistCompletedGameIfNeeded(game);
+  }
 
   if (!game.hasStarted) {
     throw new Error("Start a new game or resume a saved game before saving.");
@@ -629,8 +945,9 @@ const saveCurrentGame = async (guestId) => {
   }
 
   const snapshot = buildSerializableState(game);
+  snapshot.clockState = pauseClockState(game.clockState);
   const savedGame = await saveGameSnapshot({
-    guestId: game.guestId,
+    actor: game.actor,
     gameId: game.id,
     settings: {
       ...game.settings,
@@ -642,11 +959,12 @@ const saveCurrentGame = async (guestId) => {
   return savedGame;
 };
 
-const resumeSavedGame = async ({ guestId, gameId }) => {
-  const savedGame = await getSavedGameRecord(getGuestId(guestId), gameId);
+const resumeSavedGame = async ({ actor, gameId }) => {
+  const normalizedActor = normalizeActor(actor);
+  const savedGame = await getSavedGameRecord(normalizedActor, gameId);
 
   if (!savedGame) {
-    throw new Error("Saved game not found for this guest.");
+    throw new Error("Saved game not found for this account.");
   }
 
   if (!savedGame.isResumable) {
@@ -654,24 +972,53 @@ const resumeSavedGame = async ({ guestId, gameId }) => {
   }
 
   const game = createGame({
-    guestId: getGuestId(guestId),
+    actor: normalizedActor,
     settings: {
       difficulty: savedGame.difficulty,
-      playerColor: savedGame.playerColor
+      playerColor: savedGame.playerColor,
+      timeControl: savedGame.timeControl || null
     },
     snapshot: {
       gameId: savedGame.gameId,
       fen: savedGame.fen,
       pgn: savedGame.pgn,
       createdAt: savedGame.createdAt.toISOString(),
-      updatedAt: savedGame.updatedAt.toISOString()
+      updatedAt: savedGame.updatedAt.toISOString(),
+      clockState: savedGame.clockState || null
     },
     hasStarted: true
   });
 
+  if (game.clockState) {
+    game.clockState = resumeClockState(game.clockState);
+  }
+
   touchGame(game);
 
-  return getSerializableState(game.guestId);
+  return getSerializableState(game.actor);
+};
+
+const transferActiveGame = ({ fromActor, toActor }) => {
+  const sourceActor = normalizeActor(fromActor);
+  const targetActor = normalizeActor(toActor);
+
+  if (!sourceActor.key || !targetActor.key || sourceActor.key === targetActor.key) {
+    return null;
+  }
+
+  const activeGame = activeGames.get(sourceActor.key);
+
+  if (!activeGame) {
+    return null;
+  }
+
+  activeGames.delete(sourceActor.key);
+  activeGame.actor = targetActor;
+  activeGame.guestId = targetActor.guestId;
+  activeGame.userId = targetActor.userId;
+  activeGames.set(targetActor.key, activeGame);
+
+  return buildSerializableState(activeGame);
 };
 
 module.exports = {
@@ -681,10 +1028,12 @@ module.exports = {
   makePlayerMove,
   offerDraw,
   performEngineMove,
+  claimDraw,
   resolveCoachFeedback,
   resolvePendingEngineMove,
   resetGame,
   resignGame,
   saveCurrentGame,
-  resumeSavedGame
+  resumeSavedGame,
+  transferActiveGame
 };

@@ -4,6 +4,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 
 const apiRouter = require("./api");
+const { attachRequestAuth } = require("./auth/sessionAuth");
 const { connectToMongo, getMongoStatus } = require("./db/mongo");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -14,16 +15,19 @@ const clientOrigin = process.env.CLIENT_ORIGIN || `http://localhost:${port}`;
 const clientPath = path.resolve(__dirname, "..", "client");
 const threeBuildPath = path.resolve(__dirname, "node_modules", "three", "build");
 
+app.set("trust proxy", 1);
+
 app.use(
   cors({
-    origin: clientOrigin
+    origin: clientOrigin,
+    credentials: true
   })
 );
 app.use(express.json());
 app.use(express.static(clientPath));
 app.use("/vendor/three", express.static(threeBuildPath));
 
-app.use("/api", apiRouter);
+app.use("/api", attachRequestAuth, apiRouter);
 
 app.get("*", (request, response) => {
   response.sendFile(path.join(clientPath, "index.html"));

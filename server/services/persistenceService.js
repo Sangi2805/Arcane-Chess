@@ -2,6 +2,8 @@ const SavedGame = require("../models/SavedGame");
 const GameHistory = require("../models/GameHistory");
 const { getMongoStatus, isMongoAvailable } = require("../db/mongo");
 
+const DEFAULT_GUEST_OWNER_ID = "guest_local_fallback";
+
 class PersistenceUnavailableError extends Error {
   constructor(message = "MongoDB persistence is currently unavailable.") {
     super(message);
@@ -62,8 +64,8 @@ const getResultLabelFromSnapshot = ({ snapshot }) => {
 const getDrawReasonFromSnapshot = ({ snapshot }) =>
   snapshot.drawReason || snapshot.status?.drawReason || null;
 
-const buildSavedGamePayload = ({ guestId, gameId, settings, snapshot }) => ({
-  guestId,
+const buildSavedGamePayload = ({ actor, gameId, settings, snapshot }) => ({
+  ...buildOwnerPayload(actor),
   gameId,
   fen: snapshot.fen,
   pgn: snapshot.pgn,
@@ -71,6 +73,8 @@ const buildSavedGamePayload = ({ guestId, gameId, settings, snapshot }) => ({
   playerColor: settings.playerColor,
   engineColor: settings.engineColor,
   difficulty: settings.difficulty,
+  timeControl: snapshot.timeControl || settings.timeControl || null,
+  clockState: snapshot.clockState || null,
   status: snapshot.status,
   lastMove: snapshot.lastMove,
   isResumable: !snapshot.isGameOver
@@ -86,7 +90,17 @@ const buildSavedGameSummary = (record) => ({
   moveCount: countHalfMoves(record.moveList),
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
-  isResumable: record.isResumable
+  isResumable: record.isResumable,
+  timeControl: record.timeControl || null,
+  clockState: record.clockState || null
+});
+
+const buildSavedGameDetail = (record) => ({
+  ...buildSavedGameSummary(record),
+  statusCode: record.status?.code || null,
+  statusMessage: record.status?.message || null,
+  pgn: record.pgn,
+  moveList: record.moveList
 });
 
 const buildHistorySummary = (record) => ({
@@ -101,7 +115,9 @@ const buildHistorySummary = (record) => ({
   engineColor: record.engineColor,
   moveCount: countHalfMoves(record.moveList),
   completedAt: record.completedAt,
-  createdAt: record.createdAt
+  createdAt: record.createdAt,
+  timeControl: record.timeControl || null,
+  clockState: record.clockState || null
 });
 
 const buildHistoryDetail = (record) => ({
@@ -110,16 +126,61 @@ const buildHistoryDetail = (record) => ({
   moveList: record.moveList
 });
 
-const saveGameSnapshot = async ({ guestId, gameId, settings, snapshot }) => {
+const normalizeActor = (actor = {}) => {
+  if (actor.type === "user" && actor.userId) {
+    return {
+      ownerType: "user",
+      ownerId: String(actor.userId),
+      userId: actor.userId,
+      guestId: null
+    };
+  }
+
+  const guestId = actor.guestId || actor.actorId || DEFAULT_GUEST_OWNER_ID;
+
+  return {
+    ownerType: "guest",
+    ownerId: guestId,
+    userId: null,
+    guestId
+  };
+};
+
+const buildOwnerPayload = (actor = {}) => {
+  const normalizedActor = normalizeActor(actor);
+
+  return {
+    ownerType: normalizedActor.ownerType,
+    ownerId: normalizedActor.ownerId,
+    userId: normalizedActor.userId || null,
+    guestId: normalizedActor.guestId || null
+  };
+};
+
+const buildOwnerFilter = (actor = {}) => {
+  const normalizedActor = normalizeActor(actor);
+
+  return {
+    ownerType: normalizedActor.ownerType,
+    ownerId: normalizedActor.ownerId
+  };
+};
+
+const saveGameSnapshot = async ({ actor, gameId, settings, snapshot }) => {
   ensurePersistence();
 
   const record = await SavedGame.findOneAndUpdate(
     {
-      guestId,
+      ...buildOwnerFilter(actor),
       gameId
     },
     {
-      $set: buildSavedGamePayload({ guestId, gameId, settings, snapshot })
+      $set: buildSavedGamePayload({
+        actor,
+        gameId,
+        settings,
+        snapshot
+      })
     },
     {
       upsert: true,
@@ -131,11 +192,11 @@ const saveGameSnapshot = async ({ guestId, gameId, settings, snapshot }) => {
   return buildSavedGameSummary(record);
 };
 
-const listSavedGames = async (guestId) => {
+const listSavedGames = async (actor) => {
   ensurePersistence();
 
   const records = await SavedGame.find({
-    guestId,
+    ...buildOwnerFilter(actor),
     isResumable: true
   })
     .sort({ updatedAt: -1 })
@@ -144,27 +205,33 @@ const listSavedGames = async (guestId) => {
   return records.map(buildSavedGameSummary);
 };
 
-const getSavedGameRecord = async (guestId, gameId) => {
+const getSavedGameRecord = async (actor, gameId) => {
   ensurePersistence();
 
   return SavedGame.findOne({
-    guestId,
+    ...buildOwnerFilter(actor),
     gameId
   }).lean();
 };
 
-const recordCompletedGame = async ({ guestId, gameId, settings, snapshot }) => {
+const recordCompletedGame = async ({ actor, gameId, settings, snapshot }) => {
   ensurePersistence();
+  const ownerPayload = buildOwnerPayload(actor);
 
   const completedAt = new Date();
   await SavedGame.findOneAndUpdate(
     {
-      guestId,
+      ...buildOwnerFilter(actor),
       gameId
     },
     {
       $set: {
-        ...buildSavedGamePayload({ guestId, gameId, settings, snapshot }),
+        ...buildSavedGamePayload({
+          actor,
+          gameId,
+          settings,
+          snapshot
+        }),
         isResumable: false
       }
     },
@@ -175,12 +242,12 @@ const recordCompletedGame = async ({ guestId, gameId, settings, snapshot }) => {
 
   const record = await GameHistory.findOneAndUpdate(
     {
-      guestId,
+      ...buildOwnerFilter(actor),
       gameId
     },
     {
       $set: {
-        guestId,
+        ...ownerPayload,
         gameId,
         result: getResultFromSnapshot({ snapshot }),
         resultLabel: getResultLabelFromSnapshot({ snapshot }),
@@ -192,6 +259,8 @@ const recordCompletedGame = async ({ guestId, gameId, settings, snapshot }) => {
         playerColor: settings.playerColor,
         engineColor: settings.engineColor,
         difficulty: settings.difficulty,
+        timeControl: snapshot.timeControl || settings.timeControl || null,
+        clockState: snapshot.clockState || null,
         completedAt
       }
     },
@@ -205,36 +274,107 @@ const recordCompletedGame = async ({ guestId, gameId, settings, snapshot }) => {
   return buildHistorySummary(record);
 };
 
-const listCompletedGames = async (guestId) => {
+const listCompletedGames = async (actor) => {
   ensurePersistence();
 
-  const records = await GameHistory.find({
-    guestId
-  })
+  const records = await GameHistory.find(buildOwnerFilter(actor))
     .sort({ completedAt: -1 })
     .lean();
 
   return records.map(buildHistorySummary);
 };
 
-const getCompletedGame = async (guestId, gameId) => {
+const getCompletedGame = async (actor, gameId) => {
   ensurePersistence();
 
   const record = await GameHistory.findOne({
-    guestId,
+    ...buildOwnerFilter(actor),
     gameId
   }).lean();
 
   return record ? buildHistoryDetail(record) : null;
 };
 
+const getStoredGame = async (actor, gameId) => {
+  ensurePersistence();
+
+  const savedGameRecord = await getSavedGameRecord(actor, gameId);
+
+  if (savedGameRecord) {
+    return {
+      scope: savedGameRecord.isResumable ? "unfinished" : "archived",
+      ...buildSavedGameDetail(savedGameRecord)
+    };
+  }
+
+  const completedGameRecord = await getCompletedGame(actor, gameId);
+
+  if (!completedGameRecord) {
+    return null;
+  }
+
+  return {
+    scope: "completed",
+    ...completedGameRecord
+  };
+};
+
+const transferGuestRecordsToUser = async ({ guestId, userId }) => {
+  ensurePersistence();
+
+  if (!guestId || !userId) {
+    return {
+      savedGamesTransferred: 0,
+      historyGamesTransferred: 0
+    };
+  }
+
+  const normalizedUserId = String(userId);
+  const nextOwnerPayload = {
+    ownerType: "user",
+    ownerId: normalizedUserId,
+    userId: normalizedUserId,
+    guestId: null
+  };
+
+  const [savedGamesResult, historyGamesResult] = await Promise.all([
+    SavedGame.updateMany(
+      {
+        ownerType: "guest",
+        ownerId: guestId
+      },
+      {
+        $set: nextOwnerPayload
+      }
+    ),
+    GameHistory.updateMany(
+      {
+        ownerType: "guest",
+        ownerId: guestId
+      },
+      {
+        $set: nextOwnerPayload
+      }
+    )
+  ]);
+
+  return {
+    savedGamesTransferred: savedGamesResult.modifiedCount || 0,
+    historyGamesTransferred: historyGamesResult.modifiedCount || 0
+  };
+};
+
 module.exports = {
   PersistenceUnavailableError,
+  buildOwnerFilter,
+  buildOwnerPayload,
   getResultFromSnapshot,
+  getStoredGame,
   getSavedGameRecord,
   listCompletedGames,
   listSavedGames,
   recordCompletedGame,
   saveGameSnapshot,
-  getCompletedGame
+  getCompletedGame,
+  transferGuestRecordsToUser
 };

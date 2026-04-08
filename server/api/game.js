@@ -2,6 +2,7 @@ const express = require("express");
 
 const {
   createNewGame,
+  claimDraw,
   getSerializableState,
   getLiveSerializableState,
   makePlayerMove,
@@ -12,13 +13,13 @@ const {
   resignGame,
   resetGame
 } = require("../game/gameManager");
-const { getGuestIdFromRequest, sendApiError } = require("./requestContext");
+const { getRequestActor, sendApiError } = require("./requestContext");
 
 const router = express.Router();
 
 router.get("/", async (request, response) => {
   try {
-    const gameState = await getLiveSerializableState(getGuestIdFromRequest(request));
+    const gameState = await getLiveSerializableState(getRequestActor(request));
 
     response.json(gameState);
   } catch (error) {
@@ -29,7 +30,7 @@ router.get("/", async (request, response) => {
 router.post("/new", async (request, response) => {
   try {
     const gameState = await createNewGame({
-      guestId: getGuestIdFromRequest(request),
+      actor: getRequestActor(request),
       settings: request.body
     });
 
@@ -42,7 +43,7 @@ router.post("/new", async (request, response) => {
 router.post("/move", async (request, response) => {
   try {
     const outcome = await makePlayerMove({
-      guestId: getGuestIdFromRequest(request),
+      actor: getRequestActor(request),
       ...request.body
     });
 
@@ -55,7 +56,7 @@ router.post("/move", async (request, response) => {
 router.post("/coach", async (request, response) => {
   try {
     const outcome = await resolveCoachFeedback({
-      guestId: getGuestIdFromRequest(request),
+      actor: getRequestActor(request),
       moveToken: request.body?.moveToken
     });
 
@@ -69,7 +70,7 @@ router.post("/engine", async (request, response) => {
   try {
     if (request.body?.moveToken) {
       const outcome = await resolvePendingEngineMove({
-        guestId: getGuestIdFromRequest(request),
+        actor: getRequestActor(request),
         moveToken: request.body.moveToken
       });
 
@@ -77,7 +78,7 @@ router.post("/engine", async (request, response) => {
       return;
     }
 
-    const gameState = await performEngineMove(getGuestIdFromRequest(request));
+    const gameState = await performEngineMove(getRequestActor(request));
 
     response.json({
       stale: false,
@@ -91,7 +92,7 @@ router.post("/engine", async (request, response) => {
 
 router.post("/resign", async (request, response) => {
   try {
-    const gameState = await resignGame(getGuestIdFromRequest(request));
+    const gameState = await resignGame(getRequestActor(request));
 
     response.json(gameState);
   } catch (error) {
@@ -101,7 +102,7 @@ router.post("/resign", async (request, response) => {
 
 router.post("/draw", async (request, response) => {
   try {
-    const outcome = await offerDraw(getGuestIdFromRequest(request));
+    const outcome = await offerDraw(getRequestActor(request));
 
     response.json(outcome);
   } catch (error) {
@@ -109,9 +110,19 @@ router.post("/draw", async (request, response) => {
   }
 });
 
+router.post("/claim-draw", async (request, response) => {
+  try {
+    const gameState = await claimDraw(getRequestActor(request));
+
+    response.json(gameState);
+  } catch (error) {
+    sendApiError(response, error, 400);
+  }
+});
+
 router.post("/reset", async (request, response) => {
   try {
-    const gameState = await resetGame(getGuestIdFromRequest(request));
+    const gameState = await resetGame(getRequestActor(request));
 
     response.json(gameState);
   } catch (error) {

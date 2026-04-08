@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:rules": "node scripts/rules-harness.js",
+    "test:clocks": "node scripts/clock-harness.js"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
