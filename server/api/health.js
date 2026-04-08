@@ -7,16 +7,33 @@ const { DIFFICULTY_PRESETS } = require("../services/engineService");
 const router = express.Router();
 
 router.get("/", (request, response) => {
-  response.json({
-    status: "ok",
+  const isProduction = process.env.NODE_ENV === "production";
+  const databaseReady = isMongoAvailable();
+  const ready = !isProduction || databaseReady;
+
+  response.status(ready ? 200 : 503).json({
+    status: ready ? "ok" : "degraded",
+    ready,
     service: "arcane-chess",
     database: getMongoStatus(),
     timestamp: new Date().toISOString(),
     features: {
-      auth: "session-and-guest",
-      chessService: getChessServiceStatus(),
-      stockfish: "enabled",
-      persistence: isMongoAvailable() ? "mongo-ready" : "mongo-unavailable"
+      auth: {
+        mode: "session-and-guest",
+        ready
+      },
+      chessService: {
+        status: getChessServiceStatus(),
+        ready: true
+      },
+      stockfish: {
+        status: "enabled",
+        ready: true
+      },
+      persistence: {
+        status: databaseReady ? "mongo-ready" : "mongo-unavailable",
+        ready: databaseReady
+      }
     },
     game: {
       supportedDifficulties: Object.keys(DIFFICULTY_PRESETS)

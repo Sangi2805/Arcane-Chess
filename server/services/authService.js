@@ -120,6 +120,15 @@ const shouldUseSecureCookies = () => {
     return false;
   }
 
+  // In production behind a reverse proxy that handles HTTPS,
+  // the proxy sets X-Forwarded-Proto but the connection to
+  // the container is HTTP. Set TRUST_PROXY=true and
+  // SESSION_COOKIE_SECURE=false to allow cookies over HTTP
+  // while the browser receives HTTPS framed from the proxy.
+  if (process.env.TRUST_PROXY === "true") {
+    return false;
+  }
+
   return process.env.NODE_ENV === "production";
 };
 

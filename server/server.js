@@ -11,9 +11,35 @@ dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
+const host = process.env.HOST || "0.0.0.0";
+const isProduction = process.env.NODE_ENV === "production";
 const clientOrigin = process.env.CLIENT_ORIGIN || `http://localhost:${port}`;
 const clientPath = path.resolve(__dirname, "..", "client");
 const threeBuildPath = path.resolve(__dirname, "node_modules", "three", "build");
+
+const validateProductionConfig = () => {
+  if (!isProduction) {
+    return;
+  }
+
+  const missingVariables = [];
+
+  if (!process.env.MONGODB_URI) {
+    missingVariables.push("MONGODB_URI");
+  }
+
+  if (!process.env.CLIENT_ORIGIN) {
+    missingVariables.push("CLIENT_ORIGIN");
+  }
+
+  if (missingVariables.length > 0) {
+    throw new Error(
+      `Missing required production environment variables: ${missingVariables.join(
+        ", "
+      )}`
+    );
+  }
+};
 
 app.set("trust proxy", 1);
 
@@ -35,14 +61,15 @@ app.get("*", (request, response) => {
 
 const startServer = async () => {
   try {
+    validateProductionConfig();
     await connectToMongo();
   } catch (error) {
     console.warn("MongoDB connection skipped:", error.message);
   }
 
-  app.listen(port, () => {
+  app.listen(port, host, () => {
     console.log(
-      `Arcane Chess server listening on http://localhost:${port} (db: ${getMongoStatus()})`
+      `Arcane Chess server listening on http://${host}:${port} (db: ${getMongoStatus()})`
     );
   });
 };
