@@ -1,6 +1,5 @@
 const GUEST_STORAGE_KEY = "arcane-chess-guest-profile";
 const RECORD_VIEW_STORAGE_KEY = "arcane-chess-record-view";
-const BOARD_VIEW_STORAGE_KEY = "arcane-chess-board-view";
 
 const PIECES = {
   white: {
@@ -30,9 +29,12 @@ const shellElement = document.querySelector(".shell");
 const boardShell = document.querySelector(".board-shell");
 const board3dElement = document.getElementById("board-3d");
 const boardElement = document.getElementById("board");
-const boardViewButtons = document.querySelectorAll("[data-board-view]");
+const boardFeedbackBanner = document.getElementById("board-feedback-banner");
+const boardFeedbackTitle = document.getElementById("board-feedback-title");
+const boardFeedbackMessage = document.getElementById("board-feedback-message");
+const claimDrawButton = document.getElementById("claim-draw-button");
+const continuePlayButton = document.getElementById("continue-play-button");
 const immersiveHud = document.getElementById("immersive-hud");
-const immersiveExitButton = document.getElementById("immersive-exit-button");
 const immersiveNewGameButton = document.getElementById("immersive-new-game-button");
 const immersiveOfferDrawButton = document.getElementById("immersive-offer-draw-button");
 const immersiveResignButton = document.getElementById("immersive-resign-button");
@@ -61,6 +63,19 @@ const colorInputs = document.querySelectorAll('input[name="player-color"]');
 const guestSubtitle = document.getElementById("guest-subtitle");
 const guestName = document.getElementById("guest-name");
 const guestMeta = document.getElementById("guest-meta");
+const authSessionHeading = document.getElementById("auth-session-heading");
+const authSessionPill = document.getElementById("auth-session-pill");
+const authSessionCopy = document.getElementById("auth-session-copy");
+const authGuestView = document.getElementById("auth-guest-view");
+const authEmailInput = document.getElementById("auth-email");
+const authPasswordInput = document.getElementById("auth-password");
+const authDisplayNameInput = document.getElementById("auth-display-name");
+const loginButton = document.getElementById("login-button");
+const registerButton = document.getElementById("register-button");
+const authUserView = document.getElementById("auth-user-view");
+const authUserDisplay = document.getElementById("auth-user-display");
+const authUserEmail = document.getElementById("auth-user-email");
+const logoutButton = document.getElementById("logout-button");
 const recordTabs = document.querySelectorAll("[data-record-view]");
 const recordViews = document.querySelectorAll("[data-view-panel]");
 const savedGamesList = document.getElementById("saved-games-list");
@@ -77,17 +92,75 @@ const historyDetailCompleted = document.getElementById("history-detail-completed
 const historyDetailStatus = document.getElementById("history-detail-status");
 const historyDetailPgn = document.getElementById("history-detail-pgn");
 const historyDetailMoves = document.getElementById("history-detail-moves");
+const replayBoard = document.getElementById("replay-board");
+const replayBack = document.getElementById("replay-back");
+const replayForward = document.getElementById("replay-forward");
+const replayStepLabel = document.getElementById("replay-step-label");
+const timeControlSelect = document.getElementById("time-control-select");
+const topClockLabel = document.getElementById("top-clock-label");
+const topClockCard = document.getElementById("top-clock-card");
+const topClockSide = document.getElementById("top-clock-side");
+const topClockTime = document.getElementById("top-clock-time");
+const topClockMeta = document.getElementById("top-clock-meta");
+const bottomClockLabel = document.getElementById("bottom-clock-label");
+const bottomClockCard = document.getElementById("bottom-clock-card");
+const bottomClockSide = document.getElementById("bottom-clock-side");
+const bottomClockTime = document.getElementById("bottom-clock-time");
+const bottomClockMeta = document.getElementById("bottom-clock-meta");
 
 const DEFAULT_COACH_EXPLANATION =
   "I review each completed move against Stockfish.";
 const THINKING_COACH_EXPLANATION =
   "Your move is down. The reply is forming now.";
 const GAME_OVER_BANNER_DURATION_MS = 4200;
+const CLOCK_TICK_INTERVAL_MS = 250;
+const CLOCK_SYNC_INTERVAL_MS = 1000;
+const TIME_CONTROL_PRESETS = {
+  untimed: {
+    label: "Untimed",
+    enabled: false,
+    baseMs: 0,
+    incrementMs: 0
+  },
+  "bullet-1": {
+    label: "1 min",
+    enabled: true,
+    baseMs: 60_000,
+    incrementMs: 0
+  },
+  "blitz-3": {
+    label: "3 min",
+    enabled: true,
+    baseMs: 180_000,
+    incrementMs: 0
+  },
+  "blitz-5": {
+    label: "5 min",
+    enabled: true,
+    baseMs: 300_000,
+    incrementMs: 0
+  },
+  "rapid-10": {
+    label: "10 min",
+    enabled: true,
+    baseMs: 600_000,
+    incrementMs: 0
+  },
+  "rapid-15-10": {
+    label: "15 | 10",
+    enabled: true,
+    baseMs: 900_000,
+    incrementMs: 10_000
+  }
+};
 const DRAW_OUTCOME_LABELS = {
   stalemate: "Stalemate",
   "draw-repetition": "Draw by repetition",
+  "draw-fivefold-repetition": "Draw by fivefold repetition",
   "draw-insufficient-material": "Draw by insufficient material",
   "draw-fifty-move": "Draw by fifty-move rule",
+  "draw-seventy-five-move": "Draw by seventy-five-move rule",
+  "draw-timeout-insufficient-material": "Draw by timeout vs insufficient material",
   "draw-agreed": "Draw agreed",
   draw: "Draw"
 };
@@ -105,10 +178,12 @@ const debugGameplaySync = (event, payload = {}) => {
 
 const state = {
   guest: null,
+  session: {
+    authenticated: false,
+    user: null
+  },
   game: null,
-  boardViewMode:
-    window.localStorage.getItem(BOARD_VIEW_STORAGE_KEY) === "3d" ? "3d" : "2d",
-  board3DAvailable: Boolean(window.Arcane3D?.available),
+  boardViewMode: "2d",
   board3D: null,
   selectedSquare: null,
   pendingPromotion: null,
@@ -125,6 +200,7 @@ const state = {
   activeHistoryRequestId: 0,
   activeMoveCycleId: 0,
   activeCoachStageRank: 0,
+  clockSyncInFlight: false,
   coach: {
     classification: null,
     tone: "neutral",
@@ -148,12 +224,20 @@ let activeGameOverBannerKey = "";
 let dismissedGameOverBannerKey = "";
 let finishedGameResetTimeoutId = null;
 let activeFinishedGameResetKey = "";
+let clockDisplayIntervalId = null;
+let clockSyncIntervalId = null;
+
+// ── Replay state ─────────────────────────────────────────────────────────
+let replayFenSteps = [];
+let replayMoveHistory = [];
+let replayMoveList = [];
+let replayIndex = 0;
+let replayPlayerColor = "white";
 
 const VALID_RECORD_VIEWS = new Set(["moves", "saves", "history"]);
-const VALID_BOARD_VIEWS = new Set(["2d", "3d"]);
-
 const syncBoardViewUi = () => {
-  const is3D = state.boardViewMode === "3d";
+  state.boardViewMode = "2d";
+  const is3D = false;
 
   document.body.dataset.boardViewMode = state.boardViewMode;
   document.body.classList.toggle("board-mode-3d", is3D);
@@ -175,91 +259,11 @@ const syncBoardViewUi = () => {
     immersiveHud.setAttribute("aria-hidden", is3D ? "false" : "true");
   }
 
-  boardViewButtons.forEach((button) => {
-    const isActive = button.dataset.boardView === state.boardViewMode;
-    const is3DButton = button.dataset.boardView === "3d";
-    button.classList.toggle("active", isActive);
-    button.disabled = is3DButton && !state.board3DAvailable;
-    button.setAttribute("aria-pressed", isActive ? "true" : "false");
-  });
-
   renderImmersiveHud();
-};
-
-const ensureBoard3D = () => {
-  if (state.board3D || !state.board3DAvailable || !board3dElement) {
-    return state.board3D;
-  }
-
-  try {
-    state.board3D = window.Arcane3D?.createBoard3D({
-      mountElement: board3dElement,
-      onSquareSelect: (square) => handleSquareClick(square)
-    }) || null;
-  } catch (error) {
-    console.error("Unable to initialize 3D board.", error);
-    state.board3DAvailable = false;
-    state.boardViewMode = "2d";
-    syncBoardViewUi();
-  }
-
-  return state.board3D;
 };
 
 const syncBoard3D = () => {
   syncBoardViewUi();
-
-  if (!state.board3DAvailable || !board3dElement) {
-    return;
-  }
-
-  const board3D = ensureBoard3D();
-
-  if (!board3D) {
-    return;
-  }
-
-  board3D.sync({
-    gameState: state.game,
-    selectedSquare: state.selectedSquare,
-    legalTargets: getLegalTargets(),
-    viewMode: state.boardViewMode,
-    interactionLocked:
-      state.busy || Boolean(state.pendingPromotion?.moveChoices?.length)
-  });
-};
-
-const setBoardViewMode = (viewMode, { persist = true } = {}) => {
-  const normalizedView = VALID_BOARD_VIEWS.has(viewMode) ? viewMode : "2d";
-  const nextView =
-    normalizedView === "3d" && !state.board3DAvailable ? "2d" : normalizedView;
-
-  state.boardViewMode = nextView;
-
-  if (persist) {
-    window.localStorage.setItem(BOARD_VIEW_STORAGE_KEY, nextView);
-  }
-
-  syncBoard3D();
-  if (nextView === "3d") {
-    window.requestAnimationFrame(() => {
-      state.board3D?.scheduleResize?.({
-        immediate: true
-      });
-      renderBoardOverlays();
-    });
-  }
-  renderBoardOverlays();
-};
-
-const handleArcane3DReady = () => {
-  state.board3DAvailable = Boolean(window.Arcane3D?.available);
-
-  if (!state.board3DAvailable && state.boardViewMode === "3d") {
-    state.boardViewMode = "2d";
-  }
-
-  syncBoard3D();
 };
 
 const escapeHtml = (value) =>
@@ -340,6 +344,23 @@ const getWinnerFromResult = (result) => {
   }
 
   return null;
+};
+
+const getDrawClaimState = (gameState = state.game) =>
+  gameState?.ruleState?.drawClaim?.available ? gameState.ruleState.drawClaim : null;
+
+const getCheckedKingSquare = (gameState = state.game) => {
+  const checkedColor = gameState?.ruleState?.checkedColor;
+
+  if (!checkedColor) {
+    return null;
+  }
+
+  return (
+    gameState.board.find(
+      (entry) => entry.piece?.type === "k" && entry.piece.color === checkedColor
+    )?.square || null
+  );
 };
 
 const getGameOverCopy = (gameState) => {
@@ -505,6 +526,15 @@ const getDrawCoachState = (gameState, outcome) => {
           outcome
         })
       });
+    case "draw-fivefold-repetition":
+      return createCoachState({
+        source: "system",
+        message: "The same pattern echoed until the duel was forced still.",
+        explanation: "Draw by fivefold repetition. The position repeated beyond recovery.",
+        ...createPersistentCoachMotion("draw-special", {
+          outcome
+        })
+      });
     case "draw-insufficient-material":
       return createCoachState({
         source: "system",
@@ -523,11 +553,30 @@ const getDrawCoachState = (gameState, outcome) => {
           outcome
         })
       });
+    case "draw-seventy-five-move":
+      return createCoachState({
+        source: "system",
+        message: "The duel exhausted itself beyond recall.",
+        explanation: "Draw by seventy-five-move rule. The board reached a forced dead calm.",
+        ...createPersistentCoachMotion("draw-special", {
+          outcome
+        })
+      });
     case "draw-agreed":
       return createCoachState({
         source: "system",
         message: "Both sides set the blades down. Draw agreed.",
         explanation: "The duel ends by mutual consent. Begin another when ready.",
+        ...createPersistentCoachMotion("draw-special", {
+          outcome
+        })
+      });
+    case "draw-timeout-insufficient-material":
+      return createCoachState({
+        source: "system",
+        message: "The flag fell, but no mating force remained.",
+        explanation:
+          "Draw by timeout versus insufficient material. The finish could no longer be forced.",
         ...createPersistentCoachMotion("draw-special", {
           outcome
         })
@@ -543,6 +592,14 @@ const getDrawCoachState = (gameState, outcome) => {
       });
   }
 };
+const PIECE_LABELS = {
+  p: "pawn",
+  r: "rook",
+  n: "knight",
+  b: "bishop",
+  q: "queen",
+  k: "king"
+};
 
 const getGameOverCoachState = (gameState) => {
   const playerWon =
@@ -556,6 +613,18 @@ const getGameOverCoachState = (gameState) => {
       explanation: playerWon
         ? "A clean finish. Begin another when ready."
         : "Reset your line and return when ready.",
+      ...createPersistentCoachMotion("game-over", {
+        outcome
+      })
+    });
+  }
+
+  if (gameState.status.code === "timeout") {
+    return createCoachState({
+      message: playerWon ? "Their flag fell. The duel is yours." : "Your clock fell before the finish.",
+      explanation: playerWon
+        ? "Time pressure finished the battle. Begin another when ready."
+        : "The position may have held, but the clock did not. Reset and return sharper.",
       ...createPersistentCoachMotion("game-over", {
         outcome
       })
@@ -697,6 +766,29 @@ const getDefaultCoachState = (gameState, context = "default") => {
     return getWelcomeCoachState(context);
   }
 
+  const drawClaim = getDrawClaimState(gameState);
+
+  if (drawClaim?.available) {
+    return createCoachState({
+      message: drawClaim.message,
+      explanation:
+        gameState.turn === gameState.settings.engineColor
+          ? "Claim the draw now, or continue play to allow the engine reply."
+          : "You may claim the draw before choosing a different continuation.",
+      ...createPersistentCoachMotion("draw-special", {
+        outcome: "draw"
+      })
+    });
+  }
+
+  if (gameState.status?.code === "check") {
+    return createCoachState({
+      message: "Check. The king must be secured immediately.",
+      explanation: "Only moves that answer the threat are legal from this position.",
+      ...createPersistentCoachMotion("thinking")
+    });
+  }
+
   return createCoachState({
     message: "Your opponent is ready. Let us begin.",
     explanation: "Play a move and I will answer with a short reading.",
@@ -714,6 +806,9 @@ const formatTimestamp = (value) => {
     timeStyle: "short"
   }).format(new Date(value));
 };
+
+const formatTimeControl = (timeControl = null) =>
+  getResolvedTimeControl(timeControl).label;
 
 const normalizeHistoryRecord = (record = {}) => ({
   result: record.result || "in-progress",
@@ -773,11 +868,126 @@ const createFallbackGuest = (storedGuest) => {
 const getChosenColor = () =>
   document.querySelector('input[name="player-color"]:checked')?.value || "white";
 
+const getSelectedTimeControlId = () => timeControlSelect?.value || "untimed";
+
+const getResolvedTimeControl = (timeControl = null) => {
+  const id =
+    typeof timeControl === "string"
+      ? timeControl
+      : typeof timeControl?.id === "string"
+        ? timeControl.id
+        : "untimed";
+  const preset = TIME_CONTROL_PRESETS[id] || TIME_CONTROL_PRESETS.untimed;
+
+  return {
+    id,
+    label: timeControl?.label || preset.label,
+    enabled: Boolean(
+      typeof timeControl?.enabled === "boolean" ? timeControl.enabled : preset.enabled
+    ),
+    baseMs: Number(timeControl?.baseMs ?? preset.baseMs ?? 0),
+    incrementMs: Number(timeControl?.incrementMs ?? preset.incrementMs ?? 0)
+  };
+};
+
+const isTimedGameState = (gameState = state.game) =>
+  Boolean(gameState?.clockState?.enabled && gameState.clockState.timeControlId !== "untimed");
+
+const getClockDisplayState = (clockState = state.game?.clockState) => {
+  if (!clockState?.enabled) {
+    return null;
+  }
+
+  const serverNowMs = Date.parse(clockState.serverNow || "") || Date.now();
+  const elapsedSinceSyncMs = Math.max(0, Date.now() - serverNowMs);
+  let whiteMs = Math.max(0, Number(clockState.whiteMs || 0));
+  let blackMs = Math.max(0, Number(clockState.blackMs || 0));
+
+  if (clockState.isRunning && clockState.activeColor === "white") {
+    whiteMs = Math.max(0, whiteMs - elapsedSinceSyncMs);
+  }
+
+  if (clockState.isRunning && clockState.activeColor === "black") {
+    blackMs = Math.max(0, blackMs - elapsedSinceSyncMs);
+  }
+
+  return {
+    ...clockState,
+    whiteMs,
+    blackMs
+  };
+};
+
+const formatClockMs = (milliseconds = 0) => {
+  const clampedMs = Math.max(0, Math.floor(milliseconds));
+  const totalSeconds = Math.ceil(clampedMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainderMinutes = minutes % 60;
+    return `${hours}:${String(remainderMinutes).padStart(2, "0")}:${String(
+      seconds
+    ).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
+
+const getBoardClockColors = (gameState = state.game) => {
+  const playerColor =
+    gameState?.hasStarted ? gameState?.settings?.playerColor || "white" : getChosenColor();
+
+  return playerColor === "black"
+    ? {
+        top: "white",
+        bottom: "black"
+      }
+    : {
+        top: "black",
+        bottom: "white"
+      };
+};
+
+const isAuthenticated = () =>
+  Boolean(state.session?.authenticated && state.session.user?.id);
+
+const getSessionDisplayName = () =>
+  state.session?.user?.displayName || state.session?.user?.email || "Arcane Player";
+
+const getLocalPlayerDisplayName = () =>
+  isAuthenticated()
+    ? getSessionDisplayName()
+    : state.guest?.displayName || "Guest";
+
 const getGuestHeaders = () =>
   state.guest?.guestId ? { "X-Guest-Id": state.guest.guestId } : {};
 
+const setSessionState = (session = {}) => {
+  state.session = {
+    authenticated: Boolean(session.authenticated && session.user),
+    user: session.user || null
+  };
+
+  renderGuestProfile();
+  renderSessionUi();
+  syncActionButtons();
+};
+
 const renderGuestProfile = () => {
-  guestName.textContent = "Playing as Guest";
+  if (isAuthenticated()) {
+    guestName.textContent = getSessionDisplayName();
+    guestSubtitle.textContent = state.persistence.available
+      ? "Account sync is active for this archive."
+      : "Account session is active, but MongoDB persistence is offline.";
+    guestMeta.textContent = state.session.user?.email
+      ? `${state.session.user.email} · Unfinished and completed games belong to your account.`
+      : "Unfinished and completed games belong to your account.";
+    return;
+  }
+
+  guestName.textContent = state.guest?.displayName || "Playing as Guest";
 
   if (!state.persistence.available) {
     guestSubtitle.textContent = "Guest mode is local until MongoDB returns.";
@@ -789,6 +999,38 @@ const renderGuestProfile = () => {
   guestSubtitle.textContent = "Guest mode is active on this browser.";
   guestMeta.textContent =
     "Save and resume untimed games here without creating an account.";
+};
+
+const renderSessionUi = () => {
+  if (!authSessionHeading) {
+    return;
+  }
+
+  const persistenceAvailable = Boolean(state.persistence.available);
+  const authenticated = isAuthenticated();
+
+  if (authenticated) {
+    authSessionHeading.textContent = "Account connected";
+    authSessionPill.textContent = "Signed In";
+    authSessionPill.className = "pill pill-ok";
+    authSessionCopy.textContent = persistenceAvailable
+      ? "Saved and completed games now follow your account across devices and browsers."
+      : "Your session is active, but account sync is paused until MongoDB returns.";
+    authUserDisplay.textContent = getSessionDisplayName();
+    authUserEmail.textContent = state.session.user?.email || "Account email unavailable";
+    authGuestView.classList.add("hidden");
+    authUserView.classList.remove("hidden");
+    return;
+  }
+
+  authSessionHeading.textContent = "Sign in or create an account";
+  authSessionPill.textContent = persistenceAvailable ? "Guest" : "Offline";
+  authSessionPill.className = persistenceAvailable ? "pill" : "pill pill-error";
+  authSessionCopy.textContent = persistenceAvailable
+    ? "Accounts sync unfinished and completed games beyond this browser."
+    : "MongoDB is offline, so account sign-in and long-term sync are unavailable right now.";
+  authGuestView.classList.remove("hidden");
+  authUserView.classList.add("hidden");
 };
 
 const syncActionButtons = () => {
@@ -806,6 +1048,9 @@ const syncActionButtons = () => {
   offerDrawButton.disabled = state.busy || !inProgress;
   resignButton.disabled = state.busy || !inProgress;
   difficultySelect.disabled = state.busy;
+  if (timeControlSelect) {
+    timeControlSelect.disabled = state.busy;
+  }
 
   if (immersiveNewGameButton) {
     immersiveNewGameButton.disabled = newGameButton.disabled;
@@ -819,13 +1064,35 @@ const syncActionButtons = () => {
     immersiveResignButton.disabled = resignButton.disabled;
   }
 
-  if (immersiveExitButton) {
-    immersiveExitButton.disabled = false;
-  }
-
   colorInputs.forEach((input) => {
     input.disabled = state.busy;
   });
+
+  const authDisabled = state.busy || !state.persistence.available;
+
+  if (authEmailInput) {
+    authEmailInput.disabled = authDisabled || isAuthenticated();
+  }
+
+  if (authPasswordInput) {
+    authPasswordInput.disabled = authDisabled || isAuthenticated();
+  }
+
+  if (authDisplayNameInput) {
+    authDisplayNameInput.disabled = authDisabled || isAuthenticated();
+  }
+
+  if (loginButton) {
+    loginButton.disabled = authDisabled || isAuthenticated();
+  }
+
+  if (registerButton) {
+    registerButton.disabled = authDisabled || isAuthenticated();
+  }
+
+  if (logoutButton) {
+    logoutButton.disabled = state.busy || !isAuthenticated();
+  }
 };
 
 const setPersistence = (persistence = {}) => {
@@ -835,6 +1102,7 @@ const setPersistence = (persistence = {}) => {
   };
 
   renderGuestProfile();
+  renderSessionUi();
   syncActionButtons();
 };
 
@@ -990,6 +1258,7 @@ const setBusy = (busy, message) => {
   state.busy = busy;
   syncActionButtons();
   syncBoard3D();
+  renderBoardOverlays();
 
   if (message) {
     setCoachMessage(message);
@@ -999,6 +1268,172 @@ const setBusy = (busy, message) => {
 const setApiHealth = (healthy) => {
   apiHealth.textContent = healthy ? "API Ready" : "API Error";
   apiHealth.className = healthy ? "pill pill-ok" : "pill pill-error";
+};
+
+const renderClockCard = ({
+  labelElement,
+  cardElement,
+  sideElement,
+  timeElement,
+  metaElement,
+  roleLabel,
+  color,
+  clockDisplayState,
+  timeControl,
+  gameState
+}) => {
+  if (!labelElement || !cardElement || !sideElement || !timeElement || !metaElement) {
+    return;
+  }
+
+  const playerColor = gameState?.settings?.playerColor || getChosenColor();
+  const isPlayerSide = color === playerColor;
+  const rowElement = cardElement.closest(".board-player-row");
+  const startingTimeLabel =
+    timeControl.id === "untimed" ? "Untimed" : formatClockMs(timeControl.baseMs);
+
+  labelElement.textContent = roleLabel;
+  sideElement.textContent = `${formatColor(color)} pieces`;
+  rowElement?.setAttribute("data-player-side", isPlayerSide ? "self" : "opponent");
+
+  if (!clockDisplayState?.enabled) {
+    timeElement.textContent = startingTimeLabel;
+    metaElement.textContent = timeControl.id === "untimed" ? "Untimed" : "";
+    metaElement.classList.toggle("hidden", !metaElement.textContent);
+    cardElement.dataset.active = "false";
+    cardElement.dataset.urgent = "false";
+    cardElement.dataset.untimed = timeControl.id === "untimed" ? "true" : "false";
+    rowElement?.setAttribute("data-active", "false");
+    return;
+  }
+
+  const remainingMs =
+    color === "black" ? clockDisplayState.blackMs : clockDisplayState.whiteMs;
+  const isActive =
+    clockDisplayState.isRunning && clockDisplayState.activeColor === color && !gameState?.isGameOver;
+  const isUrgent = remainingMs <= 30000;
+  const flagged =
+    gameState?.isGameOver &&
+    (gameState?.status?.code === "timeout" ||
+      gameState?.status?.code === "draw-timeout-insufficient-material") &&
+    clockDisplayState.activeColor === color;
+
+  sideElement.textContent = isActive
+    ? `${formatColor(color)} to move`
+    : `${formatColor(color)} pieces`;
+  timeElement.textContent = formatClockMs(remainingMs);
+  metaElement.textContent = flagged
+    ? "Flag"
+    : gameState?.isGameOver
+      ? `Stopped · ${timeControl.label}`
+      : `${isActive ? "Running" : "Waiting"} · ${timeControl.label}`;
+  metaElement.textContent = flagged
+    ? "Flag"
+    : timeControl.incrementMs
+      ? `+${Math.round(timeControl.incrementMs / 1000)}`
+      : "";
+  metaElement.classList.toggle("hidden", !metaElement.textContent);
+  cardElement.dataset.active = isActive ? "true" : "false";
+  cardElement.dataset.urgent = isUrgent ? "true" : "false";
+  cardElement.dataset.untimed = "false";
+  rowElement?.setAttribute("data-active", isActive ? "true" : "false");
+};
+
+const renderClocks = () => {
+  const gameState = state.game;
+  const boardClockColors = getBoardClockColors(gameState);
+  const playerColor = gameState?.settings?.playerColor || getChosenColor();
+  const timeControl = gameState?.hasStarted
+    ? getResolvedTimeControl(gameState.settings?.timeControl)
+    : getResolvedTimeControl(getSelectedTimeControlId());
+  const clockDisplayState = getClockDisplayState(gameState?.clockState);
+
+  renderClockCard({
+    labelElement: topClockLabel,
+    cardElement: topClockCard,
+    sideElement: topClockSide,
+    timeElement: topClockTime,
+    metaElement: topClockMeta,
+    roleLabel:
+      boardClockColors.top === playerColor ? getLocalPlayerDisplayName() : "Stockfish",
+    color: boardClockColors.top,
+    clockDisplayState,
+    timeControl,
+    gameState
+  });
+
+  renderClockCard({
+    labelElement: bottomClockLabel,
+    cardElement: bottomClockCard,
+    sideElement: bottomClockSide,
+    timeElement: bottomClockTime,
+    metaElement: bottomClockMeta,
+    roleLabel:
+      boardClockColors.bottom === playerColor
+        ? getLocalPlayerDisplayName()
+        : "Stockfish",
+    color: boardClockColors.bottom,
+    clockDisplayState,
+    timeControl,
+    gameState
+  });
+};
+
+const syncTimedGameState = async () => {
+  if (
+    state.clockSyncInFlight ||
+    state.busy ||
+    !isTimedGameState(state.game) ||
+    !state.game?.hasStarted ||
+    state.game?.isGameOver
+  ) {
+    return;
+  }
+
+  state.clockSyncInFlight = true;
+
+  try {
+    const gameState = await request("/api/game");
+    const sameMove =
+      gameState?.lastMove?.san === state.game?.lastMove?.san &&
+      gameState?.lastMove?.from === state.game?.lastMove?.from &&
+      gameState?.lastMove?.to === state.game?.lastMove?.to;
+    const preserveSelection =
+      sameMove &&
+      gameState?.turn === state.game?.turn &&
+      !gameState?.isGameOver;
+
+    setApiHealth(true);
+    applyGameState(gameState, {
+      preserveCoach: !gameState?.isGameOver,
+      preserveSelection
+    });
+  } catch (error) {
+    setApiHealth(false);
+  } finally {
+    state.clockSyncInFlight = false;
+  }
+};
+
+const updateClockLoops = () => {
+  if (clockDisplayIntervalId) {
+    window.clearInterval(clockDisplayIntervalId);
+    clockDisplayIntervalId = null;
+  }
+
+  if (clockSyncIntervalId) {
+    window.clearInterval(clockSyncIntervalId);
+    clockSyncIntervalId = null;
+  }
+
+  renderClocks();
+
+  if (!isTimedGameState(state.game) || !state.game?.hasStarted || state.game?.isGameOver) {
+    return;
+  }
+
+  clockDisplayIntervalId = window.setInterval(renderClocks, CLOCK_TICK_INTERVAL_MS);
+  clockSyncIntervalId = window.setInterval(syncTimedGameState, CLOCK_SYNC_INTERVAL_MS);
 };
 
 const request = async (url, options = {}) => {
@@ -1194,6 +1629,13 @@ const buildOptimisticGameState = (gameState, move) => {
   return nextState;
 };
 
+const PROMOTION_OPTION_LABELS = {
+  q: "Queen",
+  r: "Rook",
+  b: "Bishop",
+  n: "Knight"
+};
+
 const clearPromotionPrompt = () => {
   state.pendingPromotion = null;
   promotionPanel.classList.add("hidden");
@@ -1211,6 +1653,25 @@ const openPromotionPrompt = (moveChoices, anchorSquare) => {
     "Choose a promotion piece.",
     "Select how the pawn should transform before the move is sent."
   );
+};
+
+const syncPromotionActionLabels = () => {
+  const promotionColor =
+    state.game?.settings?.playerColor === "black" ? "black" : "white";
+
+  promotionPanel.querySelectorAll("[data-promotion]").forEach((button) => {
+    const promotionType = button.dataset.promotion;
+    const pieceGlyph = PIECES[promotionColor]?.[promotionType] || "";
+    const pieceLabel = PROMOTION_OPTION_LABELS[promotionType] || promotionType?.toUpperCase?.() || "";
+
+    button.innerHTML = `
+      <span class="promotion-choice-piece">${pieceGlyph}</span>
+      <span class="promotion-choice-copy">
+        <strong>${pieceLabel}</strong>
+        <small>${promotionType.toUpperCase()}</small>
+      </span>
+    `;
+  });
 };
 
 const setSelectedSquare = (square) => {
@@ -1408,6 +1869,8 @@ const renderPromotionPrompt = () => {
     return;
   }
 
+  syncPromotionActionLabels();
+
   const boardRect = boardShell.getBoundingClientRect();
   let anchorRect = null;
 
@@ -1465,8 +1928,69 @@ const renderPromotionPrompt = () => {
   promotionPanel.style.visibility = "";
 };
 
+const hideBoardFeedback = () => {
+  if (!boardFeedbackBanner) {
+    return;
+  }
+
+  boardFeedbackBanner.classList.add("hidden");
+  boardFeedbackBanner.setAttribute("aria-hidden", "true");
+  boardFeedbackBanner.dataset.tone = "neutral";
+  claimDrawButton?.classList.add("hidden");
+  continuePlayButton?.classList.add("hidden");
+};
+
+const renderBoardFeedback = () => {
+  if (!boardFeedbackBanner) {
+    return;
+  }
+
+  const drawClaim = getDrawClaimState(state.game);
+  const isClaimBlockingEngine =
+    Boolean(drawClaim?.available) &&
+    state.game?.turn === state.game?.settings?.engineColor;
+
+  if (
+    state.boardViewMode !== "2d" ||
+    !state.game?.hasStarted ||
+    state.game?.isGameOver ||
+    state.pendingPromotion?.moveChoices?.length
+  ) {
+    hideBoardFeedback();
+    return;
+  }
+
+  if (drawClaim?.available) {
+    boardFeedbackBanner.classList.remove("hidden");
+    boardFeedbackBanner.setAttribute("aria-hidden", "false");
+    boardFeedbackBanner.dataset.tone = "draw";
+    boardFeedbackTitle.textContent = "Draw Claim Available";
+    boardFeedbackMessage.textContent = drawClaim.message;
+    claimDrawButton?.classList.remove("hidden");
+    continuePlayButton?.classList.toggle("hidden", !isClaimBlockingEngine);
+    claimDrawButton.disabled = state.busy;
+    continuePlayButton.disabled = state.busy;
+    return;
+  }
+
+  if (state.game?.status?.code === "check") {
+    boardFeedbackBanner.classList.remove("hidden");
+    boardFeedbackBanner.setAttribute("aria-hidden", "false");
+    boardFeedbackBanner.dataset.tone = "warning";
+    boardFeedbackTitle.textContent = "Check";
+    boardFeedbackMessage.textContent =
+      trimTerminalPeriod(state.game.status.message) || "The king is under attack.";
+    claimDrawButton?.classList.add("hidden");
+    continuePlayButton?.classList.add("hidden");
+    return;
+  }
+
+  hideBoardFeedback();
+};
+
 const renderBoardOverlays = () => {
   renderGameOverBanner();
+  renderBoardFeedback();
 
   if (state.pendingPromotion?.moveChoices?.length) {
     renderPromotionPrompt();
@@ -1476,7 +2000,11 @@ const renderBoardOverlays = () => {
   promotionPanel.classList.add("hidden");
 };
 
-const renderMoveRows = (moveList = [], emptyMessage = "No moves recorded yet.") => {
+const renderMoveRows = (
+  moveList = [],
+  emptyMessage = "No moves recorded yet.",
+  lastMove = null
+) => {
   if (!moveList.length) {
     return `
       <div class="empty-state">
@@ -1485,28 +2013,51 @@ const renderMoveRows = (moveList = [], emptyMessage = "No moves recorded yet.") 
     `;
   }
 
-  return moveList
+  const currentTurn = moveList.at(-1)?.turn ?? null;
+  const currentMoveColor = lastMove?.color || null;
+
+  return `
+    <div class="move-row move-row-head" role="presentation">
+      <span>Turn</span>
+      <span>White</span>
+      <span>Black</span>
+    </div>
+    ${moveList
     .map(
-      (move) => `
-        <div class="move-row">
-          <strong>${escapeHtml(`${move.turn}.`)}</strong>
-          <span>${escapeHtml(move.white || "-")}</span>
-          <span>${escapeHtml(move.black || "-")}</span>
+      (move) => {
+        const highlightWhite =
+          currentMoveColor === "white" && currentTurn === move.turn && Boolean(move.white);
+        const highlightBlack =
+          currentMoveColor === "black" && currentTurn === move.turn && Boolean(move.black);
+
+        return `
+        <div class="move-row ${highlightWhite || highlightBlack ? "move-row-current" : ""}">
+          <strong class="move-turn">${escapeHtml(`${move.turn}.`)}</strong>
+          <span class="move-cell ${highlightWhite ? "move-cell-current" : ""}">${escapeHtml(
+            move.white || "-"
+          )}</span>
+          <span class="move-cell ${highlightBlack ? "move-cell-current" : ""}">${escapeHtml(
+            move.black || "-"
+          )}</span>
         </div>
-      `
+      `;
+      }
     )
-    .join("");
+    .join("")}
+  `;
 };
 
 const renderMoveList = () => {
   moveListElement.innerHTML = renderMoveRows(
     state.game?.moveList || [],
-    "No moves have been recorded yet."
+    "No moves have been recorded yet.",
+    state.game?.lastMove || null
   );
 };
 
 const renderSavedGames = () => {
   savedGamesCount.textContent = `${state.savedGames.length} saved`;
+  const ownerLabel = isAuthenticated() ? "your account" : "this browser";
 
   if (!state.persistence.available) {
     savedGamesList.innerHTML = `
@@ -1522,7 +2073,9 @@ const renderSavedGames = () => {
     savedGamesList.innerHTML = `
       <div class="empty-state">
         <strong>No saved games yet.</strong>
-        <span>Use Save Game on any in-progress duel to archive it for later.</span>
+        <span>Use Save Game on any in-progress duel to archive it for later on ${escapeHtml(
+          ownerLabel
+        )}.</span>
       </div>
     `;
     return;
@@ -1540,6 +2093,7 @@ const renderSavedGames = () => {
             <span>${escapeHtml(game.difficulty)} difficulty - ${escapeHtml(
               `${game.moveCount} moves`
             )}</span>
+            <span>${escapeHtml(formatTimeControl(game.timeControl))}</span>
             <span>Saved ${escapeHtml(formatTimestamp(game.updatedAt))}</span>
           </div>
           <button
@@ -1555,8 +2109,181 @@ const renderSavedGames = () => {
     )
     .join("");
 };
+// ── Replay board ─────────────────────────────────────────────────────────
+
+const parseFenToBoard = (fen) => {
+  const position = fen.split(" ")[0];
+  const rows = position.split("/");
+  const RANK_LABELS = ["8", "7", "6", "5", "4", "3", "2", "1"];
+  const FILE_LABELS = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  const board = [];
+
+  rows.forEach((row, rankIndex) => {
+    const rank = RANK_LABELS[rankIndex];
+    let fileIndex = 0;
+
+    for (const ch of row) {
+      if (ch >= "1" && ch <= "8") {
+        const count = Number(ch);
+
+        for (let i = 0; i < count; i++) {
+          const file = FILE_LABELS[fileIndex + i];
+          board.push({ square: `${file}${rank}`, file, rank, piece: null });
+        }
+
+        fileIndex += count;
+      } else {
+        const file = FILE_LABELS[fileIndex];
+        const color = ch === ch.toUpperCase() ? "white" : "black";
+        const type = ch.toLowerCase();
+        board.push({ square: `${file}${rank}`, file, rank, piece: { type, color } });
+        fileIndex++;
+      }
+    }
+  });
+
+  return board;
+};
+
+const renderReplayBoard = () => {
+  if (!replayBoard) return;
+
+  const fen = replayFenSteps[replayIndex];
+
+  if (!fen) {
+    replayBoard.innerHTML = "";
+    return;
+  }
+
+  const boardData = parseFenToBoard(fen);
+  const lookup = new Map(boardData.map((e) => [e.square, e]));
+  const files =
+    replayPlayerColor === "black"
+      ? ["h", "g", "f", "e", "d", "c", "b", "a"]
+      : ["a", "b", "c", "d", "e", "f", "g", "h"];
+  const ranks =
+    replayPlayerColor === "black"
+      ? ["1", "2", "3", "4", "5", "6", "7", "8"]
+      : ["8", "7", "6", "5", "4", "3", "2", "1"];
+  const lastMoveFrom = replayIndex > 0 ? replayMoveHistory[replayIndex - 1]?.from : null;
+  const lastMoveTo = replayIndex > 0 ? replayMoveHistory[replayIndex - 1]?.to : null;
+
+  const squares = [];
+  ranks.forEach((rank) => files.forEach((file) => squares.push(lookup.get(`${file}${rank}`))));
+
+  replayBoard.innerHTML = squares
+    .map((entry, index) => {
+      if (!entry) return "";
+      const colorClass = getSquareColorClass(entry.square);
+      const classes = ["square", colorClass];
+      if (entry.square === lastMoveFrom) classes.push("square-last-from");
+      if (entry.square === lastMoveTo) classes.push("square-last-to");
+
+      const fileLabel =
+        index >= 56 ? `<span class="square-label square-file">${entry.file}</span>` : "";
+      const rankLabel =
+        index % 8 === 0 ? `<span class="square-label square-rank">${entry.rank}</span>` : "";
+
+      return `
+        <div class="${classes.join(" ")}" data-square="${entry.square}">
+          ${rankLabel}${fileLabel}
+          ${entry.piece
+            ? `<span class="piece piece-${entry.piece.color}">${PIECES[entry.piece.color][entry.piece.type]}</span>`
+            : ""}
+        </div>
+      `;
+    })
+    .join("");
+};
+
+const renderReplayMoveRows = (moveList = [], activeHalfMoveIndex = -1) => {
+  if (!moveList.length) {
+    return `
+      <div class="empty-state">
+        <strong>No moves were recorded for this game.</strong>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="move-row move-row-head" role="presentation">
+      <span>Turn</span>
+      <span>White</span>
+      <span>Black</span>
+    </div>
+    ${moveList
+      .map((move) => {
+        const whiteMoveIdx = (move.turn - 1) * 2;
+        const blackMoveIdx = (move.turn - 1) * 2 + 1;
+        const highlightWhite = activeHalfMoveIndex === whiteMoveIdx && Boolean(move.white);
+        const highlightBlack = activeHalfMoveIndex === blackMoveIdx && Boolean(move.black);
+
+        return `
+          <div class="move-row ${highlightWhite || highlightBlack ? "move-row-current" : ""}">
+            <strong class="move-turn">${escapeHtml(`${move.turn}.`)}</strong>
+            <span class="move-cell ${highlightWhite ? "move-cell-current" : ""}">${escapeHtml(move.white || "-")}</span>
+            <span class="move-cell ${highlightBlack ? "move-cell-current" : ""}">${escapeHtml(move.black || "-")}</span>
+          </div>
+        `;
+      })
+      .join("")}
+  `;
+};
+
+const updateReplayControls = () => {
+  const total = Math.max(0, replayFenSteps.length - 1);
+  const hasData = replayFenSteps.length > 0;
+
+  if (replayStepLabel) {
+    if (!hasData) {
+      replayStepLabel.textContent = "No data";
+    } else {
+      replayStepLabel.textContent = replayIndex === 0 ? "Start" : `Move ${replayIndex} of ${total}`;
+    }
+  }
+
+  if (replayBack) replayBack.disabled = replayIndex <= 0 || !hasData;
+  if (replayForward) replayForward.disabled = replayIndex >= total || !hasData;
+};
+
+const scrollReplayActiveMoveIntoView = () => {
+  if (!historyDetailMoves) return;
+  const active = historyDetailMoves.querySelector(".move-cell-current");
+  if (active) active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+};
+
+const setReplayStep = (index) => {
+  replayIndex = Math.max(0, Math.min(index, Math.max(0, replayFenSteps.length - 1)));
+  renderReplayBoard();
+  if (historyDetailMoves) {
+    historyDetailMoves.innerHTML = renderReplayMoveRows(replayMoveList, replayIndex - 1);
+  }
+  updateReplayControls();
+  scrollReplayActiveMoveIntoView();
+};
+
+const stepReplay = (delta) => setReplayStep(replayIndex + delta);
+
+const initReplay = (moveList, fenSteps, moveHistory, playerColor) => {
+  replayMoveList = moveList || [];
+  replayFenSteps = fenSteps || [];
+  replayMoveHistory = moveHistory || [];
+  replayPlayerColor = playerColor || "white";
+  setReplayStep(0);
+};
+
+const clearReplay = () => {
+  replayFenSteps = [];
+  replayMoveHistory = [];
+  replayMoveList = [];
+  replayIndex = 0;
+  if (replayBoard) replayBoard.innerHTML = "";
+  updateReplayControls();
+};
+
 const renderHistory = () => {
   historyCount.textContent = `${state.history.length} recorded`;
+  const ownerLabel = isAuthenticated() ? "your account" : "this browser";
 
   if (!state.persistence.available) {
     historyList.innerHTML = `
@@ -1572,7 +2299,9 @@ const renderHistory = () => {
     historyList.innerHTML = `
       <div class="empty-state">
         <strong>No completed games yet.</strong>
-        <span>Finish a duel to store its summary and move record here.</span>
+        <span>Finish a duel to store its summary and move record for ${escapeHtml(
+          ownerLabel
+        )}.</span>
       </div>
     `;
     return;
@@ -1591,6 +2320,7 @@ const renderHistory = () => {
             <span>${escapeHtml(record.difficulty)} difficulty - ${escapeHtml(
               `${record.moveCount} moves`
             )}</span>
+            <span>${escapeHtml(formatTimeControl(record.timeControl))}</span>
             <span>Completed ${escapeHtml(formatTimestamp(record.completedAt))}</span>
           </div>
           <button
@@ -1614,26 +2344,63 @@ const resetHistoryDetail = () => {
   historyDetailCompleted.textContent = "-";
   historyDetailStatus.textContent = "-";
   historyDetailPgn.textContent = "-";
-  historyDetailMoves.innerHTML = renderMoveRows(
-    [],
-    "No moves were recorded for this game."
-  );
+  if (historyDetailMoves) {
+    historyDetailMoves.innerHTML = renderReplayMoveRows([], -1);
+  }
+  clearReplay();
 };
 
 const renderBoard = () => {
   const legalTargets = getLegalTargets();
   const targetSquares = new Map(legalTargets.map((move) => [move.to, move]));
   const orderedSquares = getOrderedSquares();
+  const lastMove = state.game?.lastMove || null;
+  const checkedKingSquare = getCheckedKingSquare(state.game);
+  const playerColor = state.game?.settings?.playerColor || "white";
+  const isPlayerTurn = state.game?.turn === playerColor;
+  const canInteract =
+    !state.busy &&
+    !state.game?.isGameOver &&
+    !state.pendingPromotion?.moveChoices?.length;
 
   boardElement.innerHTML = orderedSquares
     .map((entry, index) => {
       const moveTarget = targetSquares.get(entry.square);
       const colorClass = getSquareColorClass(entry.square);
-      const targetClass = moveTarget
-        ? moveTarget.captured
-          ? "square-capture"
-          : "square-target"
-        : "";
+      const isSelected = state.selectedSquare === entry.square;
+      const isLastFrom = lastMove?.from === entry.square;
+      const isLastTo = lastMove?.to === entry.square;
+      const isCheckedKing = checkedKingSquare === entry.square;
+      const isOwnPiece = entry.piece?.color === playerColor;
+      const isSelectable =
+        canInteract && isPlayerTurn && isOwnPiece && Boolean(state.game?.legalMoves?.[entry.square]?.length);
+      const squareClasses = ["square", colorClass];
+
+      if (moveTarget) {
+        squareClasses.push(moveTarget.captured ? "square-capture" : "square-target");
+        squareClasses.push("square-legal-destination");
+      }
+
+      if (isSelected) {
+        squareClasses.push("square-selected");
+      }
+
+      if (isLastFrom) {
+        squareClasses.push("square-last-from");
+      }
+
+      if (isLastTo) {
+        squareClasses.push("square-last-to");
+      }
+
+      if (isCheckedKing) {
+        squareClasses.push("square-check");
+      }
+
+      if (isSelectable) {
+        squareClasses.push("square-selectable");
+      }
+
       const fileLabel =
         index >= 56
           ? `<span class="square-label square-file">${entry.file}</span>`
@@ -1642,13 +2409,35 @@ const renderBoard = () => {
         index % 8 === 0
           ? `<span class="square-label square-rank">${entry.rank}</span>`
           : "";
+      const pieceDescription = entry.piece
+        ? `${formatColor(entry.piece.color)} ${PIECE_LABELS[entry.piece.type] || "piece"}`
+        : "empty square";
+      const ariaStates = [];
+
+      if (isSelected) {
+        ariaStates.push("selected");
+      }
+
+      if (moveTarget) {
+        ariaStates.push(moveTarget.captured ? "capture available" : "legal destination");
+      }
+
+      if (isLastFrom || isLastTo) {
+        ariaStates.push("part of the last move");
+      }
+
+      if (isCheckedKing) {
+        ariaStates.push("king in check");
+      }
+
+      const ariaLabel = [entry.square, pieceDescription, ...ariaStates].join(", ");
 
       return `
         <button
           type="button"
-          class="square ${colorClass} ${targetClass}"
+          class="${squareClasses.join(" ")}"
           data-square="${entry.square}"
-          aria-label="${entry.square}"
+          aria-label="${escapeHtml(ariaLabel)}"
         >
           ${rankLabel}
           ${fileLabel}
@@ -1669,7 +2458,8 @@ const updateSummary = () => {
     return;
   }
 
-  statusText.textContent = state.game.status.message;
+  statusText.textContent =
+    getDrawClaimState(state.game)?.message || state.game.status.message;
   playerSide.textContent =
     state.game.settings.playerColor === "white" ? "White" : "Black";
   engineSide.textContent =
@@ -1728,7 +2518,9 @@ const renderBoardSurface = () => {
 
 const render = () => {
   renderGuestProfile();
+  renderSessionUi();
   renderBoardSurface();
+  renderClocks();
   renderMoveList();
   renderSavedGames();
   renderHistory();
@@ -1736,14 +2528,21 @@ const render = () => {
   updateSummary();
   setRecordView(state.activeRecordView);
   syncActionButtons();
+  updateClockLoops();
 };
 
 const syncControls = () => {
   if (!state.game) {
+    if (timeControlSelect) {
+      timeControlSelect.value = getSelectedTimeControlId();
+    }
     return;
   }
 
   difficultySelect.value = state.game.settings.difficulty;
+  if (timeControlSelect) {
+    timeControlSelect.value = state.game.settings.timeControl?.id || "untimed";
+  }
   document
     .querySelectorAll('input[name="player-color"]')
     .forEach((input) => (input.checked = input.value === state.game.settings.playerColor));
@@ -1793,7 +2592,9 @@ const applyGameState = (gameState, options = {}) => {
     resetGameOverBannerLifecycle();
     resetFinishedGameResetLifecycle();
   }
-  clearSelectedSquare();
+  if (!options.preserveSelection) {
+    clearSelectedSquare();
+  }
   hideGameOverBanner({
     resetCopy: true
   });
@@ -1856,6 +2657,128 @@ const ensureGuestSession = async () => {
   }
 };
 
+const clearAuthInputs = ({ keepEmail = false } = {}) => {
+  if (authEmailInput && !keepEmail) {
+    authEmailInput.value = "";
+  }
+
+  if (authPasswordInput) {
+    authPasswordInput.value = "";
+  }
+
+  if (authDisplayNameInput) {
+    authDisplayNameInput.value = "";
+  }
+};
+
+const getAuthTransferMessage = (transferred = {}) => {
+  const totalTransferred =
+    (transferred.savedGamesTransferred || 0) +
+    (transferred.historyGamesTransferred || 0);
+
+  if (!totalTransferred) {
+    return "Account sync is ready. New saves and completed games now belong to your account.";
+  }
+
+  const noun = totalTransferred === 1 ? "game" : "games";
+  return `${totalTransferred} archived ${noun} moved from this browser guest profile into your account.`;
+};
+
+const loadSession = async () => {
+  const payload = await request("/api/auth/session");
+  setPersistence(payload.persistence);
+  setSessionState(payload);
+  return payload;
+};
+
+const registerAccount = async () => {
+  setBusy(true, "Creating your Arcane Chess account...");
+
+  try {
+    const payload = await request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email: authEmailInput?.value?.trim() || "",
+        password: authPasswordInput?.value || "",
+        displayName: authDisplayNameInput?.value?.trim() || ""
+      })
+    });
+
+    setApiHealth(true);
+    setPersistence(payload.persistence);
+    setSessionState(payload);
+    clearAuthInputs({
+      keepEmail: true
+    });
+    await Promise.all([loadGame(), refreshCollections()]);
+    setRecordView("saves");
+    setCoachMessage(
+      "Account created.",
+      getAuthTransferMessage(payload.transferred)
+    );
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const loginAccount = async () => {
+  setBusy(true, "Signing you in...");
+
+  try {
+    const payload = await request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: authEmailInput?.value?.trim() || "",
+        password: authPasswordInput?.value || ""
+      })
+    });
+
+    setApiHealth(true);
+    setPersistence(payload.persistence);
+    setSessionState(payload);
+    clearAuthInputs({
+      keepEmail: true
+    });
+    await Promise.all([loadGame(), refreshCollections()]);
+    setRecordView("saves");
+    setCoachMessage("Signed in.", getAuthTransferMessage(payload.transferred));
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const logoutAccount = async () => {
+  setBusy(true, "Returning to guest mode...");
+
+  try {
+    const payload = await request("/api/auth/logout", {
+      method: "POST"
+    });
+
+    setApiHealth(true);
+    setPersistence(payload.persistence);
+    setSessionState(payload);
+    clearAuthInputs();
+    await Promise.all([loadGame(), refreshCollections()]);
+    setRecordView("moves");
+    setCoachMessage(
+      "Signed out.",
+      "You are back in guest mode on this browser. Account archives remain available the next time you sign in."
+    );
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
 const startNewGame = async () => {
   state.pendingNewGame = true;
   beginMoveCycle();
@@ -1873,7 +2796,8 @@ const startNewGame = async () => {
       method: "POST",
       body: JSON.stringify({
         difficulty: difficultySelect.value,
-        playerColor: getChosenColor()
+        playerColor: getChosenColor(),
+        timeControl: getSelectedTimeControlId()
       })
     });
 
@@ -1903,7 +2827,9 @@ const saveCurrentGame = async () => {
     setApiHealth(true);
     setPersistence(payload.persistence);
     applyGameState(payload.game, {
-      feedbackMessage: "Game saved to your guest archive."
+      feedbackMessage: isAuthenticated()
+        ? "Game saved to your account archive."
+        : "Game saved to your guest archive."
     });
     void refreshCollections();
     setRecordView("saves");
@@ -1990,7 +2916,73 @@ const offerDraw = async () => {
   }
 };
 
-const populateHistoryDetail = (record) => {
+const claimAvailableDraw = async () => {
+  const drawClaim = getDrawClaimState(state.game);
+
+  if (!drawClaim?.available) {
+    return;
+  }
+
+  beginMoveCycle();
+  setBusy(true, "Claiming the draw...");
+
+  try {
+    const gameState = await request("/api/game/claim-draw", {
+      method: "POST"
+    });
+
+    setApiHealth(true);
+    applyGameState(gameState);
+    void refreshCollections();
+    setRecordView("history");
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const continueAfterDrawClaim = async () => {
+  const drawClaim = getDrawClaimState(state.game);
+  const engineTurnPaused =
+    drawClaim?.available && state.game?.turn === state.game?.settings?.engineColor;
+
+  if (!engineTurnPaused) {
+    return;
+  }
+
+  beginMoveCycle();
+  setBusy(true, "Continuing the duel...");
+
+  try {
+    const payload = await request("/api/game/engine", {
+      method: "POST"
+    });
+
+    setApiHealth(true);
+
+    if (payload.game.isGameOver) {
+      setCoachStageRank(COACH_STAGE_GAME_OVER);
+      applyGameState(payload.game);
+      void refreshCollections();
+    } else if (payload.game.coachFeedback) {
+      setCoachStageRank(COACH_STAGE_ENGINE_FEEDBACK);
+      applyGameState(payload.game);
+    } else {
+      applyGameState(payload.game, {
+        preserveCoach: true
+      });
+    }
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const populateHistoryDetail = (record, fenSteps = [], moveHistory = []) => {
   const normalizedRecord = normalizeHistoryRecord(record);
 
   historyDetailResult.textContent = formatResult(
@@ -2003,10 +2995,7 @@ const populateHistoryDetail = (record) => {
   historyDetailCompleted.textContent = formatTimestamp(normalizedRecord.completedAt);
   historyDetailStatus.textContent = normalizedRecord.statusMessage;
   historyDetailPgn.textContent = normalizedRecord.pgn || "No PGN available.";
-  historyDetailMoves.innerHTML = renderMoveRows(
-    normalizedRecord.moveList,
-    "No moves were recorded for this game."
-  );
+  initReplay(normalizedRecord.moveList, fenSteps, moveHistory, normalizedRecord.playerColor);
 };
 
 const showHistoryModal = () => {
@@ -2046,7 +3035,7 @@ const openHistoryDetail = async (gameId) => {
 
     setApiHealth(true);
     setPersistence(payload.persistence);
-    populateHistoryDetail(payload.record);
+    populateHistoryDetail(payload.record, payload.fenSteps || [], payload.moveHistory || []);
   } catch (error) {
     if (requestId !== state.activeHistoryRequestId) {
       return;
@@ -2234,7 +3223,19 @@ const handleSquareClick = (square) => {
     return;
   }
 
+  const drawClaim = getDrawClaimState(state.game);
+
   if (state.game.turn !== state.game.settings.playerColor) {
+    if (drawClaim?.available) {
+      setCoachMessage(
+        drawClaim.message,
+        state.game.turn === state.game.settings.engineColor
+          ? "Claim the draw now, or continue play to let the engine answer."
+          : "You may claim the draw before playing on from this position."
+      );
+      return;
+    }
+
     setCoachMessage(
       "Wait for Stockfish to move.",
       "Your coach will grade your next move once the engine replies."
@@ -2322,11 +3323,13 @@ const handleSquareClick = (square) => {
 
 const initialize = async () => {
   renderGuestProfile();
+  renderSessionUi();
   setRecordView(state.activeRecordView);
   syncBoardViewUi();
 
   try {
     await ensureGuestSession();
+    await loadSession();
     await Promise.all([loadGame(), refreshCollections()]);
     setApiHealth(true);
   } catch (error) {
@@ -2371,15 +3374,8 @@ promotionPanel.addEventListener("click", (event) => {
   });
 });
 
-boardViewButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    setBoardViewMode(button.dataset.boardView);
-  });
-});
-
-immersiveExitButton?.addEventListener("click", () => {
-  setBoardViewMode("2d");
-});
+claimDrawButton?.addEventListener("click", claimAvailableDraw);
+continuePlayButton?.addEventListener("click", continueAfterDrawClaim);
 
 immersiveNewGameButton?.addEventListener("click", startNewGame);
 immersiveOfferDrawButton?.addEventListener("click", offerDraw);
@@ -2432,6 +3428,17 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.historyModalOpen) {
     event.preventDefault();
     closeHistoryDetail();
+    return;
+  }
+
+  if (state.historyModalOpen && event.key === "ArrowLeft") {
+    event.preventDefault();
+    stepReplay(-1);
+  }
+
+  if (state.historyModalOpen && event.key === "ArrowRight") {
+    event.preventDefault();
+    stepReplay(1);
   }
 });
 
@@ -2445,16 +3452,28 @@ window.addEventListener("resize", () => {
   }
 });
 
-window.addEventListener("arcane-3d-ready", handleArcane3DReady);
-
 closeHistoryButton.addEventListener("click", (event) => {
   event.preventDefault();
   closeHistoryDetail();
 });
+
+replayBack?.addEventListener("click", () => stepReplay(-1));
+replayForward?.addEventListener("click", () => stepReplay(1));
 newGameButton.addEventListener("click", startNewGame);
 saveGameButton.addEventListener("click", saveCurrentGame);
 offerDrawButton.addEventListener("click", offerDraw);
 resignButton.addEventListener("click", resignCurrentGame);
+loginButton?.addEventListener("click", loginAccount);
+registerButton?.addEventListener("click", registerAccount);
+logoutButton?.addEventListener("click", logoutAccount);
+timeControlSelect?.addEventListener("change", renderClocks);
+colorInputs.forEach((input) => {
+  input.addEventListener("change", renderClocks);
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    void syncTimedGameState();
+  }
+});
 
-handleArcane3DReady();
 initialize();
