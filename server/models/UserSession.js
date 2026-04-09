@@ -16,8 +16,7 @@ const userSessionSchema = new mongoose.Schema(
     },
     expiresAt: {
       type: Date,
-      required: true,
-      index: true
+      required: true
     },
     lastSeenAt: {
       type: Date,
