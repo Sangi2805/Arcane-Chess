@@ -17,15 +17,252 @@
       <section class="hero panel">
         <div class="hero-copy">
           <p class="eyebrow">Phase 3 Product Foundation</p>
-          <h1>Arcane Chess</h1>
-          <p class="lead">
-            Challenge Stockfish inside the first playable milestone of Arcane
-            Chess. Choose your side, tune the engine, and duel on a responsive
-            fantasy board.
-          </p>
+          <div class="hero-title-group">
+            <h1>Arcane Chess</h1>
+            <p class="hero-subtitle">2D duel interface</p>
+          </div>
         </div>
 
-        <div class="hero-status">
+        <div class="hero-challenge">
+          <span class="label hero-challenge-label">Challenge</span>
+          <p class="hero-challenge-text">Challenge Stockfish - Dark Academia Edition</p>
+        </div>
+      </section>
+
+      <section class="play-area">
+        <article class="panel controls-panel">
+          <div class="controls-header">
+            <div>
+              <h2>Match Setup</h2>
+              <p id="guest-subtitle" class="panel-subtitle">
+                Preparing guest mode...
+              </p>
+            </div>
+            <div class="controls-actions">
+              <button id="new-game-button" type="button">New Game</button>
+              <button id="save-game-button" class="button-secondary" type="button">
+                Save Game
+              </button>
+            </div>
+          </div>
+
+          <div class="guest-banner">
+            <strong id="guest-name">Playing as Guest</strong>
+            <span id="guest-meta" class="card-copy">
+              Linking local continuity and archives.
+            </span>
+          </div>
+
+          <section class="auth-panel">
+            <div class="auth-panel-header">
+              <div class="auth-panel-heading">
+                <span class="label">Account</span>
+                <strong id="auth-session-heading">Sign in or create an account</strong>
+              </div>
+              <span id="auth-session-pill" class="pill">Guest</span>
+            </div>
+            <p id="auth-session-copy" class="card-copy auth-session-copy">
+              Accounts sync unfinished and completed games beyond this browser.
+            </p>
+
+            <div id="auth-guest-view" class="auth-stack">
+              <label class="control auth-control">
+                <span>Email</span>
+                <input
+                  id="auth-email"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="username"
+                  placeholder="mage@arcanechess.dev"
+                />
+              </label>
+
+              <label class="control auth-control">
+                <span>Password</span>
+                <input
+                  id="auth-password"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="At least 8 characters"
+                />
+              </label>
+
+              <label class="control auth-control">
+                <span>Display Name</span>
+                <input
+                  id="auth-display-name"
+                  type="text"
+                  autocomplete="nickname"
+                  maxlength="40"
+                  placeholder="Used when creating an account"
+                />
+              </label>
+
+              <div class="auth-actions">
+                <button id="login-button" class="button-secondary" type="button">
+                  Log In
+                </button>
+                <button id="register-button" type="button">
+                  Create Account
+                </button>
+              </div>
+            </div>
+
+            <div id="auth-user-view" class="auth-stack hidden">
+              <div class="summary-card auth-user-card">
+                <span class="label">Signed In</span>
+                <strong id="auth-user-display">Arcane Player</strong>
+                <span id="auth-user-email" class="card-copy">mage@arcanechess.dev</span>
+              </div>
+              <div class="auth-actions">
+                <button id="logout-button" class="button-secondary" type="button">
+                  Log Out
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <label class="control">
+            <span>Difficulty</span>
+            <select id="difficulty-select">
+              <option value="easy">Easy</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="hard">Hard</option>
+              <option value="grandmaster">Grand Master</option>
+            </select>
+          </label>
+
+          <label class="control">
+            <span>Time Control</span>
+            <select id="time-control-select">
+              <option value="untimed">Untimed</option>
+              <option value="bullet-1">1 min</option>
+              <option value="blitz-3">3 min</option>
+              <option value="blitz-5">5 min</option>
+              <option value="rapid-10">10 min</option>
+              <option value="rapid-15-10">15 | 10</option>
+            </select>
+          </label>
+
+          <fieldset class="control side-choice">
+            <legend>Play As</legend>
+            <label>
+              <input type="radio" name="player-color" value="white" checked />
+              <span>White</span>
+            </label>
+            <label>
+              <input type="radio" name="player-color" value="black" />
+              <span>Black</span>
+            </label>
+          </fieldset>
+
+          <div class="summary-grid">
+            <div class="summary-card">
+              <span class="label">You</span>
+              <strong id="player-side">White</strong>
+            </div>
+            <div class="summary-card">
+              <span class="label">Engine</span>
+              <strong id="engine-side">Black</strong>
+            </div>
+            <div class="summary-card">
+              <span class="label">Turn</span>
+              <strong id="turn-indicator">White</strong>
+            </div>
+            <div class="summary-card">
+              <span class="label">Last Move</span>
+              <strong id="last-move-text">None</strong>
+            </div>
+          </div>
+
+          <div class="game-actions">
+            <button id="offer-draw-button" class="button-secondary" type="button">
+              Offer Draw
+            </button>
+            <button id="resign-button" class="button-secondary button-danger" type="button">
+              Resign
+            </button>
+          </div>
+
+        </article>
+
+        <article class="panel board-panel">
+          <div class="board-stage">
+              <div class="board-player-row" data-player-row="top">
+                <div class="player-row-copy">
+                  <strong id="top-clock-label" class="player-row-name">Stockfish</strong>
+                  <span id="top-clock-side" class="player-row-meta">Black pieces</span>
+                </div>
+                <div id="top-clock-card" class="clock-display">
+                  <strong id="top-clock-time" class="clock-time">--:--</strong>
+                  <span id="top-clock-meta" class="clock-meta hidden">Clock idle</span>
+                </div>
+              </div>
+
+              <div class="board-shell">
+                <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
+                <div id="board" class="board" aria-label="Arcane Chess Board"></div>
+                <div
+                  id="board-feedback-banner"
+                  class="board-feedback hidden"
+                  aria-live="polite"
+                  aria-hidden="true"
+                >
+                  <div class="board-feedback-copy">
+                    <strong id="board-feedback-title">Board Status</strong>
+                    <span id="board-feedback-message">The duel is underway.</span>
+                  </div>
+                  <div class="board-feedback-actions">
+                    <button
+                      id="claim-draw-button"
+                      type="button"
+                      class="button-secondary button-small hidden"
+                    >
+                      Claim Draw
+                    </button>
+                    <button
+                      id="continue-play-button"
+                      type="button"
+                      class="button-secondary button-small hidden"
+                    >
+                      Continue Play
+                    </button>
+                  </div>
+                </div>
+                <div
+                  id="game-over-banner"
+                  class="game-over-banner hidden"
+                  aria-live="polite"
+                  aria-hidden="true"
+                >
+                  <strong id="game-over-title">Game Over</strong>
+                  <span id="game-over-message">Result pending.</span>
+                </div>
+                <div id="promotion-panel" class="promotion-panel promotion-popover hidden">
+                  <span class="label">Choose Promotion</span>
+                  <div class="promotion-actions">
+                    <button type="button" class="button-secondary" data-promotion="q">Queen</button>
+                    <button type="button" class="button-secondary" data-promotion="r">Rook</button>
+                    <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
+                    <button type="button" class="button-secondary" data-promotion="n">Knight</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="board-player-row" data-player-row="bottom">
+                <div class="player-row-copy">
+                  <strong id="bottom-clock-label" class="player-row-name">You</strong>
+                  <span id="bottom-clock-side" class="player-row-meta">White pieces</span>
+                </div>
+                <div id="bottom-clock-card" class="clock-display">
+                  <strong id="bottom-clock-time" class="clock-time">--:--</strong>
+                  <span id="bottom-clock-meta" class="clock-meta hidden">Clock idle</span>
+                </div>
+              </div>
+          </div>
+        </article>
+
+        <aside class="support-column">
           <article id="coach-panel" class="status-group coach-panel" aria-live="polite">
             <div class="coach-avatar-stage">
               <div class="coach-avatar-frame" aria-hidden="true">
@@ -80,175 +317,55 @@
               </div>
             </div>
           </article>
-        </div>
-      </section>
 
-      <section class="play-area">
-        <article class="panel controls-panel">
-          <div class="controls-header">
-            <div>
-              <h2>Match Setup</h2>
-              <p id="guest-subtitle" class="panel-subtitle">
-                Preparing guest mode...
-              </p>
+          <article class="panel moves-panel">
+            <div class="controls-header moves-panel-header">
+              <div class="moves-panel-heading">
+                <h2>Move Chronicle</h2>
+                <p class="panel-subtitle moves-panel-subtitle">
+                  Live turns, saved duels, and finished match history.
+                </p>
+              </div>
+              <span id="api-health" class="pill">API</span>
             </div>
-            <div class="controls-actions">
-              <button id="new-game-button" type="button">New Game</button>
-              <button id="save-game-button" class="button-secondary" type="button">
-                Save Game
+
+            <div class="record-tabs" role="tablist" aria-label="Game records">
+              <button
+                type="button"
+                class="record-tab active"
+                data-record-view="moves"
+              >
+                Moves
+              </button>
+              <button type="button" class="record-tab" data-record-view="saves">
+                Resume
+              </button>
+              <button type="button" class="record-tab" data-record-view="history">
+                History
               </button>
             </div>
-          </div>
 
-          <div class="guest-banner">
-            <strong id="guest-name">Playing as Guest</strong>
-            <span id="guest-meta" class="card-copy">
-              Linking local continuity and archives.
-            </span>
-          </div>
+            <section class="record-view" data-view-panel="moves">
+              <div id="move-list" class="move-list"></div>
+            </section>
 
-          <label class="control">
-            <span>Difficulty</span>
-            <select id="difficulty-select">
-              <option value="easy">Easy</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="hard">Hard</option>
-              <option value="grandmaster">Grand Master</option>
-            </select>
-          </label>
-
-          <fieldset class="control side-choice">
-            <legend>Play As</legend>
-            <label>
-              <input type="radio" name="player-color" value="white" checked />
-              <span>White</span>
-            </label>
-            <label>
-              <input type="radio" name="player-color" value="black" />
-              <span>Black</span>
-            </label>
-          </fieldset>
-
-          <div class="summary-grid">
-            <div class="summary-card">
-              <span class="label">You</span>
-              <strong id="player-side">White</strong>
-            </div>
-            <div class="summary-card">
-              <span class="label">Engine</span>
-              <strong id="engine-side">Black</strong>
-            </div>
-            <div class="summary-card">
-              <span class="label">Turn</span>
-              <strong id="turn-indicator">White</strong>
-            </div>
-            <div class="summary-card">
-              <span class="label">Last Move</span>
-              <strong id="last-move-text">None</strong>
-            </div>
-          </div>
-
-          <div class="game-actions">
-            <button id="offer-draw-button" class="button-secondary" type="button">
-              Offer Draw
-            </button>
-            <button id="resign-button" class="button-secondary button-danger" type="button">
-              Resign
-            </button>
-          </div>
-
-        </article>
-
-        <article class="panel board-panel">
-          <div class="board-panel-toolbar">
-            <div class="board-view-toolbar" role="group" aria-label="Board view mode">
-              <span class="board-view-label">View</span>
-              <div class="board-view-toggle">
-                <button
-                  id="board-view-2d"
-                  type="button"
-                  class="board-view-button active"
-                  data-board-view="2d"
-                >
-                  2D
-                </button>
-                <button
-                  id="board-view-3d"
-                  type="button"
-                  class="board-view-button"
-                  data-board-view="3d"
-                >
-                  3D
-                </button>
+            <section class="record-view hidden" data-view-panel="saves">
+              <div class="record-section-header">
+                <span class="label">Resume Game</span>
+                <span id="saved-games-count" class="section-count">0 saved</span>
               </div>
-            </div>
-          </div>
-          <div class="board-shell">
-            <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
-            <div id="board" class="board" aria-label="Arcane Chess Board"></div>
-            <div
-              id="game-over-banner"
-              class="game-over-banner hidden"
-              aria-live="polite"
-              aria-hidden="true"
-            >
-              <strong id="game-over-title">Game Over</strong>
-              <span id="game-over-message">Result pending.</span>
-            </div>
-            <div id="promotion-panel" class="promotion-panel promotion-popover hidden">
-              <span class="label">Choose Promotion</span>
-              <div class="promotion-actions">
-                <button type="button" class="button-secondary" data-promotion="q">Queen</button>
-                <button type="button" class="button-secondary" data-promotion="r">Rook</button>
-                <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
-                <button type="button" class="button-secondary" data-promotion="n">Knight</button>
+              <div id="saved-games-list" class="record-list"></div>
+            </section>
+
+            <section class="record-view hidden" data-view-panel="history">
+              <div class="record-section-header">
+                <span class="label">Completed Games</span>
+                <span id="history-count" class="section-count">0 recorded</span>
               </div>
-            </div>
-          </div>
-        </article>
-
-        <article class="panel moves-panel">
-          <div class="controls-header">
-            <h2>Move Chronicle</h2>
-            <span id="api-health" class="pill">API</span>
-          </div>
-
-          <div class="record-tabs" role="tablist" aria-label="Game records">
-            <button
-              type="button"
-              class="record-tab active"
-              data-record-view="moves"
-            >
-              Moves
-            </button>
-            <button type="button" class="record-tab" data-record-view="saves">
-              Resume
-            </button>
-            <button type="button" class="record-tab" data-record-view="history">
-              History
-            </button>
-          </div>
-
-          <section class="record-view" data-view-panel="moves">
-            <div id="move-list" class="move-list"></div>
-          </section>
-
-          <section class="record-view hidden" data-view-panel="saves">
-            <div class="record-section-header">
-              <span class="label">Resume Game</span>
-              <span id="saved-games-count" class="section-count">0 saved</span>
-            </div>
-            <div id="saved-games-list" class="record-list"></div>
-          </section>
-
-          <section class="record-view hidden" data-view-panel="history">
-            <div class="record-section-header">
-              <span class="label">Completed Games</span>
-              <span id="history-count" class="section-count">0 recorded</span>
-            </div>
-            <div id="history-list" class="record-list"></div>
-          </section>
-        </article>
+              <div id="history-list" class="record-list"></div>
+            </section>
+          </article>
+        </aside>
       </section>
 
       <div id="immersive-hud" class="immersive-hud" aria-hidden="true">
@@ -337,6 +454,23 @@
           </div>
         </div>
 
+        <div class="replay-layout">
+          <div class="replay-board-column">
+            <div id="replay-board" class="replay-board"></div>
+            <div class="replay-controls">
+              <button id="replay-back" type="button" class="button-secondary button-small" disabled>&#8592; Back</button>
+              <span id="replay-step-label" class="replay-step-label">Start</span>
+              <button id="replay-forward" type="button" class="button-secondary button-small" disabled>Forward &#8594;</button>
+            </div>
+          </div>
+          <div class="replay-sidebar">
+            <div class="history-block replay-sidebar-block">
+              <span class="label">Move List</span>
+              <div id="history-detail-moves" class="history-move-list replay-move-list"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="history-detail-grid">
           <div class="history-block">
             <span class="label">Status</span>
@@ -345,10 +479,6 @@
           <div class="history-block">
             <span class="label">PGN</span>
             <pre id="history-detail-pgn" class="history-pgn">-</pre>
-          </div>
-          <div class="history-block history-moves-block">
-            <span class="label">Move List</span>
-            <div id="history-detail-moves" class="history-move-list"></div>
           </div>
         </div>
       </div>
