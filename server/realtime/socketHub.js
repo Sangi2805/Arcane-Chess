@@ -7,6 +7,14 @@ const WAITING_STATUS = {
   message: "Waiting for an opponent to join."
 };
 
+const BLITZ_FIVE_TIME_CONTROL = {
+  id: "blitz-5",
+  label: "5 min",
+  enabled: true,
+  baseMs: 300000,
+  incrementMs: 0
+};
+
 const UNTYPED_TIME_CONTROL = {
   id: "untimed",
   label: "Untimed",
@@ -16,6 +24,8 @@ const UNTYPED_TIME_CONTROL = {
 };
 
 const roomRegistry = new Map();
+const matchmakingQueue = [];
+const queuedActors = new Map();
 
 const createRoomId = () => randomUUID().split("-")[0].toUpperCase();
 
@@ -44,6 +54,46 @@ const getOpenColor = (room) => {
 };
 
 const hasBothPlayers = (room) => Boolean(room.players.white && room.players.black);
+
+const normalizeDisplayName = (value, fallback = "Player") => {
+  const trimmed = String(value || "").trim();
+  return trimmed ? trimmed.slice(0, 40) : fallback;
+};
+
+const normalizeActorIdentity = (socket, payload = {}) => {
+  const actor = payload.actor || {};
+  const userId = typeof actor.userId === "string" ? actor.userId.trim() : "";
+  const guestId = typeof actor.guestId === "string" ? actor.guestId.trim() : "";
+  const displayName = normalizeDisplayName(actor.displayName, "Player");
+
+  if (userId) {
+    return {
+      actorKey: `user:${userId}`,
+      actorType: "user",
+      userId,
+      guestId: null,
+      displayName
+    };
+  }
+
+  if (guestId) {
+    return {
+      actorKey: `guest:${guestId}`,
+      actorType: "guest",
+      userId: null,
+      guestId,
+      displayName
+    };
+  }
+
+  return {
+    actorKey: `guest:socket-${socket.id}`,
+    actorType: "guest",
+    userId: null,
+    guestId: null,
+    displayName
+  };
+};
 
 const getPublicPlayers = (room) => ({
   white: room.players.white
@@ -110,6 +160,7 @@ const buildPerspectiveState = (room, playerColor) => {
   const snapshot = serializeGame(room.chess);
   const hasStarted = hasBothPlayers(room);
   const resolved = getResolvedResult(snapshot, hasStarted);
+  const timeControl = room.timeControl || UNTYPED_TIME_CONTROL;
 
   return {
     id: room.id,
@@ -124,14 +175,14 @@ const buildPerspectiveState = (room, playerColor) => {
       difficulty: "easy",
       playerColor,
       engineColor: playerColor === "white" ? "black" : "white",
-      timeControl: UNTYPED_TIME_CONTROL
+      timeControl
     },
     persistence: {
       available: true,
       status: "socket-live"
     },
     ...snapshot,
-    timeControl: UNTYPED_TIME_CONTROL,
+    timeControl,
     clockState: null,
     turn: resolved.turn,
     legalMoves: resolved.legalMoves,
@@ -160,6 +211,149 @@ const emitRoomState = (io, room, extras = {}) => {
       ...extras
     });
   });
+};
+
+const getSocketById = (io, socketId) => io.sockets.sockets.get(socketId) || null;
+
+const buildQueueStatus = ({ queued, position = null } = {}) => ({
+  queued,
+  position,
+  timeControl: queued ? BLITZ_FIVE_TIME_CONTROL : null
+});
+
+const emitQueueStatus = (socket, status) => {
+  socket.emit("queue:status", status);
+};
+
+const emitQueueError = (socket, message) => {
+  socket.emit("queue:error", {
+    message
+  });
+};
+
+const removeQueueEntryByActorKey = (io, actorKey) => {
+  if (!actorKey || !queuedActors.has(actorKey)) {
+    return null;
+  }
+
+  const queueIndex = matchmakingQueue.findIndex((entry) => entry.actorKey === actorKey);
+  const removedEntry = queuedActors.get(actorKey) || null;
+
+  if (queueIndex >= 0) {
+    matchmakingQueue.splice(queueIndex, 1);
+  }
+
+  queuedActors.delete(actorKey);
+
+  if (removedEntry?.socketId) {
+    const removedSocket = getSocketById(io, removedEntry.socketId);
+    if (removedSocket) {
+      emitQueueStatus(removedSocket, buildQueueStatus({ queued: false }));
+    }
+  }
+
+  return removedEntry;
+};
+
+const broadcastQueueStatuses = (io) => {
+  matchmakingQueue.forEach((entry, index) => {
+    const queuedSocket = getSocketById(io, entry.socketId);
+
+    if (!queuedSocket) {
+      return;
+    }
+
+    emitQueueStatus(
+      queuedSocket,
+      buildQueueStatus({
+        queued: true,
+        position: index + 1
+      })
+    );
+  });
+};
+
+const pruneQueue = (io) => {
+  const staleKeys = matchmakingQueue
+    .filter((entry) => !getSocketById(io, entry.socketId))
+    .map((entry) => entry.actorKey);
+
+  staleKeys.forEach((actorKey) => {
+    removeQueueEntryByActorKey(io, actorKey);
+  });
+};
+
+const createRoomFromQueuePair = (io, firstEntry, secondEntry) => {
+  const firstSocket = getSocketById(io, firstEntry.socketId);
+  const secondSocket = getSocketById(io, secondEntry.socketId);
+
+  if (!firstSocket || !secondSocket) {
+    return;
+  }
+
+  const roomId = createRoomId();
+  const now = new Date().toISOString();
+  const room = {
+    id: roomId,
+    chess: createChessGame(),
+    createdAt: now,
+    updatedAt: now,
+    timeControl: BLITZ_FIVE_TIME_CONTROL,
+    players: {
+      white: {
+        socketId: firstSocket.id,
+        name: firstEntry.displayName
+      },
+      black: {
+        socketId: secondSocket.id,
+        name: secondEntry.displayName
+      }
+    }
+  };
+
+  roomRegistry.set(roomId, room);
+
+  firstSocket.join(roomId);
+  secondSocket.join(roomId);
+
+  firstSocket.data.roomId = roomId;
+  firstSocket.data.playerColor = "white";
+  secondSocket.data.roomId = roomId;
+  secondSocket.data.playerColor = "black";
+
+  firstSocket.emit("match:found", {
+    roomId,
+    youAre: "white",
+    opponentName: secondEntry.displayName,
+    timeControl: BLITZ_FIVE_TIME_CONTROL
+  });
+
+  secondSocket.emit("match:found", {
+    roomId,
+    youAre: "black",
+    opponentName: firstEntry.displayName,
+    timeControl: BLITZ_FIVE_TIME_CONTROL
+  });
+
+  emitRoomState(io, room, {
+    event: "match-started"
+  });
+};
+
+const runMatchmaking = (io) => {
+  pruneQueue(io);
+
+  while (matchmakingQueue.length >= 2) {
+    const firstEntry = matchmakingQueue.shift();
+    const secondEntry = matchmakingQueue.shift();
+
+    queuedActors.delete(firstEntry.actorKey);
+    queuedActors.delete(secondEntry.actorKey);
+
+    createRoomFromQueuePair(io, firstEntry, secondEntry);
+  }
+
+  broadcastQueueStatuses(io);
 };
 
 const removeSocketFromRoom = (io, socket) => {
@@ -202,6 +396,7 @@ const attachRealtimeHub = (io) => {
     console.log("SOCKET CONNECTED:", socket.id);
     socket.data.roomId = null;
     socket.data.playerColor = null;
+    socket.data.actorKey = null;
 
     socket.on("multiplayer:create", (payload = {}, callback = () => {}) => {
       try {
@@ -214,6 +409,7 @@ const attachRealtimeHub = (io) => {
           chess: createChessGame(),
           createdAt: now,
           updatedAt: now,
+          timeControl: UNTYPED_TIME_CONTROL,
           players: {
             white: {
               socketId: socket.id,
@@ -372,7 +568,80 @@ const attachRealtimeHub = (io) => {
       removeSocketFromRoom(io, socket);
     });
 
+    socket.on("queue:join", (payload = {}, callback = () => {}) => {
+      try {
+        if (socket.data.roomId) {
+          throw new Error("Leave the current room before joining quick play queue.");
+        }
+
+        const actor = normalizeActorIdentity(socket, payload);
+        socket.data.actorKey = actor.actorKey;
+
+        removeQueueEntryByActorKey(io, actor.actorKey);
+
+        const queueEntry = {
+          ...actor,
+          socketId: socket.id,
+          queuedAt: Date.now()
+        };
+
+        matchmakingQueue.push(queueEntry);
+        queuedActors.set(actor.actorKey, queueEntry);
+
+        runMatchmaking(io);
+
+        const position = matchmakingQueue.findIndex((entry) => entry.actorKey === actor.actorKey) + 1;
+
+        callback({
+          ok: true,
+          state: buildQueueStatus({
+            queued: position > 0,
+            position: position > 0 ? position : null
+          })
+        });
+      } catch (error) {
+        emitQueueError(socket, error.message || "Unable to join queue.");
+        callback({
+          ok: false,
+          message: error.message || "Unable to join queue."
+        });
+      }
+    });
+
+    socket.on("queue:leave", (_payload = {}, callback = () => {}) => {
+      try {
+        removeQueueEntryByActorKey(io, socket.data.actorKey);
+        broadcastQueueStatuses(io);
+
+        callback({
+          ok: true,
+          state: buildQueueStatus({ queued: false })
+        });
+      } catch (error) {
+        callback({
+          ok: false,
+          message: error.message || "Unable to leave queue."
+        });
+      }
+    });
+
+    socket.on("queue:status-request", (_payload = {}, callback = () => {}) => {
+      const position = matchmakingQueue.findIndex(
+        (entry) => entry.actorKey && entry.actorKey === socket.data.actorKey
+      );
+
+      callback({
+        ok: true,
+        state: buildQueueStatus({
+          queued: position >= 0,
+          position: position >= 0 ? position + 1 : null
+        })
+      });
+    });
+
     socket.on("disconnect", () => {
+      removeQueueEntryByActorKey(io, socket.data.actorKey);
+      broadcastQueueStatuses(io);
       removeSocketFromRoom(io, socket);
     });
   });

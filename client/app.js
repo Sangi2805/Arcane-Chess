@@ -3,6 +3,7 @@ const RECORD_VIEW_STORAGE_KEY = "arcane-chess-record-view";
 const LOBBY_MODE_STORAGE_KEY = "arcane-chess-lobby-mode";
 const VIEW_STORAGE_KEY = "arcane-chess-view";
 const VALID_APP_VIEWS = new Set(["auth", "hall", "game"]);
+const QUICK_PLAY_TIME_CONTROL_ID = "blitz-5";
 
 const PIECES = {
   white: {
@@ -301,7 +302,10 @@ const state = {
     connected: false,
     roomId: null,
     color: null,
-    phase: "idle"
+    phase: "idle",
+    queued: false,
+    queuePosition: null,
+    queueTimeControlId: null
   },
   view: "auth",
   authMode: "login",
@@ -413,6 +417,24 @@ const getMultiplayerDisplayName = () => {
   return state.guest?.displayName || state.guest?.name || "Guest";
 };
 
+const getMultiplayerActorPayload = () => {
+  if (isAuthenticated()) {
+    return {
+      actorType: "user",
+      userId: state.session.user.id,
+      guestId: null,
+      displayName: getSessionDisplayName()
+    };
+  }
+
+  return {
+    actorType: "guest",
+    userId: null,
+    guestId: state.guest?.guestId || null,
+    displayName: state.guest?.displayName || "Guest"
+  };
+};
+
 const renderMultiplayerRealtimeControls = () => {
   if (multiplayerRoomIdLabel) {
     multiplayerRoomIdLabel.textContent = state.multiplayer.roomId
@@ -421,14 +443,23 @@ const renderMultiplayerRealtimeControls = () => {
   }
 
   if (multiplayerConnectionStatus) {
+    const queueSuffix = state.multiplayer.queued
+      ? ` queued for Blitz 5${
+          state.multiplayer.queuePosition
+            ? ` (position ${state.multiplayer.queuePosition})`
+            : ""
+        }.`
+      : "";
     const phaseLabel =
       state.multiplayer.phase === "active"
         ? "ready"
         : state.multiplayer.phase === "waiting"
           ? "waiting"
+          : state.multiplayer.phase === "queued"
+            ? "queued"
           : "idle";
     multiplayerConnectionStatus.textContent = state.multiplayer.connected
-      ? `Multiplayer socket: connected (${phaseLabel}).`
+      ? `Multiplayer socket: connected (${phaseLabel})${queueSuffix}`
       : "Multiplayer socket: disconnected.";
   }
 };
@@ -525,9 +556,12 @@ const renderMultiplayerLobby = () => {
     if (showDashboard && state.multiplayer.roomId) {
       multiplayerStatusCopy.textContent =
         "Live room active. Share the Room ID so your opponent can join and play in real time.";
+    } else if (showDashboard && state.multiplayer.queued) {
+      multiplayerStatusCopy.textContent =
+        "Searching for a Blitz 5 opponent now. Stay on this page while queued.";
     } else if (showDashboard && state.multiplayer.connected) {
       multiplayerStatusCopy.textContent =
-        "Live socket connected. Create a room or join one by ID.";
+        "Live socket connected. Click Online Quick Play to queue instantly for Blitz 5.";
     } else if (!persistenceAvailable) {
       multiplayerStatusCopy.textContent =
         "MongoDB is offline, so presence, invites, and PvP history stay parked until persistence returns.";
@@ -646,7 +680,7 @@ const ensureMultiplayerSocket = () => {
     return null;
   }
 
-  const socket = window.io("http://localhost:4000", {
+  const socket = window.io(window.location.origin, {
     transports: ["websocket", "polling"]
   });
 
@@ -655,12 +689,45 @@ const ensureMultiplayerSocket = () => {
     state.multiplayer.connected = true;
     renderMultiplayerLobby();
     syncActionButtons();
+    void emitMultiplayerEvent("queue:status-request")
+      .then((queueState) => {
+        applyQueueStatusState(queueState);
+      })
+      .catch(() => {
+        applyQueueStatusState({ queued: false });
+      });
   });
 
   socket.on("disconnect", () => {
     state.multiplayer.connected = false;
+    applyQueueStatusState({ queued: false });
     renderMultiplayerLobby();
     syncActionButtons();
+  });
+
+  socket.on("queue:status", (queueState) => {
+    applyQueueStatusState(queueState);
+  });
+
+  socket.on("queue:error", (payload = {}) => {
+    setCoachMessage(payload.message || "Quick play queue request failed.");
+  });
+
+  socket.on("match:found", (payload = {}) => {
+    state.multiplayer.queued = false;
+    state.multiplayer.queuePosition = null;
+    state.multiplayer.queueTimeControlId = null;
+    state.multiplayer.phase = "active";
+
+    state.view = "game";
+    renderView();
+    renderMultiplayerLobby();
+    syncActionButtons();
+
+    setCoachMessage(
+      `Match found: ${payload.opponentName || "Opponent"}`,
+      "Blitz 5 duel ready. Pieces are loading now."
+    );
   });
 
   socket.on("multiplayer:state", (socketState) => {
@@ -718,6 +785,85 @@ const leaveMultiplayerRoom = () => {
   state.multiplayer.color = null;
   state.multiplayer.phase = "idle";
   renderMultiplayerLobby();
+};
+
+const applyQueueStatusState = (queueState = {}) => {
+  state.multiplayer.queued = Boolean(queueState.queued);
+  state.multiplayer.queuePosition =
+    Number.isFinite(queueState.position) && queueState.position > 0
+      ? queueState.position
+      : null;
+  state.multiplayer.queueTimeControlId = state.multiplayer.queued
+    ? QUICK_PLAY_TIME_CONTROL_ID
+    : null;
+
+  if (state.multiplayer.queued) {
+    state.multiplayer.phase = "queued";
+  } else if (!state.multiplayer.roomId) {
+    state.multiplayer.phase = "idle";
+  }
+
+  renderMultiplayerLobby();
+  syncActionButtons();
+};
+
+const joinMatchmakingQueue = async () => {
+  if (state.multiplayer.roomId) {
+    setCoachMessage(
+      "Leave your current room before joining quick play.",
+      "Quick play queue is only available when you are not inside a multiplayer room."
+    );
+    return;
+  }
+
+  setBusy(true, "Joining Blitz 5 quick play queue...");
+
+  try {
+    const queueState = await emitMultiplayerEvent("queue:join", {
+      actor: getMultiplayerActorPayload()
+    });
+
+    setApiHealth(true);
+    applyQueueStatusState(queueState);
+    setCoachMessage(
+      "Queued for Blitz 5 quick play.",
+      "Matchmaking is live. We will drop you into a game as soon as another player queues."
+    );
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const leaveMatchmakingQueue = async () => {
+  setBusy(true, "Leaving quick play queue...");
+
+  try {
+    const queueState = await emitMultiplayerEvent("queue:leave");
+
+    setApiHealth(true);
+    applyQueueStatusState(queueState);
+    setCoachMessage(
+      "Quick play queue canceled.",
+      "You can rejoin Blitz 5 quick play at any time."
+    );
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const handleQuickPlayClick = async () => {
+  if (state.multiplayer.queued) {
+    await leaveMatchmakingQueue();
+    return;
+  }
+
+  await joinMatchmakingQueue();
 };
 
 const createMultiplayerRoom = async () => {
@@ -1647,15 +1793,27 @@ const syncActionButtons = () => {
   });
 
   if (multiplayerCreateGameButton) {
-    multiplayerCreateGameButton.disabled = state.busy || !state.multiplayer.connected;
+    multiplayerCreateGameButton.disabled =
+      state.busy ||
+      !state.multiplayer.connected ||
+      Boolean(state.multiplayer.roomId);
+    multiplayerCreateGameButton.textContent = state.multiplayer.queued
+      ? "Cancel Quick Play"
+      : "Online Quick Play";
   }
 
   if (multiplayerJoinGameButton) {
-    multiplayerJoinGameButton.disabled = state.busy || !state.multiplayer.connected;
+    multiplayerJoinGameButton.disabled =
+      state.busy ||
+      !state.multiplayer.connected ||
+      state.multiplayer.queued;
   }
 
   if (multiplayerRoomIdInput) {
-    multiplayerRoomIdInput.disabled = state.busy || !state.multiplayer.connected;
+    multiplayerRoomIdInput.disabled =
+      state.busy ||
+      !state.multiplayer.connected ||
+      state.multiplayer.queued;
   }
 };
 
@@ -4544,7 +4702,7 @@ initialize();
 ensureMultiplayerSocket();
 
 multiplayerCreateGameButton?.addEventListener("click", () => {
-  void createMultiplayerRoom();
+  void handleQuickPlayClick();
 });
 
 multiplayerJoinGameButton?.addEventListener("click", () => {
