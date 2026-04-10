@@ -1,15 +1,19 @@
 const path = require("path");
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const { Server } = require("socket.io");
 
 const apiRouter = require("./api");
 const { attachRequestAuth } = require("./auth/sessionAuth");
 const { connectToMongo, getMongoStatus } = require("./db/mongo");
+const { attachRealtimeHub } = require("./realtime/socketHub");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
 const app = express();
+const httpServer = require("http").createServer(app);
 const port = Number(process.env.PORT) || 4000;
 const host = process.env.HOST || "0.0.0.0";
 const isProduction = process.env.NODE_ENV === "production";
@@ -67,7 +71,16 @@ const startServer = async () => {
     console.warn("MongoDB connection skipped:", error.message);
   }
 
-  app.listen(port, host, () => {
+  const io = new Server(httpServer, {
+    cors: {
+      origin: "*"
+    }
+  });
+
+  attachRealtimeHub(io);
+  console.log("Socket.IO initialized");
+
+  httpServer.listen(port, host, () => {
     console.log(
       `Arcane Chess server listening on http://${host}:${port} (db: ${getMongoStatus()})`
     );

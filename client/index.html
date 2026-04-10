@@ -11,182 +11,350 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles-override.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="./3d/ArcaneBoardV2.js"></script>
   </head>
   <body>
     <main class="shell">
       <section class="hero panel">
         <div class="hero-copy">
-          <p class="eyebrow">Phase 3 Product Foundation</p>
+          <p class="eyebrow">Arcane Chess · AI 6001</p>
           <div class="hero-title-group">
             <h1>Arcane Chess</h1>
-            <p class="hero-subtitle">2D duel interface</p>
+            <p class="hero-subtitle" id="board-mode-label">Challenge Stockfish</p>
+          </div>
+          <div class="board-mode-toggle">
+            <button id="toggle-2d" class="mode-btn mode-btn-active" type="button">2D</button>
+            <button id="toggle-3d" class="mode-btn" type="button">3D</button>
           </div>
         </div>
 
         <div class="hero-challenge">
-          <span class="label hero-challenge-label">Challenge</span>
-          <p class="hero-challenge-text">Challenge Stockfish - Dark Academia Edition</p>
+          <span class="label hero-challenge-label">Dark Academia Edition</span>
+          <p class="hero-challenge-text">Masters AI · Phase 3 Product Foundation</p>
         </div>
       </section>
 
-      <section class="play-area">
-        <article class="panel controls-panel">
-          <div class="controls-header">
+      <section id="auth-view" class="auth-view">
+        <article class="panel auth-panel">
+          <div class="auth-panel-copy">
+            <p class="eyebrow">Arcane Chess</p>
+            <h2>Welcome back</h2>
+            <p class="panel-subtitle">Sign in to reach the hall, then open a game.</p>
+          </div>
+
+          <div class="cp-acct-strip">
             <div>
-              <h2>Match Setup</h2>
-              <p id="guest-subtitle" class="panel-subtitle">
-                Preparing guest mode...
-              </p>
+              <strong id="auth-session-heading" class="cp-acct-name">Sign in or create an account</strong>
+              <span id="auth-session-copy" class="cp-acct-meta">Accounts sync unfinished and completed games beyond this browser.</span>
             </div>
-            <div class="controls-actions">
-              <button id="new-game-button" type="button">New Game</button>
-              <button id="save-game-button" class="button-secondary" type="button">
-                Save Game
-              </button>
+              <!-- Removed duplicated auth pill -->
+              <!-- <span id="auth-session-pill" class="pill">Guest</span> -->
+          </div>
+
+          <div id="auth-guest-view" class="cp-auth-form">
+            <label class="cp-field">
+              <span>Email or Username</span>
+              <input
+                id="auth-email"
+                type="email"
+                inputmode="email"
+                autocomplete="username"
+                placeholder="mage@arcanechess.dev"
+              />
+            </label>
+            <label class="cp-field">
+              <span>Password</span>
+              <input
+                id="auth-password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="At least 8 characters"
+              />
+            </label>
+              <label class="cp-field signup-only hidden">
+              <span>Display Name</span>
+              <input
+                id="auth-display-name"
+                type="text"
+                autocomplete="nickname"
+                maxlength="40"
+                placeholder="Used when creating an account"
+              />
+            </label>
+            <div class="cp-row">
+              <button id="login-button" class="button-secondary" type="button">Login</button>
+              <button id="register-button" type="button">Create Account</button>
             </div>
           </div>
 
-          <div class="guest-banner">
-            <strong id="guest-name">Playing as Guest</strong>
-            <span id="guest-meta" class="card-copy">
-              Linking local continuity and archives.
-            </span>
+          <div id="auth-user-view" class="hidden">
+            <button id="logout-button" class="button-secondary" type="button" style="width:100%">
+              Log Out
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section class="play-area">
+        <div id="lobby-view">
+        <article class="panel controls-panel">
+
+          <div class="hall-hero-heading">
+            <p class="label">Arcane Command Center</p>
+            <h2>Hall</h2>
+            <p class="card-copy">Choose your route, prepare a duel, or jump into your archive.</p>
           </div>
 
-          <section class="auth-panel">
-            <div class="auth-panel-header">
-              <div class="auth-panel-heading">
-                <span class="label">Account</span>
-                <strong id="auth-session-heading">Sign in or create an account</strong>
-              </div>
-              <span id="auth-session-pill" class="pill">Guest</span>
+          <!-- Compact account strip -->
+          <div class="cp-acct-strip hall-account-strip">
+            <div>
+              <strong id="guest-name" class="cp-acct-name">Playing as Guest</strong>
+              <span id="guest-subtitle" class="cp-acct-meta">Preparing guest mode...</span>
             </div>
-            <p id="auth-session-copy" class="card-copy auth-session-copy">
-              Accounts sync unfinished and completed games beyond this browser.
-            </p>
+            <span id="auth-session-pill" class="pill">Guest</span>
+          </div>
 
-            <div id="auth-guest-view" class="auth-stack">
-              <label class="control auth-control">
-                <span>Email</span>
-                <input
-                  id="auth-email"
-                  type="email"
-                  inputmode="email"
-                  autocomplete="username"
-                  placeholder="mage@arcanechess.dev"
-                />
-              </label>
+          <!-- Hidden compatibility elements — app.js needs these IDs in the DOM -->
+          <span id="guest-meta" class="hidden" aria-hidden="true"></span>
 
-              <label class="control auth-control">
-                <span>Password</span>
-                <input
-                  id="auth-password"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="At least 8 characters"
-                />
-              </label>
-
-              <label class="control auth-control">
-                <span>Display Name</span>
-                <input
-                  id="auth-display-name"
-                  type="text"
-                  autocomplete="nickname"
-                  maxlength="40"
-                  placeholder="Used when creating an account"
-                />
-              </label>
-
-              <div class="auth-actions">
-                <button id="login-button" class="button-secondary" type="button">
-                  Log In
-                </button>
-                <button id="register-button" type="button">
-                  Create Account
-                </button>
+          <section class="hall-main-grid" aria-label="Hall command cards">
+          <article class="lobby-card hall-card hall-card-solo">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Solo Play</span>
+                <strong>Play vs Stockfish</strong>
               </div>
+              <span class="pill">Practice</span>
             </div>
+            <p class="lobby-note">Tune your setup and launch a solo duel against Stockfish.</p>
 
-            <div id="auth-user-view" class="auth-stack hidden">
-              <div class="summary-card auth-user-card">
-                <span class="label">Signed In</span>
-                <strong id="auth-user-display">Arcane Player</strong>
-                <span id="auth-user-email" class="card-copy">mage@arcanechess.dev</span>
-              </div>
-              <div class="auth-actions">
-                <button id="logout-button" class="button-secondary" type="button">
-                  Log Out
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <label class="control">
-            <span>Difficulty</span>
+          <div class="cp-row hall-stockfish-controls">
+            <span class="cp-ilabel">Difficulty</span>
             <select id="difficulty-select">
               <option value="easy">Easy</option>
               <option value="intermediate">Intermediate</option>
               <option value="hard">Hard</option>
               <option value="grandmaster">Grand Master</option>
             </select>
-          </label>
+          </div>
 
-          <label class="control">
-            <span>Time Control</span>
+          <!-- Time Control -->
+          <div class="cp-irow hall-time-control">
+            <span class="cp-ilabel">Time Control</span>
             <select id="time-control-select">
-              <option value="untimed">Untimed</option>
-              <option value="bullet-1">1 min</option>
-              <option value="blitz-3">3 min</option>
-              <option value="blitz-5">5 min</option>
-              <option value="rapid-10">10 min</option>
-              <option value="rapid-15-10">15 | 10</option>
+              <optgroup label="Solo Practice">
+                <option value="untimed">Untimed</option>
+              </optgroup>
+              <optgroup label="Bullet">
+                <option value="bullet-30">30 sec</option>
+                <option value="bullet-1">1 min</option>
+                <option value="bullet-1-1">1 | 1</option>
+                <option value="bullet-2-1">2 | 1</option>
+              </optgroup>
+              <optgroup label="Blitz">
+                <option value="blitz-3">3 min</option>
+                <option value="blitz-3-2">3 | 2</option>
+                <option value="blitz-5">5 min</option>
+                <option value="blitz-5-2">5 | 2</option>
+                <option value="blitz-5-5">5 | 5</option>
+              </optgroup>
+              <optgroup label="Rapid">
+                <option value="rapid-10">10 min</option>
+                <option value="rapid-10-5">10 | 5</option>
+                <option value="rapid-15-10">15 | 10</option>
+                <option value="rapid-20">20 min</option>
+                <option value="rapid-30">30 min</option>
+                <option value="rapid-60">60 min</option>
+              </optgroup>
             </select>
-          </label>
-
-          <fieldset class="control side-choice">
-            <legend>Play As</legend>
-            <label>
-              <input type="radio" name="player-color" value="white" checked />
-              <span>White</span>
-            </label>
-            <label>
-              <input type="radio" name="player-color" value="black" />
-              <span>Black</span>
-            </label>
-          </fieldset>
-
-          <div class="summary-grid">
-            <div class="summary-card">
-              <span class="label">You</span>
-              <strong id="player-side">White</strong>
-            </div>
-            <div class="summary-card">
-              <span class="label">Engine</span>
-              <strong id="engine-side">Black</strong>
-            </div>
-            <div class="summary-card">
-              <span class="label">Turn</span>
-              <strong id="turn-indicator">White</strong>
-            </div>
-            <div class="summary-card">
-              <span class="label">Last Move</span>
-              <strong id="last-move-text">None</strong>
-            </div>
           </div>
 
-          <div class="game-actions">
-            <button id="offer-draw-button" class="button-secondary" type="button">
-              Offer Draw
-            </button>
-            <button id="resign-button" class="button-secondary button-danger" type="button">
-              Resign
-            </button>
+          <!-- Play As -->
+          <div class="hall-color-control">
+            <div class="cp-ilabel" style="margin-bottom:5px">Play As</div>
+            <fieldset class="cp-pa-row">
+              <legend style="position:absolute;width:1px;height:1px;overflow:hidden">Play As</legend>
+              <label class="cp-pa-opt">
+                <input type="radio" name="player-color" value="white" checked />
+                <span>White</span>
+              </label>
+              <label class="cp-pa-opt">
+                <input type="radio" name="player-color" value="black" />
+                <span>Black</span>
+              </label>
+            </fieldset>
           </div>
+
+          <button id="new-game-button" class="hall-card-primary-btn" type="button">Start Duel</button>
+          </article>
+
+          <article class="lobby-card hall-card hall-card-multiplayer">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Multiplayer Hall</span>
+                <strong>Create or join a room</strong>
+              </div>
+              <span class="pill">Live</span>
+            </div>
+            <p class="lobby-note">Open a room instantly or join via Room ID for a live duel.</p>
+
+            <div class="cp-mode-switch hall-mode-switch" role="tablist" aria-label="Play route">
+              <button
+                id="multiplayer-lobby-button"
+                class="cp-mode-btn cp-mode-btn-active"
+                type="button"
+                aria-pressed="true"
+              >
+                Multiplayer Hall
+              </button>
+          </div>
+
+          <section id="multiplayer-gateway" class="lobby-card hidden" aria-live="polite">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Entry Layer</span>
+                <strong>Choose your route</strong>
+              </div>
+              <span class="pill">Preview</span>
+            </div>
+            <p class="card-copy">
+              Sign in to unlock live duels, invites, and cross-device PvP history. Guests can
+              stay in the solo archive until they are ready to enter the hall.
+            </p>
+            <div class="lobby-entry-actions">
+              <button id="gateway-signin-button" type="button">Sign In</button>
+              <button id="gateway-create-button" class="button-secondary" type="button">
+                Create Account
+              </button>
+              <button id="gateway-guest-button" class="button-secondary" type="button">
+                Continue as Guest
+              </button>
+            </div>
+          </section>
+
+          <section id="multiplayer-dashboard" class="multiplayer-dashboard hall-multiplayer-dashboard hidden" aria-live="polite">
+            <article class="lobby-card">
+              <div class="lobby-card-header">
+                <div class="lobby-heading">
+                  <span class="label">Command Hall</span>
+                  <strong>Room Controls</strong>
+                </div>
+                <span class="pill">Phase 1</span>
+              </div>
+              <p class="card-copy">
+                Pick a duel pace now so queue and direct-challenge flows inherit the same feel
+                once the live socket hall is connected.
+              </p>
+              <div class="cp-row" style="margin-top: 10px">
+                <button id="mp-create-game-button" type="button">Create Game</button>
+              </div>
+              <label class="cp-field" style="margin-top: 10px">
+                <span>Join by Room ID</span>
+                <input
+                  id="mp-room-id-input"
+                  type="text"
+                  maxlength="16"
+                  placeholder="Enter Room ID"
+                />
+              </label>
+              <div class="cp-row" style="margin-top: 8px">
+                <button
+                  id="mp-join-game-button"
+                  class="button-secondary"
+                  type="button"
+                >
+                  Join Game
+                </button>
+              </div>
+              <p id="mp-room-id-label" class="lobby-note" style="margin-top: 8px">
+                Room: -
+              </p>
+              <p id="mp-connection-status" class="lobby-note" style="margin-top: 4px">
+                Multiplayer socket: disconnected.
+              </p>
+              <div class="lobby-actions">
+                <button class="button-secondary" type="button" disabled>Queue Soon</button>
+                <button class="button-secondary" type="button" disabled>Challenge Soon</button>
+              </div>
+              <p class="lobby-note">
+                Solo controls remain below while live matchmaking and invites are wired in.
+              </p>
+            </article>
+
+            <article class="lobby-card">
+              <div class="lobby-card-header">
+                <div class="lobby-heading">
+                  <span class="label">Hall of Players</span>
+                  <strong>Presence</strong>
+                </div>
+                <span id="multiplayer-presence-pill" class="pill">Preview</span>
+              </div>
+              <p id="multiplayer-status-copy" class="card-copy">
+                Signed-in players will appear here once presence tracking is connected.
+              </p>
+              <div id="multiplayer-player-list" class="lobby-list"></div>
+            </article>
+
+            <article class="lobby-card">
+              <div class="lobby-card-header">
+                <div class="lobby-heading">
+                  <span class="label">Invites</span>
+                  <strong>Challenge Desk</strong>
+                </div>
+                <span class="pill">Fair Play</span>
+              </div>
+              <p class="lobby-coach-rule">
+                Arcane Coach should stay silent during live PvP and return after the match ends.
+              </p>
+              <div id="multiplayer-invite-list" class="lobby-list"></div>
+            </article>
+          </section>
+          </article>
+
+          <section class="lobby-card hall-card hall-card-archive hall-archive-card" aria-live="polite">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Archive</span>
+                <strong>Resume &amp; Match History</strong>
+              </div>
+              <span class="pill">Library</span>
+            </div>
+            <p class="lobby-note">Jump directly to saved games or match history in the archive panel.</p>
+            <div class="lobby-actions">
+              <button id="hall-resume-button" class="button-secondary" type="button">Resume Game</button>
+              <button id="hall-history-button" class="button-secondary" type="button">Match History</button>
+            </div>
+          </section>
+          </section>
+
+          <section class="lobby-card hall-quick-duel-strip" aria-live="polite">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Quick Duel</span>
+                <strong>Time shortcuts</strong>
+              </div>
+              <span class="pill">Utility</span>
+            </div>
+            <div class="lobby-time-grid" aria-label="Recommended multiplayer time controls">
+              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="bullet-1">1 min</button>
+              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="blitz-3-2">3 | 2</button>
+              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="blitz-5">5 min</button>
+              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="rapid-10">10 min</button>
+              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="rapid-15-10">15 | 10</button>
+              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="rapid-30">30 min</button>
+            </div>
+          </section>
 
         </article>
+        </div>
 
+        <div id="game-view">
         <article class="panel board-panel">
+          <button id="back-to-hall-button" class="button-secondary button-small board-back-button" type="button">
+            Back to Hall
+          </button>
           <div class="board-stage">
               <div class="board-player-row" data-player-row="top">
                 <div class="player-row-copy">
@@ -199,7 +367,12 @@
                 </div>
               </div>
 
-              <div class="board-shell">
+              <div class="board-shell-wrap">
+                <div class="eval-bar" id="eval-bar">
+                  <div class="eval-bar-black" id="eval-bar-black" style="flex:1"></div>
+                  <div class="eval-bar-white" id="eval-bar-white" style="flex:1"></div>
+                </div>
+                <div class="board-shell">
                 <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
                 <div id="board" class="board" aria-label="Arcane Chess Board"></div>
                 <div
@@ -247,6 +420,7 @@
                     <button type="button" class="button-secondary" data-promotion="n">Knight</button>
                   </div>
                 </div>
+              </div>
               </div>
 
               <div class="board-player-row" data-player-row="bottom">
@@ -329,6 +503,14 @@
               <span id="api-health" class="pill">API</span>
             </div>
 
+            <section class="game-command-strip" aria-live="polite">
+              <div class="game-actions game-screen-actions">
+                <button id="save-game-button" class="button-secondary" type="button">Save Game</button>
+                <button id="offer-draw-button" class="button-secondary" type="button">Offer Draw</button>
+                <button id="resign-button" class="button-secondary button-danger" type="button">Resign</button>
+              </div>
+            </section>
+
             <div class="record-tabs" role="tablist" aria-label="Game records">
               <button
                 type="button"
@@ -366,6 +548,7 @@
             </section>
           </article>
         </aside>
+        </div>
       </section>
 
       <div id="immersive-hud" class="immersive-hud" aria-hidden="true">
@@ -484,6 +667,7 @@
       </div>
     </div>
 
+    <script src="http://localhost:4000/socket.io/socket.io.js"></script>
     <script type="module" src="./3d/index.js"></script>
     <script src="./app.js" defer></script>
   </body>

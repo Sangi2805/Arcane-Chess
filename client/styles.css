@@ -1438,6 +1438,148 @@ h1 {
   align-items: stretch;
 }
 
+#auth-view {
+  display: none;
+  min-height: calc(100% - 24px);
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 18px 0 8px;
+}
+
+.auth-panel {
+  width: min(100%, 460px);
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.auth-panel .eyebrow {
+  margin-bottom: 2px;
+}
+
+.auth-panel .panel-subtitle {
+  font-size: 0.78rem;
+}
+
+.auth-panel .cp-acct-strip {
+  padding: 10px 12px;
+}
+
+.auth-panel .cp-acct-name {
+  font-size: 0.98rem;
+}
+
+.auth-panel .cp-acct-meta {
+  font-size: 0.76rem;
+}
+
+.auth-panel .cp-field span {
+  font-size: 0.64rem;
+}
+
+.auth-panel input[type="email"],
+.auth-panel input[type="password"],
+.auth-panel input[type="text"] {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 0.86rem;
+}
+
+.auth-panel .cp-row {
+  gap: 8px;
+}
+
+.auth-panel button {
+  min-height: 34px;
+  font-size: 0.78rem;
+  padding: 0 12px;
+}
+
+.auth-panel .signup-only.hidden {
+  display: none !important;
+}
+
+.auth-panel .cp-row button {
+  flex: 1;
+}
+
+.auth-panel-copy h2 {
+  margin: 0;
+}
+
+.board-panel {
+  position: relative;
+}
+
+.board-back-button {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: 2;
+  justify-self: start;
+  margin: 0 0 8px 0;
+}
+
+/* View split layout fix: ensure game view uses a stable 3-column grid. */
+#game-view {
+  display: grid !important;
+  grid-template-columns: 280px 1fr 320px;
+  gap: 20px;
+  height: 100%;
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.play-area {
+  width: 100%;
+  height: 100%;
+}
+
+#game-view .board-panel {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  justify-content: stretch;
+  justify-items: stretch;
+  align-items: stretch;
+  align-content: start;
+  min-height: 0;
+}
+
+#game-view .support-column {
+  grid-column: 3;
+}
+
+.board-container,
+#game-view .board-shell {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  max-height: 100%;
+  margin-inline: auto;
+}
+
+#game-view .board-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#game-view .board-stage {
+  align-items: start;
+  align-content: start;
+}
+
+#game-view .board-shell-wrap {
+  width: 100%;
+  min-height: 0;
+  justify-content: center;
+  align-items: stretch;
+}
+
 .controls-panel,
 .board-panel,
 .moves-panel,
@@ -1529,6 +1671,13 @@ h1 {
       width: clamp(0px, calc(100cqh - var(--board-stage-row-stack)), 100%);
     }
   }
+}
+
+/* Keep game board large in center panel; do not let cqh clamp shrink it to thumbnail size. */
+#game-view .board-stage {
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
 }
 
 .board-player-row {
@@ -2877,11 +3026,27 @@ body.board-mode-3d .immersive-hud {
 }
 
 .piece-white {
-  color: #fff6e7;
+  color: #ffffff;
+  text-shadow:
+    1px 1px 0 #1a0f00,
+    -1px -1px 0 #1a0f00,
+    1px -1px 0 #1a0f00,
+    -1px 1px 0 #1a0f00,
+    0 0 4px rgba(0, 0, 0, 0.85),
+    0 6px 10px rgba(0, 0, 0, 0.22),
+    0 12px 18px rgba(0, 0, 0, 0.16);
 }
 
 .piece-black {
-  color: #241911;
+  color: #0d0803;
+  text-shadow:
+    1px 1px 0 rgba(255, 245, 220, 0.5),
+    -1px -1px 0 rgba(255, 245, 220, 0.5),
+    1px -1px 0 rgba(255, 245, 220, 0.5),
+    -1px 1px 0 rgba(255, 245, 220, 0.5),
+    0 0 4px rgba(255, 240, 200, 0.3),
+    0 6px 10px rgba(0, 0, 0, 0.22),
+    0 12px 18px rgba(0, 0, 0, 0.16);
 }
 
 @supports (font-size: 1cqi) {

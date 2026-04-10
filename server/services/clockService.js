@@ -9,10 +9,31 @@ const TIME_CONTROL_PRESET_DEFINITIONS = [
     enabled: false
   },
   {
+    id: "bullet-30",
+    label: "30 sec",
+    baseSeconds: 30,
+    incrementSeconds: 0,
+    enabled: true
+  },
+  {
     id: "bullet-1",
     label: "1 min",
     baseSeconds: 60,
     incrementSeconds: 0,
+    enabled: true
+  },
+  {
+    id: "bullet-1-1",
+    label: "1 | 1",
+    baseSeconds: 60,
+    incrementSeconds: 1,
+    enabled: true
+  },
+  {
+    id: "bullet-2-1",
+    label: "2 | 1",
+    baseSeconds: 120,
+    incrementSeconds: 1,
     enabled: true
   },
   {
@@ -23,10 +44,31 @@ const TIME_CONTROL_PRESET_DEFINITIONS = [
     enabled: true
   },
   {
+    id: "blitz-3-2",
+    label: "3 | 2",
+    baseSeconds: 180,
+    incrementSeconds: 2,
+    enabled: true
+  },
+  {
     id: "blitz-5",
     label: "5 min",
     baseSeconds: 300,
     incrementSeconds: 0,
+    enabled: true
+  },
+  {
+    id: "blitz-5-2",
+    label: "5 | 2",
+    baseSeconds: 300,
+    incrementSeconds: 2,
+    enabled: true
+  },
+  {
+    id: "blitz-5-5",
+    label: "5 | 5",
+    baseSeconds: 300,
+    incrementSeconds: 5,
     enabled: true
   },
   {
@@ -37,10 +79,38 @@ const TIME_CONTROL_PRESET_DEFINITIONS = [
     enabled: true
   },
   {
+    id: "rapid-10-5",
+    label: "10 | 5",
+    baseSeconds: 600,
+    incrementSeconds: 5,
+    enabled: true
+  },
+  {
     id: "rapid-15-10",
     label: "15 | 10",
     baseSeconds: 900,
     incrementSeconds: 10,
+    enabled: true
+  },
+  {
+    id: "rapid-20",
+    label: "20 min",
+    baseSeconds: 1200,
+    incrementSeconds: 0,
+    enabled: true
+  },
+  {
+    id: "rapid-30",
+    label: "30 min",
+    baseSeconds: 1800,
+    incrementSeconds: 0,
+    enabled: true
+  },
+  {
+    id: "rapid-60",
+    label: "60 min",
+    baseSeconds: 3600,
+    incrementSeconds: 0,
     enabled: true
   }
 ];
