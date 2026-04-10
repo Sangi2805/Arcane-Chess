@@ -1,5 +1,8 @@
 const GUEST_STORAGE_KEY = "arcane-chess-guest-profile";
 const RECORD_VIEW_STORAGE_KEY = "arcane-chess-record-view";
+const LOBBY_MODE_STORAGE_KEY = "arcane-chess-lobby-mode";
+const VIEW_STORAGE_KEY = "arcane-chess-view";
+const VALID_APP_VIEWS = new Set(["auth", "hall", "game"]);
 
 const PIECES = {
   white: {
@@ -26,9 +29,14 @@ const saveGameButton = document.getElementById("save-game-button");
 const offerDrawButton = document.getElementById("offer-draw-button");
 const resignButton = document.getElementById("resign-button");
 const shellElement = document.querySelector(".shell");
+const controlsPanel = document.querySelector(".controls-panel");
 const boardShell = document.querySelector(".board-shell");
 const board3dElement = document.getElementById("board-3d");
 const boardElement = document.getElementById("board");
+const toggle2dBtn    = document.getElementById("toggle-2d");
+const toggle3dBtn    = document.getElementById("toggle-3d");
+const boardModeLabel = document.getElementById("board-mode-label");
+let   arcaneBoard3D  = null;
 const boardFeedbackBanner = document.getElementById("board-feedback-banner");
 const boardFeedbackTitle = document.getElementById("board-feedback-title");
 const boardFeedbackMessage = document.getElementById("board-feedback-message");
@@ -76,6 +84,31 @@ const authUserView = document.getElementById("auth-user-view");
 const authUserDisplay = document.getElementById("auth-user-display");
 const authUserEmail = document.getElementById("auth-user-email");
 const logoutButton = document.getElementById("logout-button");
+const soloLobbyButton = document.getElementById("solo-lobby-button");
+const multiplayerLobbyButton = document.getElementById("multiplayer-lobby-button");
+const multiplayerGateway = document.getElementById("multiplayer-gateway");
+const multiplayerDashboard = document.getElementById("multiplayer-dashboard");
+const gatewaySignInButton = document.getElementById("gateway-signin-button");
+const gatewayCreateButton = document.getElementById("gateway-create-button");
+const gatewayGuestButton = document.getElementById("gateway-guest-button");
+const multiplayerStatusCopy = document.getElementById("multiplayer-status-copy");
+const multiplayerPresencePill = document.getElementById("multiplayer-presence-pill");
+const multiplayerPlayerList = document.getElementById("multiplayer-player-list");
+const multiplayerInviteList = document.getElementById("multiplayer-invite-list");
+const multiplayerCreateGameButton = document.getElementById("mp-create-game-button");
+const multiplayerRoomIdInput = document.getElementById("mp-room-id-input");
+const multiplayerJoinGameButton = document.getElementById("mp-join-game-button");
+const multiplayerRoomIdLabel = document.getElementById("mp-room-id-label");
+const multiplayerConnectionStatus = document.getElementById("mp-connection-status");
+const hallResumeButton = document.getElementById("hall-resume-button");
+const hallHistoryButton = document.getElementById("hall-history-button");
+const lobbyView = document.getElementById("lobby-view");
+const gameView = document.getElementById("game-view");
+const authView = document.getElementById("auth-view");
+const backToHallButton = document.getElementById("back-to-hall-button");
+const playArea = document.querySelector(".play-area");
+const dashboardTimeControlButtons = document.querySelectorAll("[data-dashboard-time-control]");
+const authSignupOnlyFields = document.querySelectorAll(".signup-only");
 const recordTabs = document.querySelectorAll("[data-record-view]");
 const recordViews = document.querySelectorAll("[data-view-panel]");
 const savedGamesList = document.getElementById("saved-games-list");
@@ -107,6 +140,8 @@ const bottomClockCard = document.getElementById("bottom-clock-card");
 const bottomClockSide = document.getElementById("bottom-clock-side");
 const bottomClockTime = document.getElementById("bottom-clock-time");
 const bottomClockMeta = document.getElementById("bottom-clock-meta");
+const evalBarBlack = document.getElementById('eval-bar-black');
+const evalBarWhite = document.getElementById('eval-bar-white');
 
 const DEFAULT_COACH_EXPLANATION =
   "I review each completed move against Stockfish.";
@@ -122,11 +157,29 @@ const TIME_CONTROL_PRESETS = {
     baseMs: 0,
     incrementMs: 0
   },
+  "bullet-30": {
+    label: "30 sec",
+    enabled: true,
+    baseMs: 30_000,
+    incrementMs: 0
+  },
   "bullet-1": {
     label: "1 min",
     enabled: true,
     baseMs: 60_000,
     incrementMs: 0
+  },
+  "bullet-1-1": {
+    label: "1 | 1",
+    enabled: true,
+    baseMs: 60_000,
+    incrementMs: 1_000
+  },
+  "bullet-2-1": {
+    label: "2 | 1",
+    enabled: true,
+    baseMs: 120_000,
+    incrementMs: 1_000
   },
   "blitz-3": {
     label: "3 min",
@@ -134,11 +187,29 @@ const TIME_CONTROL_PRESETS = {
     baseMs: 180_000,
     incrementMs: 0
   },
+  "blitz-3-2": {
+    label: "3 | 2",
+    enabled: true,
+    baseMs: 180_000,
+    incrementMs: 2_000
+  },
   "blitz-5": {
     label: "5 min",
     enabled: true,
     baseMs: 300_000,
     incrementMs: 0
+  },
+  "blitz-5-2": {
+    label: "5 | 2",
+    enabled: true,
+    baseMs: 300_000,
+    incrementMs: 2_000
+  },
+  "blitz-5-5": {
+    label: "5 | 5",
+    enabled: true,
+    baseMs: 300_000,
+    incrementMs: 5_000
   },
   "rapid-10": {
     label: "10 min",
@@ -146,11 +217,35 @@ const TIME_CONTROL_PRESETS = {
     baseMs: 600_000,
     incrementMs: 0
   },
+  "rapid-10-5": {
+    label: "10 | 5",
+    enabled: true,
+    baseMs: 600_000,
+    incrementMs: 5_000
+  },
   "rapid-15-10": {
     label: "15 | 10",
     enabled: true,
     baseMs: 900_000,
     incrementMs: 10_000
+  },
+  "rapid-20": {
+    label: "20 min",
+    enabled: true,
+    baseMs: 1_200_000,
+    incrementMs: 0
+  },
+  "rapid-30": {
+    label: "30 min",
+    enabled: true,
+    baseMs: 1_800_000,
+    incrementMs: 0
+  },
+  "rapid-60": {
+    label: "60 min",
+    enabled: true,
+    baseMs: 3_600_000,
+    incrementMs: 0
   }
 };
 const DRAW_OUTCOME_LABELS = {
@@ -201,6 +296,15 @@ const state = {
   activeMoveCycleId: 0,
   activeCoachStageRank: 0,
   clockSyncInFlight: false,
+  multiplayer: {
+    socket: null,
+    connected: false,
+    roomId: null,
+    color: null,
+    phase: "idle"
+  },
+  view: "auth",
+  authMode: "login",
   coach: {
     classification: null,
     tone: "neutral",
@@ -209,6 +313,7 @@ const state = {
     bestMove: null,
     animate: false
   },
+  lobbyMode: window.localStorage.getItem(LOBBY_MODE_STORAGE_KEY) || "solo",
   activeRecordView:
     window.localStorage.getItem(RECORD_VIEW_STORAGE_KEY) || "moves"
 };
@@ -235,6 +340,7 @@ let replayIndex = 0;
 let replayPlayerColor = "white";
 
 const VALID_RECORD_VIEWS = new Set(["moves", "saves", "history"]);
+const VALID_LOBBY_MODES = new Set(["solo", "multiplayer"]);
 const syncBoardViewUi = () => {
   state.boardViewMode = "2d";
   const is3D = false;
@@ -248,6 +354,11 @@ const syncBoardViewUi = () => {
 
   if (boardShell) {
     boardShell.dataset.viewMode = state.boardViewMode;
+  }
+
+  if (boardElement) {
+    boardElement.classList.toggle("hidden", is3D);
+    boardElement.setAttribute("aria-hidden", is3D ? "true" : "false");
   }
 
   if (board3dElement) {
@@ -273,6 +384,394 @@ const escapeHtml = (value) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+
+const normalizeLobbyMode = (value) =>
+  VALID_LOBBY_MODES.has(value) ? value : "solo";
+
+const isRealtimeMultiplayerGame = () =>
+  Boolean(state.multiplayer.roomId) && state.game?.actorType === "multiplayer";
+
+const persistView = (view) => {
+  window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  console.log("Persisting view:", view);
+};
+
+const getSavedView = () => {
+  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+  console.log("Restored saved view:", savedView);
+  return VALID_APP_VIEWS.has(savedView) ? savedView : null;
+};
+
+const isActiveGameState = (gameState) =>
+  Boolean(gameState?.id && gameState?.hasStarted && !gameState?.isGameOver);
+
+const getMultiplayerDisplayName = () => {
+  if (isAuthenticated()) {
+    return getSessionDisplayName();
+  }
+
+  return state.guest?.displayName || state.guest?.name || "Guest";
+};
+
+const renderMultiplayerRealtimeControls = () => {
+  if (multiplayerRoomIdLabel) {
+    multiplayerRoomIdLabel.textContent = state.multiplayer.roomId
+      ? `Room: ${state.multiplayer.roomId}`
+      : "Room: -";
+  }
+
+  if (multiplayerConnectionStatus) {
+    const phaseLabel =
+      state.multiplayer.phase === "active"
+        ? "ready"
+        : state.multiplayer.phase === "waiting"
+          ? "waiting"
+          : "idle";
+    multiplayerConnectionStatus.textContent = state.multiplayer.connected
+      ? `Multiplayer socket: connected (${phaseLabel}).`
+      : "Multiplayer socket: disconnected.";
+  }
+};
+
+const renderLobbyTimeControlButtons = () => {
+  const activeTimeControlId = getSelectedTimeControlId();
+
+  dashboardTimeControlButtons.forEach((button) => {
+    const isActive = button.dataset.dashboardTimeControl === activeTimeControlId;
+    button.classList.toggle("lobby-time-chip-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+};
+
+function renderView() {
+  document.body.classList.toggle("view-auth", state.view === "auth");
+  document.body.classList.toggle("view-hall", state.view === "hall");
+  document.body.classList.toggle("view-game", state.view === "game");
+  document.body.classList.toggle("hall-view", state.view === "hall");
+  persistView(state.view);
+
+  if (authView) {
+    authView.style.display = state.view === "auth" ? "flex" : "none";
+  }
+
+  if (playArea) {
+    playArea.style.display = state.view === "auth" ? "none" : "grid";
+  }
+
+  if (lobbyView) {
+    lobbyView.style.display = state.view === "hall" ? "block" : "none";
+  }
+
+  if (gameView) {
+    gameView.style.display = state.view === "game" ? "grid" : "none";
+  }
+
+  console.log("renderView:", state.view);
+  console.log("Hall visible:", lobbyView?.style.display, "Game visible:", gameView?.style.display);
+}
+
+const renderMultiplayerLobby = () => {
+  const lobbyMode = normalizeLobbyMode(state.lobbyMode);
+  const persistenceAvailable = Boolean(state.persistence.available);
+  const showGateway = false;
+  const showDashboard = lobbyMode === "multiplayer";
+
+  state.lobbyMode = lobbyMode;
+
+  if (controlsPanel) {
+    controlsPanel.dataset.lobbyMode = lobbyMode;
+  }
+
+  if (soloLobbyButton) {
+    const isActive = lobbyMode === "solo";
+    soloLobbyButton.classList.toggle("cp-mode-btn-active", isActive);
+    soloLobbyButton.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  if (multiplayerLobbyButton) {
+    const isActive = lobbyMode === "multiplayer";
+    multiplayerLobbyButton.classList.toggle("cp-mode-btn-active", isActive);
+    multiplayerLobbyButton.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  if (multiplayerGateway) {
+    multiplayerGateway.classList.toggle("hidden", !showGateway);
+  }
+
+  if (multiplayerDashboard) {
+    multiplayerDashboard.classList.toggle("hidden", !showDashboard);
+  }
+
+  if (multiplayerPresencePill) {
+    if (showDashboard && state.multiplayer.connected && state.multiplayer.roomId) {
+      multiplayerPresencePill.textContent = "In Match";
+      multiplayerPresencePill.className = "pill pill-ok";
+    } else if (showDashboard && state.multiplayer.connected) {
+      multiplayerPresencePill.textContent = "Online";
+      multiplayerPresencePill.className = "pill pill-ok";
+    } else if (!persistenceAvailable) {
+      multiplayerPresencePill.textContent = "Offline";
+      multiplayerPresencePill.className = "pill pill-error";
+    } else if (showDashboard) {
+      multiplayerPresencePill.textContent = "Ready";
+      multiplayerPresencePill.className = "pill pill-ok";
+    } else {
+      multiplayerPresencePill.textContent = "Preview";
+      multiplayerPresencePill.className = "pill";
+    }
+  }
+
+  if (multiplayerStatusCopy) {
+    if (showDashboard && state.multiplayer.roomId) {
+      multiplayerStatusCopy.textContent =
+        "Live room active. Share the Room ID so your opponent can join and play in real time.";
+    } else if (showDashboard && state.multiplayer.connected) {
+      multiplayerStatusCopy.textContent =
+        "Live socket connected. Create a room or join one by ID.";
+    } else if (!persistenceAvailable) {
+      multiplayerStatusCopy.textContent =
+        "MongoDB is offline, so presence, invites, and PvP history stay parked until persistence returns.";
+    } else if (showDashboard) {
+      multiplayerStatusCopy.textContent =
+        "Your account is ready for live duels. Create a room or join by Room ID to start.";
+    } else {
+      multiplayerStatusCopy.textContent =
+        "Sign in to unlock the live roster, incoming invites, and cross-device multiplayer archives.";
+    }
+  }
+
+  if (multiplayerPlayerList) {
+    multiplayerPlayerList.innerHTML = showDashboard
+      ? `
+        <article class="lobby-roster-card">
+          <div class="lobby-roster-copy">
+            <strong>${escapeHtml(getSessionDisplayName())}</strong>
+            <span>${
+              state.multiplayer.roomId
+                ? `Room ${escapeHtml(state.multiplayer.roomId)} as ${escapeHtml(
+                    formatColor(state.multiplayer.color || "white")
+                  )}.`
+                : "Connected and ready for live room play."
+            }</span>
+          </div>
+          <span class="pill pill-ok">You</span>
+        </article>
+        <div class="empty-state">
+          <strong>The hall is quiet for now.</strong>
+          <span>Share a Room ID with a friend to start a live duel.</span>
+        </div>
+      `
+      : "";
+  }
+
+  if (multiplayerInviteList) {
+    multiplayerInviteList.innerHTML = showDashboard
+      ? `
+        <div class="empty-state">
+          <strong>No pending challenges.</strong>
+          <span>Incoming and outgoing invites will collect here when the challenge desk opens.</span>
+        </div>
+      `
+      : "";
+  }
+
+  renderMultiplayerRealtimeControls();
+  renderLobbyTimeControlButtons();
+};
+
+const setLobbyMode = (mode = "solo") => {
+  const nextMode = normalizeLobbyMode(mode);
+
+  state.lobbyMode = nextMode;
+  window.localStorage.setItem(LOBBY_MODE_STORAGE_KEY, nextMode);
+
+  if (nextMode === "multiplayer") {
+    ensureMultiplayerSocket();
+  }
+
+  renderMultiplayerLobby();
+};
+
+const getMultiplayerCoachState = (socketState) => {
+  if (socketState?.phase === "waiting") {
+    return {
+      message: `Room ${socketState.roomId} created. Waiting for opponent to join.`,
+      explanation: "Share this Room ID with a friend."
+    };
+  }
+
+  if (socketState?.game?.isGameOver) {
+    return {
+      message: "Multiplayer game complete.",
+      explanation: "Create or join another room to continue."
+    };
+  }
+
+  return {
+    message: "Live multiplayer is active.",
+    explanation:
+      socketState?.game?.turn === socketState?.youAre
+        ? "Your turn. Select a piece and make a move."
+        : "Waiting for opponent move."
+  };
+};
+
+const applyMultiplayerSocketState = (socketState) => {
+  if (!socketState?.game) {
+    return;
+  }
+
+  state.multiplayer.roomId = socketState.roomId || state.multiplayer.roomId;
+  state.multiplayer.color = socketState.youAre || state.multiplayer.color;
+  state.multiplayer.phase = socketState.phase || state.multiplayer.phase;
+
+  applyGameState(
+    {
+      ...socketState.game,
+      persistence: state.persistence
+    },
+    {
+      coachState: getMultiplayerCoachState(socketState)
+    }
+  );
+};
+
+const ensureMultiplayerSocket = () => {
+  if (state.multiplayer.socket) {
+    return state.multiplayer.socket;
+  }
+
+  if (typeof window.io !== "function") {
+    setCoachMessage("Socket client failed to load.", "Reload the page and try again.");
+    return null;
+  }
+
+  const socket = window.io("http://localhost:4000", {
+    transports: ["websocket", "polling"]
+  });
+
+  socket.on("connect", () => {
+    console.log("CLIENT CONNECTED:", socket.id);
+    state.multiplayer.connected = true;
+    renderMultiplayerLobby();
+    syncActionButtons();
+  });
+
+  socket.on("disconnect", () => {
+    state.multiplayer.connected = false;
+    renderMultiplayerLobby();
+    syncActionButtons();
+  });
+
+  socket.on("multiplayer:state", (socketState) => {
+    setApiHealth(true);
+    applyMultiplayerSocketState(socketState);
+
+    if (socketState?.event === "opponent-disconnected") {
+      setCoachMessage(
+        "Opponent disconnected.",
+        "The room stays open. Share the same Room ID for a reconnection."
+      );
+    }
+
+    setBusy(false);
+  });
+
+  state.multiplayer.socket = socket;
+  renderMultiplayerLobby();
+  syncActionButtons();
+
+  return socket;
+};
+
+const emitMultiplayerEvent = (eventName, payload = {}) => {
+  const socket = ensureMultiplayerSocket();
+
+  if (!socket) {
+    return Promise.reject(new Error("Multiplayer socket is unavailable."));
+  }
+
+  return new Promise((resolve, reject) => {
+    socket.timeout(7000).emit(eventName, payload, (error, response) => {
+      if (error) {
+        reject(new Error("Multiplayer request timed out."));
+        return;
+      }
+
+      if (!response?.ok) {
+        reject(new Error(response?.message || "Multiplayer request failed."));
+        return;
+      }
+
+      resolve(response.state || null);
+    });
+  });
+};
+
+const leaveMultiplayerRoom = () => {
+  if (!state.multiplayer.socket || !state.multiplayer.roomId) {
+    return;
+  }
+
+  state.multiplayer.socket.emit("multiplayer:leave");
+  state.multiplayer.roomId = null;
+  state.multiplayer.color = null;
+  state.multiplayer.phase = "idle";
+  renderMultiplayerLobby();
+};
+
+const createMultiplayerRoom = async () => {
+  setBusy(true, "Creating multiplayer room...");
+
+  try {
+    const socketState = await emitMultiplayerEvent("multiplayer:create", {
+      displayName: getMultiplayerDisplayName()
+    });
+
+    setApiHealth(true);
+    state.view = "game";
+    renderView();
+    applyMultiplayerSocketState(socketState);
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const joinMultiplayerRoom = async () => {
+  const roomId = multiplayerRoomIdInput?.value?.trim()?.toUpperCase() || "";
+
+  if (!roomId) {
+    setCoachMessage("Enter a Room ID first.", "Use the ID shared by the host player.");
+    return;
+  }
+
+  setBusy(true, `Joining room ${roomId}...`);
+
+  try {
+    const socketState = await emitMultiplayerEvent("multiplayer:join", {
+      roomId,
+      displayName: getMultiplayerDisplayName()
+    });
+
+    setApiHealth(true);
+    state.view = "game";
+    renderView();
+    applyMultiplayerSocketState(socketState);
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+};
+
+const focusAuthField = (input) => {
+  input?.focus();
+  input?.select?.();
+};
 
 const formatColor = (color) =>
   color ? `${color.charAt(0).toUpperCase()}${color.slice(1)}` : "-";
@@ -868,6 +1367,9 @@ const createFallbackGuest = (storedGuest) => {
 const getChosenColor = () =>
   document.querySelector('input[name="player-color"]:checked')?.value || "white";
 
+const getBoardPerspectiveColor = () =>
+  state.game?.settings?.playerColor || getChosenColor();
+
 const getSelectedTimeControlId = () => timeControlSelect?.value || "untimed";
 
 const getResolvedTimeControl = (timeControl = null) => {
@@ -981,9 +1483,7 @@ const renderGuestProfile = () => {
     guestSubtitle.textContent = state.persistence.available
       ? "Account sync is active for this archive."
       : "Account session is active, but MongoDB persistence is offline.";
-    guestMeta.textContent = state.session.user?.email
-      ? `${state.session.user.email} · Unfinished and completed games belong to your account.`
-      : "Unfinished and completed games belong to your account.";
+    guestMeta.textContent = "Unfinished and completed games belong to your account.";
     return;
   }
 
@@ -1010,30 +1510,57 @@ const renderSessionUi = () => {
   const authenticated = isAuthenticated();
 
   if (authenticated) {
-    authSessionHeading.textContent = "Account connected";
-    authSessionPill.textContent = "Signed In";
-    authSessionPill.className = "pill pill-ok";
-    authSessionCopy.textContent = persistenceAvailable
-      ? "Saved and completed games now follow your account across devices and browsers."
-      : "Your session is active, but account sync is paused until MongoDB returns.";
-    authUserDisplay.textContent = getSessionDisplayName();
-    authUserEmail.textContent = state.session.user?.email || "Account email unavailable";
-    authGuestView.classList.add("hidden");
-    authUserView.classList.remove("hidden");
-    return;
+    if (authSessionHeading) {
+      authSessionHeading.textContent = "Account connected";
+    }
+    if (authSessionPill) {
+      authSessionPill.textContent = "Signed In";
+      authSessionPill.className = "pill pill-ok";
+    }
+    if (authSessionCopy) {
+      authSessionCopy.textContent = persistenceAvailable
+        ? "Saved and completed games now follow your account across devices and browsers."
+        : "Your session is active, but account sync is paused until MongoDB returns.";
+    }
+    if (!authUserDisplay) {
+      console.log("renderSessionUi: missing #auth-user-display");
+    }
+    if (authUserDisplay) {
+      authUserDisplay.textContent = getSessionDisplayName();
+    }
+    // authUserEmail.textContent = state.session.user?.email || "Account email unavailable";
+    if (authGuestView) {
+      authGuestView.classList.add("hidden");
+    }
+    if (authUserView) {
+      authUserView.classList.remove("hidden");
+    }
+  } else {
+    if (authSessionHeading) {
+      authSessionHeading.textContent = "Sign in or create an account";
+    }
+    if (authSessionPill) {
+      authSessionPill.textContent = persistenceAvailable ? "Guest" : "Offline";
+      authSessionPill.className = persistenceAvailable ? "pill" : "pill pill-error";
+    }
+    if (authSessionCopy) {
+      authSessionCopy.textContent = persistenceAvailable
+        ? "Accounts sync unfinished and completed games beyond this browser."
+        : "MongoDB is offline, so account sign-in and long-term sync are unavailable right now.";
+    }
+    if (authGuestView) {
+      authGuestView.classList.remove("hidden");
+    }
+    if (authUserView) {
+      authUserView.classList.add("hidden");
+    }
   }
 
-  authSessionHeading.textContent = "Sign in or create an account";
-  authSessionPill.textContent = persistenceAvailable ? "Guest" : "Offline";
-  authSessionPill.className = persistenceAvailable ? "pill" : "pill pill-error";
-  authSessionCopy.textContent = persistenceAvailable
-    ? "Accounts sync unfinished and completed games beyond this browser."
-    : "MongoDB is offline, so account sign-in and long-term sync are unavailable right now.";
-  authGuestView.classList.remove("hidden");
-  authUserView.classList.add("hidden");
+  renderMultiplayerLobby();
 };
 
 const syncActionButtons = () => {
+  const realtimeMultiplayer = isRealtimeMultiplayerGame();
   const inProgress =
     Boolean(state.game?.hasStarted) && Boolean(state.game) && !state.game.isGameOver;
   const saveDisabled =
@@ -1041,12 +1568,13 @@ const syncActionButtons = () => {
     !state.game ||
     !state.game.hasStarted ||
     !state.persistence.available ||
-    state.game.isGameOver;
+    state.game.isGameOver ||
+    realtimeMultiplayer;
 
   newGameButton.disabled = state.busy;
   saveGameButton.disabled = saveDisabled;
-  offerDrawButton.disabled = state.busy || !inProgress;
-  resignButton.disabled = state.busy || !inProgress;
+  offerDrawButton.disabled = state.busy || !inProgress || realtimeMultiplayer;
+  resignButton.disabled = state.busy || !inProgress || realtimeMultiplayer;
   difficultySelect.disabled = state.busy;
   if (timeControlSelect) {
     timeControlSelect.disabled = state.busy;
@@ -1068,30 +1596,66 @@ const syncActionButtons = () => {
     input.disabled = state.busy;
   });
 
-  const authDisabled = state.busy || !state.persistence.available;
+  const authDisabled = state.busy;
 
   if (authEmailInput) {
-    authEmailInput.disabled = authDisabled || isAuthenticated();
+    authEmailInput.disabled = authDisabled;
   }
 
   if (authPasswordInput) {
-    authPasswordInput.disabled = authDisabled || isAuthenticated();
+    authPasswordInput.disabled = authDisabled;
   }
 
   if (authDisplayNameInput) {
-    authDisplayNameInput.disabled = authDisabled || isAuthenticated();
+    authDisplayNameInput.disabled = authDisabled;
   }
 
   if (loginButton) {
-    loginButton.disabled = authDisabled || isAuthenticated();
+    loginButton.disabled = authDisabled;
   }
 
   if (registerButton) {
-    registerButton.disabled = authDisabled || isAuthenticated();
+    registerButton.disabled = authDisabled;
   }
 
   if (logoutButton) {
     logoutButton.disabled = state.busy || !isAuthenticated();
+  }
+
+  if (soloLobbyButton) {
+    soloLobbyButton.disabled = state.busy;
+  }
+
+  if (multiplayerLobbyButton) {
+    multiplayerLobbyButton.disabled = state.busy;
+  }
+
+  if (gatewaySignInButton) {
+    gatewaySignInButton.disabled = state.busy || !state.persistence.available;
+  }
+
+  if (gatewayCreateButton) {
+    gatewayCreateButton.disabled = state.busy || !state.persistence.available;
+  }
+
+  if (gatewayGuestButton) {
+    gatewayGuestButton.disabled = state.busy;
+  }
+
+  dashboardTimeControlButtons.forEach((button) => {
+    button.disabled = state.busy;
+  });
+
+  if (multiplayerCreateGameButton) {
+    multiplayerCreateGameButton.disabled = state.busy || !state.multiplayer.connected;
+  }
+
+  if (multiplayerJoinGameButton) {
+    multiplayerJoinGameButton.disabled = state.busy || !state.multiplayer.connected;
+  }
+
+  if (multiplayerRoomIdInput) {
+    multiplayerRoomIdInput.disabled = state.busy || !state.multiplayer.connected;
   }
 };
 
@@ -1266,7 +1830,7 @@ const setBusy = (busy, message) => {
 };
 
 const setApiHealth = (healthy) => {
-  apiHealth.textContent = healthy ? "API Ready" : "API Error";
+  apiHealth.textContent = healthy ? "Live" : "Offline";
   apiHealth.className = healthy ? "pill pill-ok" : "pill pill-error";
 };
 
@@ -1337,6 +1901,14 @@ const renderClockCard = ({
   cardElement.dataset.urgent = isUrgent ? "true" : "false";
   cardElement.dataset.untimed = "false";
   rowElement?.setAttribute("data-active", isActive ? "true" : "false");
+};
+
+const renderAuthMode = () => {
+  const signupMode = state.authMode === "signup";
+
+  authSignupOnlyFields.forEach((field) => {
+    field.classList.toggle("hidden", !signupMode);
+  });
 };
 
 const renderClocks = () => {
@@ -1511,6 +2083,74 @@ const getOrderedSquares = () => {
 
   return orderedSquares;
 };
+
+const getBoardRenderFailureReason = (boardState = []) => {
+  if (!Array.isArray(boardState)) {
+    return "board state is not an array";
+  }
+
+  if (boardState.length !== 64) {
+    return `expected 64 squares but received ${boardState.length}`;
+  }
+
+  const squares = new Set();
+
+  for (const entry of boardState) {
+    if (!entry || typeof entry !== "object") {
+      return "board contains an undefined square entry";
+    }
+
+    if (typeof entry.square !== "string" || typeof entry.file !== "string" || typeof entry.rank !== "string") {
+      return "board contains square entries with missing coordinates";
+    }
+
+    squares.add(entry.square);
+  }
+
+  for (const file of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+    for (const rank of ["1", "2", "3", "4", "5", "6", "7", "8"]) {
+      const square = `${file}${rank}`;
+      if (!squares.has(square)) {
+        return `missing required square ${square}`;
+      }
+    }
+  }
+
+  return null;
+};
+
+const waitForBoardContainerReady = ({ maxFrames = 30 } = {}) =>
+  new Promise((resolve) => {
+    let frameCount = 0;
+
+    const pollContainer = () => {
+      const boardContainerElement =
+        document.querySelector("#game-view .board-container") ||
+        document.querySelector("#game-view .board-shell") ||
+        boardElement?.parentElement ||
+        null;
+
+      if (
+        state.view === "game" &&
+        boardContainerElement &&
+        boardContainerElement.offsetWidth > 0 &&
+        boardContainerElement.offsetHeight > 0
+      ) {
+        resolve(boardContainerElement);
+        return;
+      }
+
+      frameCount += 1;
+      if (frameCount >= maxFrames) {
+        resolve(null);
+        return;
+      }
+
+      requestAnimationFrame(pollContainer);
+    };
+
+    requestAnimationFrame(pollContainer);
+  });
 
 const getLegalTargets = () => {
   if (!state.selectedSquare || !state.game) {
@@ -2350,10 +2990,41 @@ const resetHistoryDetail = () => {
   clearReplay();
 };
 
+const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+const updateEvalBar = () => {
+  if (!evalBarBlack || !evalBarWhite) return;
+  const board = state.game?.board;
+  if (!board) return;
+
+  let white = 0, black = 0;
+  board.forEach(sq => {
+    if (!sq.piece) return;
+    const v = PIECE_VALUES[sq.piece.type] || 0;
+    if (sq.piece.color === 'white') white += v;
+    else black += v;
+  });
+
+  const diff = Math.max(-10, Math.min(10, white - black));
+  const whitePct = Math.round(((diff + 10) / 20) * 100);
+  const blackPct = 100 - whitePct;
+
+  evalBarBlack.style.flex = blackPct;
+  evalBarWhite.style.flex = whitePct;
+};
+
 const renderBoard = () => {
   const legalTargets = getLegalTargets();
   const targetSquares = new Map(legalTargets.map((move) => [move.to, move]));
   const orderedSquares = getOrderedSquares();
+  const incompleteSquareData =
+    orderedSquares.length !== 64 || orderedSquares.some((entry) => !entry || !entry.square);
+
+  if (incompleteSquareData) {
+    console.log("Skipping board render: square data is incomplete");
+    return;
+  }
+
   const lastMove = state.game?.lastMove || null;
   const checkedKingSquare = getCheckedKingSquare(state.game);
   const playerColor = state.game?.settings?.playerColor || "white";
@@ -2450,6 +3121,26 @@ const renderBoard = () => {
       `;
     })
     .join("");
+
+  updateEvalBar();
+
+  if (arcaneBoard3D?.setPerspective) {
+    arcaneBoard3D.setPerspective(getBoardPerspectiveColor());
+  }
+
+  if (arcaneBoard3D && state.game && state.game.board) {
+    arcaneBoard3D.setPosition(state.game.board);
+    const legalForSelected = state.selectedSquare && state.game.legalMoves
+      ? (state.game.legalMoves[state.selectedSquare] || []).map(m => m.to)
+      : [];
+    arcaneBoard3D.highlightSquares(state.selectedSquare, legalForSelected);
+    if (state.game.lastMove) {
+      arcaneBoard3D.setLastMove(
+        state.game.lastMove.from,
+        state.game.lastMove.to
+      );
+    }
+  }
 };
 
 const updateSummary = () => {
@@ -2460,12 +3151,14 @@ const updateSummary = () => {
 
   statusText.textContent =
     getDrawClaimState(state.game)?.message || state.game.status.message;
-  playerSide.textContent =
-    state.game.settings.playerColor === "white" ? "White" : "Black";
-  engineSide.textContent =
-    state.game.settings.engineColor === "white" ? "White" : "Black";
-  turnIndicator.textContent = state.game.turn ? formatColor(state.game.turn) : "-";
-  lastMoveText.textContent = state.game.lastMove?.san || "None";
+  if (playerSide && engineSide && turnIndicator && lastMoveText) {
+    playerSide.textContent =
+      state.game.settings.playerColor === "white" ? "White" : "Black";
+    engineSide.textContent =
+      state.game.settings.engineColor === "white" ? "White" : "Black";
+    turnIndicator.textContent = state.game.turn ? formatColor(state.game.turn) : "-";
+    lastMoveText.textContent = state.game.lastMove?.san || "None";
+  }
   renderImmersiveHud();
 };
 
@@ -2511,6 +3204,85 @@ const renderImmersiveHud = () => {
 };
 
 const renderBoardSurface = () => {
+  if (state.view !== "game") {
+    return;
+  }
+
+  const boardPanel = document.querySelector("#game-view .board-panel");
+  const boardStage = document.querySelector("#game-view .board-stage");
+  const boardContainerElement = document.querySelector("#game-view .board-container");
+  const boardShell = document.querySelector("#game-view .board-shell");
+  const boardSurface = document.getElementById("board");
+  const boardContainer = boardContainerElement || boardShell || boardElement?.parentElement || null;
+  const boardState = state.game?.board;
+  const boardStateFailureReason = getBoardRenderFailureReason(boardState);
+  const boardStageRows = Array.from(
+    document.querySelectorAll("#game-view .board-stage .board-player-row") || []
+  );
+  const boardRowsHeight = boardStageRows.reduce(
+    (totalHeight, row) => totalHeight + (row?.offsetHeight || 0),
+    0
+  );
+  const boardShellWrap = document.querySelector("#game-view .board-shell-wrap");
+  const boardStackHeight = boardRowsHeight + (boardShellWrap?.offsetHeight || 0);
+  const logBox = (label, element) => {
+    if (!element) {
+      console.log(label, null);
+      return;
+    }
+
+    const computedStyle = window.getComputedStyle(element);
+    console.log(label, {
+      offsetWidth: element.offsetWidth,
+      offsetHeight: element.offsetHeight,
+      width: computedStyle.width,
+      height: computedStyle.height
+    });
+  };
+
+  console.log("Rendering board in view:", state.view);
+  logBox("Board panel", boardPanel);
+  logBox("Board stage", boardStage);
+  logBox("Board shell", boardShell);
+  logBox("Board container", boardContainer);
+  logBox("Board surface", boardSurface);
+  console.log("boardPanel offsetHeight", boardPanel?.offsetHeight ?? 0);
+  console.log("boardStage offsetHeight", boardStage?.offsetHeight ?? 0);
+  console.log("Board stack height", boardStackHeight);
+  if (boardPanel) {
+    const boardPanelStyle = window.getComputedStyle(boardPanel);
+    console.log("Board panel layout", {
+      justifyContent: boardPanelStyle.justifyContent,
+      alignItems: boardPanelStyle.alignItems
+    });
+  }
+  console.log(
+    "Board final size:",
+    boardContainer?.offsetWidth ?? 0,
+    boardContainer?.offsetHeight ?? 0
+  );
+  console.log("Board state ready:", !boardStateFailureReason, boardState?.length);
+
+  if (!boardSurface) {
+    console.log("Skipping board render: board surface element is missing");
+    return;
+  }
+
+  if (!boardContainer) {
+    console.log("Skipping board render: board container is missing");
+    return;
+  }
+
+  if (boardContainer.offsetWidth <= 0 || boardContainer.offsetHeight <= 0) {
+    console.log("Skipping board render: board container has zero size");
+    return;
+  }
+
+  if (boardStateFailureReason) {
+    console.log("Skipping board render:", boardStateFailureReason);
+    return;
+  }
+
   renderBoard();
   syncBoard3D();
   renderBoardOverlays();
@@ -2519,7 +3291,11 @@ const renderBoardSurface = () => {
 const render = () => {
   renderGuestProfile();
   renderSessionUi();
-  renderBoardSurface();
+  renderView();
+  renderAuthMode();
+  if (state.view === "game") {
+    renderBoardSurface();
+  }
   renderClocks();
   renderMoveList();
   renderSavedGames();
@@ -2601,15 +3377,55 @@ const applyGameState = (gameState, options = {}) => {
   syncControls();
   setPersistence(gameState.persistence);
   setCoachStateForGame(gameState, options);
-  render();
+  if (!options.skipRender) {
+    render();
+  }
 };
 
-const loadGame = async () => {
+const loadGame = async ({ applyState = true, coachContext = "load-active" } = {}) => {
   beginMoveCycle();
   const gameState = await request("/api/game");
+
+  if (!applyState) {
+    return gameState;
+  }
+
+  if (!isActiveGameState(gameState)) {
+    return gameState;
+  }
+
   applyGameState(gameState, {
-    coachContext: gameState.hasStarted ? "load-active" : "idle"
+    coachContext: gameState.hasStarted ? coachContext : "idle"
   });
+
+  return gameState;
+};
+
+const enterGameView = async ({ coachContext = "load-active", fallbackView = "hall" } = {}) => {
+  console.log("Entering game view -> restoring/initializing game");
+  const gameState = await loadGame({ applyState: false, coachContext });
+  const activeGameIdOrState = isActiveGameState(gameState)
+    ? gameState
+    : isActiveGameState(state.game)
+      ? state.game
+      : null;
+  console.log("Active game found:", !!activeGameIdOrState);
+
+  if (!isActiveGameState(gameState)) {
+    state.game = null;
+    clearSelectedSquare();
+    state.view = fallbackView;
+    render();
+    return false;
+  }
+
+  state.view = "game";
+  renderView();
+  applyGameState(gameState, {
+    coachContext
+  });
+
+  return true;
 };
 
 const loadSavedGames = async () => {
@@ -2710,31 +3526,54 @@ const registerAccount = async () => {
     clearAuthInputs({
       keepEmail: true
     });
+    state.view = "hall";
+    renderView();
     await Promise.all([loadGame(), refreshCollections()]);
     setRecordView("saves");
     setCoachMessage(
       "Account created.",
       getAuthTransferMessage(payload.transferred)
     );
+      return true;
   } catch (error) {
     setApiHealth(false);
     setCoachMessage(error.message);
+      return false;
   } finally {
     setBusy(false);
   }
 };
 
 const loginAccount = async () => {
+  console.log("loginAccount: start");
   setBusy(true, "Signing you in...");
 
   try {
-    const payload = await request("/api/auth/login", {
+    const response = await fetch("/api/auth/login", {
       method: "POST",
+      credentials: "include",
+      headers: {
+        ...getGuestHeaders(),
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         email: authEmailInput?.value?.trim() || "",
         password: authPasswordInput?.value || ""
       })
     });
+    console.log("loginAccount: response status", response.status);
+
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (parseError) {
+      payload = {};
+    }
+    console.log("loginAccount: payload", payload);
+
+    if (!response.ok) {
+      throw new Error(payload.message || "Request failed.");
+    }
 
     setApiHealth(true);
     setPersistence(payload.persistence);
@@ -2742,12 +3581,19 @@ const loginAccount = async () => {
     clearAuthInputs({
       keepEmail: true
     });
+    console.log("Login success -> switching to hall");
+    state.view = "hall";
+    renderView();
     await Promise.all([loadGame(), refreshCollections()]);
     setRecordView("saves");
     setCoachMessage("Signed in.", getAuthTransferMessage(payload.transferred));
+    console.log("loginAccount: success returning true");
+    return true;
   } catch (error) {
+    console.log("loginAccount: failed", error?.message || error);
     setApiHealth(false);
     setCoachMessage(error.message);
+    return false;
   } finally {
     setBusy(false);
   }
@@ -2767,6 +3613,8 @@ const logoutAccount = async () => {
     clearAuthInputs();
     await Promise.all([loadGame(), refreshCollections()]);
     setRecordView("moves");
+    state.view = "auth";
+    renderView();
     setCoachMessage(
       "Signed out.",
       "You are back in guest mode on this browser. Account archives remain available the next time you sign in."
@@ -2779,7 +3627,18 @@ const logoutAccount = async () => {
   }
 };
 
+const showSignupMode = () => {
+  state.authMode = "signup";
+  renderAuthMode();
+};
+
 const startNewGame = async () => {
+  console.log("Start Duel clicked");
+
+  if (isRealtimeMultiplayerGame()) {
+    leaveMultiplayerRoom();
+  }
+
   state.pendingNewGame = true;
   beginMoveCycle();
   resetFinishedGameResetLifecycle();
@@ -2788,7 +3647,7 @@ const startNewGame = async () => {
   hideGameOverBanner({
     resetCopy: true
   });
-  renderBoardSurface();
+  console.log("Initializing solo game state");
   setBusy(true, "Forging a new duel...");
 
   try {
@@ -2800,15 +3659,33 @@ const startNewGame = async () => {
         timeControl: getSelectedTimeControlId()
       })
     });
+    const boardStateFailureReason = getBoardRenderFailureReason(gameState?.board);
+
+    console.log("Board state ready:", !boardStateFailureReason, gameState?.board?.length);
+
+    if (boardStateFailureReason) {
+      throw new Error(`Unable to render new duel board: ${boardStateFailureReason}`);
+    }
 
     setApiHealth(true);
     applyGameState(gameState, {
-      coachContext: "new-game"
+      coachContext: "new-game",
+      skipRender: true
     });
+    console.log("Switching to game view");
+    state.view = "game";
+    renderView();
+
+    const boardContainer = await waitForBoardContainerReady();
+    if (!boardContainer) {
+      console.log("Skipping board render: game view board container never became visible");
+      return;
+    }
+
+    render();
     void refreshCollections();
   } catch (error) {
     state.pendingNewGame = false;
-    renderBoardSurface();
     setApiHealth(false);
     setCoachMessage(error.message);
   } finally {
@@ -2917,6 +3794,14 @@ const offerDraw = async () => {
 };
 
 const claimAvailableDraw = async () => {
+  if (isRealtimeMultiplayerGame()) {
+    setCoachMessage(
+      "Draw claim via board controls is solo-only right now.",
+      "For multiplayer, continue play until checkmate or a draw result occurs naturally."
+    );
+    return;
+  }
+
   const drawClaim = getDrawClaimState(state.game);
 
   if (!drawClaim?.available) {
@@ -2944,6 +3829,10 @@ const claimAvailableDraw = async () => {
 };
 
 const continueAfterDrawClaim = async () => {
+  if (isRealtimeMultiplayerGame()) {
+    return;
+  }
+
   const drawClaim = getDrawClaimState(state.game);
   const engineTurnPaused =
     drawClaim?.available && state.game?.turn === state.game?.settings?.engineColor;
@@ -3126,6 +4015,28 @@ const loadEngineReply = async ({ cycleId, moveToken }) => {
 };
 
 const submitMove = async ({ from, to, promotion, previewMove }) => {
+  if (isRealtimeMultiplayerGame()) {
+    setBusy(true, "Sending move...");
+
+    try {
+      const socketState = await emitMultiplayerEvent("multiplayer:move", {
+        from,
+        to,
+        promotion
+      });
+
+      setApiHealth(true);
+      applyMultiplayerSocketState(socketState);
+    } catch (error) {
+      setApiHealth(false);
+      setCoachMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+
+    return;
+  }
+
   const cycleId = beginMoveCycle();
   const previousGame = cloneValue(state.game);
   const optimisticGame = buildOptimisticGameState(state.game, {
@@ -3237,8 +4148,10 @@ const handleSquareClick = (square) => {
     }
 
     setCoachMessage(
-      "Wait for Stockfish to move.",
-      "Your coach will grade your next move once the engine replies."
+      isRealtimeMultiplayerGame() ? "Wait for your opponent to move." : "Wait for Stockfish to move.",
+      isRealtimeMultiplayerGame()
+        ? "The board will update automatically when your opponent plays."
+        : "Your coach will grade your next move once the engine replies."
     );
     return;
   }
@@ -3329,10 +4242,32 @@ const initialize = async () => {
 
   try {
     await ensureGuestSession();
-    await loadSession();
-    await Promise.all([loadGame(), refreshCollections()]);
+    const sessionPayload = await loadSession();
+    const savedView = getSavedView();
+    const desiredView = sessionPayload?.authenticated
+      ? savedView || "hall"
+      : "auth";
+
+    state.view = desiredView;
+    console.log("Session restore:", state.view);
+
+    if (sessionPayload?.authenticated) {
+      if (desiredView === "game") {
+        const restored = await enterGameView({ coachContext: "load-active" });
+      } else {
+        renderView();
+        await loadGame();
+      }
+    } else {
+      renderView();
+    }
+
+    await refreshCollections();
     setApiHealth(true);
   } catch (error) {
+    state.view = "auth";
+    console.log("Session restore:", state.view);
+    renderView();
     setApiHealth(false);
     statusText.textContent = "Unable to load the game.";
     setCoachMessage(error.message);
@@ -3463,12 +4398,96 @@ newGameButton.addEventListener("click", startNewGame);
 saveGameButton.addEventListener("click", saveCurrentGame);
 offerDrawButton.addEventListener("click", offerDraw);
 resignButton.addEventListener("click", resignCurrentGame);
-loginButton?.addEventListener("click", loginAccount);
-registerButton?.addEventListener("click", registerAccount);
+loginButton?.addEventListener("click", async () => {
+  if (state.authMode === "signup") {
+    state.authMode = "login";
+    renderAuthMode();
+    return;
+  }
+
+  const success = await loginAccount();
+  console.log("login button success:", success);
+  if (success) {
+    state.view = "hall";
+    renderView();
+  }
+});
+registerButton?.addEventListener("click", () => {
+  if (state.authMode !== "signup") {
+      state.authMode = "signup";
+      renderAuthMode();
+    return;
+  }
+
+    registerAccount();
+});
 logoutButton?.addEventListener("click", logoutAccount);
-timeControlSelect?.addEventListener("change", renderClocks);
+soloLobbyButton?.addEventListener("click", () => {
+  setLobbyMode("solo");
+});
+multiplayerLobbyButton?.addEventListener("click", () => {
+  setLobbyMode("multiplayer");
+  state.view = "hall";
+  renderView();
+});
+gatewaySignInButton?.addEventListener("click", () => {
+  setLobbyMode("multiplayer");
+  focusAuthField(authEmailInput);
+});
+gatewayCreateButton?.addEventListener("click", () => {
+  setLobbyMode("multiplayer");
+  focusAuthField(authDisplayNameInput || authEmailInput);
+});
+gatewayGuestButton?.addEventListener("click", () => {
+  setLobbyMode("solo");
+});
+
+hallResumeButton?.addEventListener("click", () => {
+  void enterGameView({ coachContext: "resume", fallbackView: "hall" }).then((restored) => {
+    if (restored) {
+      setRecordView("saves");
+    }
+  });
+});
+
+hallHistoryButton?.addEventListener("click", () => {
+  void enterGameView({ coachContext: "load-active", fallbackView: "hall" }).then((restored) => {
+    if (restored) {
+      setRecordView("history");
+    }
+  });
+});
+
+if (backToHallButton) {
+  backToHallButton.addEventListener("click", () => {
+    state.view = "hall";
+    renderView();
+  });
+}
+dashboardTimeControlButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const nextTimeControlId = button.dataset.dashboardTimeControl;
+
+    if (!timeControlSelect || !TIME_CONTROL_PRESETS[nextTimeControlId]) {
+      return;
+    }
+
+    timeControlSelect.value = nextTimeControlId;
+    renderClocks();
+    renderMultiplayerLobby();
+  });
+});
+timeControlSelect?.addEventListener("change", () => {
+  renderClocks();
+  renderMultiplayerLobby();
+});
 colorInputs.forEach((input) => {
-  input.addEventListener("change", renderClocks);
+  input.addEventListener("change", () => {
+    renderClocks();
+    if (!state.game?.hasStarted && arcaneBoard3D?.setPerspective) {
+      arcaneBoard3D.setPerspective(getBoardPerspectiveColor());
+    }
+  });
 });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
@@ -3476,4 +4495,65 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// ── 2D / 3D TOGGLE ─────────────────────────────────────────
+const switchTo3D = () => {
+  if (arcaneBoard3D) return; // already in 3D
+  boardElement.classList.add("hidden");
+  board3dElement.classList.remove("hidden");
+  board3dElement.removeAttribute("aria-hidden");
+  toggle2dBtn.classList.remove("mode-btn-active");
+  toggle3dBtn.classList.add("mode-btn-active");
+  if (boardModeLabel) boardModeLabel.textContent = "3D duel interface";
+
+  arcaneBoard3D = new ArcaneBoardV2(board3dElement);
+  arcaneBoard3D.init();
+  arcaneBoard3D.setPerspective?.(getBoardPerspectiveColor());
+
+  // Sync current board position
+  if (state.game && state.game.board) {
+    arcaneBoard3D.setPosition(state.game.board);
+  }
+  if (state.game && state.game.lastMove) {
+    arcaneBoard3D.setLastMove(state.game.lastMove.from, state.game.lastMove.to);
+  }
+
+  // Route square clicks through 3D board
+  arcaneBoard3D.onSquareClick((square) => {
+    handleSquareClick(square);
+  });
+};
+
+const switchTo2D = () => {
+  if (!arcaneBoard3D) return; // already in 2D
+  arcaneBoard3D.destroy();
+  arcaneBoard3D = null;
+  if (!arcaneBoard3D) board3dElement.classList.add("hidden");
+  if (!arcaneBoard3D) board3dElement.setAttribute("aria-hidden", "true");
+  if (!arcaneBoard3D) boardElement.classList.remove("hidden");
+  toggle3dBtn.classList.remove("mode-btn-active");
+  toggle2dBtn.classList.add("mode-btn-active");
+  if (boardModeLabel) boardModeLabel.textContent = "2D duel interface";
+  renderBoard();
+};
+
+if (toggle2dBtn) toggle2dBtn.addEventListener("click", switchTo2D);
+if (toggle3dBtn) toggle3dBtn.addEventListener("click", switchTo3D);
+
 initialize();
+
+ensureMultiplayerSocket();
+
+multiplayerCreateGameButton?.addEventListener("click", () => {
+  void createMultiplayerRoom();
+});
+
+multiplayerJoinGameButton?.addEventListener("click", () => {
+  void joinMultiplayerRoom();
+});
+
+multiplayerRoomIdInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void joinMultiplayerRoom();
+  }
+});
