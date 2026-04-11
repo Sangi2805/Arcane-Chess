@@ -1,3 +1,33 @@
+(function() {
+  if (sessionStorage.getItem('ss-intro-seen')) {
+    const s = document.getElementById('ss-intro-splash');
+    if (s) s.remove();
+    return;
+  }
+  const splash = document.getElementById('ss-intro-splash');
+  if (!splash) return;
+  const sparks = document.getElementById('intro-sparks');
+  for (let i = 0; i < 16; i++) {
+    const el = document.createElement('div');
+    el.className = 'intro-spark';
+    const left = i < 8;
+    el.style.left = left ? (Math.random() * 14 + 1) + '%' : (Math.random() * 14 + 85) + '%';
+    el.style.bottom = (Math.random() * 35 + 5) + '%';
+    const sz = Math.random() * 3 + 1.5;
+    el.style.width = el.style.height = sz + 'px';
+    el.style.setProperty('--d', (1.2 + Math.random() * 1.4) + 's');
+    el.style.setProperty('--dl', (Math.random() * 2) + 's');
+    el.style.setProperty('--sx', (Math.random() * 22 - 11) + 'px');
+    sparks.appendChild(el);
+  }
+  const dismiss = () => {
+    sessionStorage.setItem('ss-intro-seen', '1');
+    splash.remove();
+  };
+  splash.addEventListener('click', dismiss);
+  document.addEventListener('keydown', dismiss, { once: true });
+})();
+
 const GUEST_STORAGE_KEY = "arcane-chess-guest-profile";
 const RECORD_VIEW_STORAGE_KEY = "arcane-chess-record-view";
 const LOBBY_MODE_STORAGE_KEY = "arcane-chess-lobby-mode";
@@ -6310,35 +6340,6 @@ historyModalCard?.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  (function() {
-  const splash = document.getElementById('ss-intro-splash');
-  if (!splash) return;
-  const sparks = document.getElementById('intro-sparks');
-  for (let i = 0; i < 16; i++) {
-    const s = document.createElement('div');
-    s.className = 'intro-spark';
-    const left = i < 8;
-    s.style.left = left
-      ? (Math.random() * 14 + 1) + '%'
-      : (Math.random() * 14 + 85) + '%';
-    s.style.bottom = (Math.random() * 35 + 5) + '%';
-    const sz = Math.random() * 3 + 1.5;
-    s.style.width = s.style.height = sz + 'px';
-    s.style.setProperty('--d', (1.2 + Math.random() * 1.4) + 's');
-    s.style.setProperty('--dl', (Math.random() * 2) + 's');
-    s.style.setProperty('--sx', (Math.random() * 22 - 11) + 'px');
-    sparks.appendChild(s);
-  }
-  const dismiss = () => {
-    splash.style.opacity = '0';
-    setTimeout(() => splash.remove(), 850);
-  };
-  setTimeout(dismiss, 1000);
-  splash.addEventListener('click', () => {
-  splash.remove();
-});
-  document.addEventListener('keydown', dismiss, { once: true });
-})();
   if (event.key === "Escape" && state.pendingPromotion?.moveChoices?.length) {
     event.preventDefault();
     clearPromotionPrompt();

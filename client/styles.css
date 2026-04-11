@@ -4521,3 +4521,6 @@ body.board-mode-3d .immersive-hud {
 #mp-rejoin-game-button {
   min-width: 150px;
 }
+* {
+  font-family: 'Cinzel', serif !important;
+}
