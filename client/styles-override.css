@@ -3,8 +3,8 @@
    Link AFTER styles.css in index.html.
    Touches zero game logic. Preserves all existing IDs.
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-:root{--bg0:#131009;--bg1:#1b1711;--bg2:#222019;--bg3:#292520;--bg4:#302c26;--bg5:#37332d;--gold:#b8952a;--gold2:#d4ad3a;--t1:#e6deca;--t2:#9a9080;--t3:#5c5448;--ok:#6abf72;--err:#d46060;--fi:'Inter',system-ui,sans-serif;--fd:'Cinzel',serif;--fm:'JetBrains Mono',monospace;--r:8px;--rs:6px}
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cinzel+Decorative:wght@400&family=IM+Fell+English:ital@0;1&display=swap');
+:root{--bg0:#131009;--bg1:#1b1711;--bg2:#222019;--bg3:#292520;--bg4:#302c26;--bg5:#37332d;--gold:#b8952a;--gold2:#d4ad3a;--t1:#e6deca;--t2:#9a9080;--t3:#5c5448;--ok:#6abf72;--err:#d46060;--fi:'Cinzel',serif;--fd:'Cinzel',serif;--fm:'Cinzel',serif;--r:8px;--rs:6px}
 body{font-family:var(--fi)!important;font-size:13px;background:var(--bg0)!important;color:var(--t1)!important;overflow:hidden!important}
 .hero{background:var(--bg1)!important;border:1px solid rgba(255,255,255,.05)!important;border-radius:var(--r)!important;box-shadow:none!important;backdrop-filter:none!important}
 .eyebrow{font-family:var(--fm)!important;font-size:8px!important;letter-spacing:.16em!important;text-transform:uppercase!important;color:var(--t3)!important}
@@ -326,7 +326,7 @@ input:focus,select:focus{border-color:rgba(184,149,42,.4)!important;outline:none
 
 /* Subtitle */
 .gec-subtitle{
-  font-family:'Inter',system-ui,sans-serif;
+  font-family:var(--fi);
   font-size:10px;
   font-variant:small-caps;
   letter-spacing:.06em;
@@ -341,7 +341,7 @@ input:focus,select:focus{border-color:rgba(184,149,42,.4)!important;outline:none
   margin-top:6px;
 }
 .gec-btn{
-  font-family:'Inter',system-ui,sans-serif!important;
+  font-family:var(--fi)!important;
   font-size:11px!important;
   font-weight:600!important;
   letter-spacing:.03em!important;
@@ -2312,11 +2312,11 @@ button,
   --requested-logo-font: "Cinzel Decorative", serif;
   --requested-display-font: "Cinzel", serif;
   --requested-coach-font: "IM Fell English", serif;
-  --requested-ui-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --requested-ui-font: "Cinzel", serif;
 }
 
 .hero-title-group h1 {
-  font-family: var(--requested-logo-font) !important;
+  font-family: var(--requested-display-font) !important;
   font-size: 22px !important;
   font-weight: 400 !important;
   line-height: 1.04 !important;
@@ -2364,7 +2364,10 @@ button,
 }
 
 #feedback-text,
-.coach-message {
+.coach-message,
+.coach-explanation,
+.coach-suggestion,
+#feedback-explanation {
   font-family: var(--requested-coach-font) !important;
   font-style: italic !important;
   font-size: 13px !important;
@@ -2377,9 +2380,6 @@ button,
 .card-copy,
 .lobby-note,
 .moves-panel-subtitle,
-.coach-status-line,
-.coach-explanation,
-.coach-suggestion,
 .cp-acct-meta,
 .record-card-copy span,
 .detail-copy,
@@ -2392,7 +2392,6 @@ button,
 .clock-meta,
 #mp-room-id-label,
 #mp-connection-status,
-#feedback-explanation,
 #status-text,
 #guest-subtitle {
   font-family: var(--requested-ui-font) !important;
@@ -2410,8 +2409,8 @@ button,
 .button-small {
   font-family: var(--requested-display-font) !important;
   font-size: 12px !important;
-  font-weight: 400 !important;
-  line-height: 1.15 !important;
+  font-weight: 600 !important;
+  line-height: 1.1 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
 }

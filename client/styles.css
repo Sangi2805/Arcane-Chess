@@ -1923,7 +1923,7 @@ body.view-auth .play-area {
 }
 
 .clock-time {
-  font-family: "Manrope", sans-serif;
+  font-family: "Cinzel", serif;
   font-size: clamp(1.08rem, 0.96rem + 0.52vw, 1.42rem);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -4516,7 +4516,7 @@ body.board-mode-3d .immersive-hud {
   0%,100%{ opacity: 0.25; } 50%{ opacity: 0.8; }
 }
 #mp-create-room-button {
-  min-width: 110px;
+  min-width: 150px;
 }
 #mp-rejoin-game-button {
   min-width: 150px;
