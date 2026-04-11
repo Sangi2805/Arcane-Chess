@@ -6310,6 +6310,35 @@ historyModalCard?.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  (function() {
+  const splash = document.getElementById('ss-intro-splash');
+  if (!splash) return;
+  const sparks = document.getElementById('intro-sparks');
+  for (let i = 0; i < 16; i++) {
+    const s = document.createElement('div');
+    s.className = 'intro-spark';
+    const left = i < 8;
+    s.style.left = left
+      ? (Math.random() * 14 + 1) + '%'
+      : (Math.random() * 14 + 85) + '%';
+    s.style.bottom = (Math.random() * 35 + 5) + '%';
+    const sz = Math.random() * 3 + 1.5;
+    s.style.width = s.style.height = sz + 'px';
+    s.style.setProperty('--d', (1.2 + Math.random() * 1.4) + 's');
+    s.style.setProperty('--dl', (Math.random() * 2) + 's');
+    s.style.setProperty('--sx', (Math.random() * 22 - 11) + 'px');
+    sparks.appendChild(s);
+  }
+  const dismiss = () => {
+    splash.style.opacity = '0';
+    setTimeout(() => splash.remove(), 850);
+  };
+  setTimeout(dismiss, 1000);
+  splash.addEventListener('click', () => {
+  splash.remove();
+});
+  document.addEventListener('keydown', dismiss, { once: true });
+})();
   if (event.key === "Escape" && state.pendingPromotion?.moveChoices?.length) {
     event.preventDefault();
     clearPromotionPrompt();

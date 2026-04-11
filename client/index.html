@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cinzel+Decorative:wght@400&family=IM+Fell+English:ital@0;1&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -17,6 +17,33 @@
     <script src="./3d/ArcaneBoardV2.js"></script>
   </head>
   <body>
+    <div id="ss-intro-splash">
+  <div class="intro-radial"></div>
+  <div class="intro-sparks" id="intro-sparks"></div>
+  <div class="intro-ground"></div>
+  <div class="intro-body">
+    <div class="intro-guardian-row">
+      <img src="assets/guardian.svg" class="intro-guardian" width="56" height="128"/>
+      <div class="intro-crest">
+        <svg width="108" height="108" viewBox="0 0 108 108">
+          <circle cx="54" cy="54" r="52" fill="#0a0d12"/>
+          <circle cx="54" cy="54" r="48" fill="none" stroke="#c9a84c" stroke-width="0.8" opacity="0.5"/>
+          <path d="M30 22 L36 32 L54 26 L72 32 L78 22 L74 38 L34 38 Z" fill="#c9a84c" opacity="0.8"/>
+          <text x="10" y="78" font-family="Georgia,serif" font-size="62" fill="#c9a84c" opacity="0.95">S</text>
+          <text x="38" y="78" font-family="Georgia,serif" font-size="62" fill="#c9a84c" opacity="0.3">S</text>
+          <path d="M28 88 Q54 94 80 88" fill="none" stroke="#c9a84c" stroke-width="0.8" opacity="0.5"/>
+        </svg>
+      </div>
+      <img src="assets/guardian.svg" class="intro-guardian mirrored" width="56" height="128"/>
+    </div>
+    <p class="intro-presented">A PRESENTATION BY</p>
+    <h1 class="intro-title">SS GAMES</h1>
+    <div class="intro-divider"></div>
+    <p class="intro-tagline">where strategy meets the arcane</p>
+    <p class="intro-welcome">WELCOME, CHALLENGER</p>
+    <p class="intro-skip">PRESS ENTER TO CONTINUE</p>
+  </div>
+</div>
     <main class="shell">
       <section class="hero panel">
         <div class="hero-copy">
@@ -249,17 +276,16 @@
             <article class="lobby-card">
               <div class="lobby-card-header">
                 <div class="lobby-heading">
-                  <span class="label">Command Hall</span>
+                  <span class="label">Command Hall / Phase 1</span>
                   <strong>Room Controls</strong>
                 </div>
-                <span class="pill">Phase 1</span>
               </div>
               <p class="card-copy">
                 Create a private room for a friend, or jump into Blitz 5 quick play.
               </p>
               <div class="cp-row" style="margin-top: 10px">
                 <button id="mp-create-room-button" type="button">Create Room</button>
-                <button id="mp-create-game-button" class="button-secondary" type="button">Quick Play (Blitz 5)</button>
+                <button id="mp-create-game-button" class="button-secondary" type="button">Quick Play · Blitz 5</button>
                 <button id="mp-rejoin-game-button" class="button-secondary" type="button">Rejoin Match</button>
               </div>
               <label class="cp-field" style="margin-top: 10px">
@@ -378,25 +404,99 @@
                   <div class="eval-bar-black" id="eval-bar-black" style="flex:1"></div>
                   <div class="eval-bar-white" id="eval-bar-white" style="flex:1"></div>
                 </div>
-                <div class="board-shell">
-                <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
-                <div id="board" class="board" aria-label="Arcane Chess Board"></div>
-                <div
-                  id="game-over-banner"
-                  class="game-over-banner hidden"
-                  aria-live="polite"
-                  aria-hidden="true"
-                >
-                  <strong id="game-over-title">Game Over</strong>
-                  <span id="game-over-message">Result pending.</span>
-                </div>
-                <div id="promotion-panel" class="promotion-panel promotion-popover hidden">
-                  <span class="label">Choose Promotion</span>
-                  <div class="promotion-actions">
-                    <button type="button" class="button-secondary" data-promotion="q">Queen</button>
-                    <button type="button" class="button-secondary" data-promotion="r">Rook</button>
-                    <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
-                    <button type="button" class="button-secondary" data-promotion="n">Knight</button>
+                <div class="board-shell-anchor">
+                  <div id="wizard-side" aria-hidden="true">
+                    <svg
+                      id="coach-wizard-svg"
+                      class="coach-wizard-svg st-idle"
+                      viewBox="0 0 220 220"
+                      aria-hidden="true"
+                    >
+                      <defs>
+                        <linearGradient id="wizard-hat-grad" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stop-color="#2e2a43" />
+                          <stop offset="100%" stop-color="#181425" />
+                        </linearGradient>
+                        <radialGradient id="wizard-orb-grad" cx="50%" cy="38%" r="65%">
+                          <stop offset="0%" stop-color="#fff6dc" />
+                          <stop offset="100%" stop-color="#c7a06e" />
+                        </radialGradient>
+                      </defs>
+
+                      <g class="wizard-particles" aria-hidden="true">
+                        <circle cx="36" cy="56" r="6" />
+                        <circle cx="182" cy="62" r="6" />
+                        <circle cx="28" cy="134" r="6" />
+                        <circle cx="192" cy="142" r="6" />
+                        <circle cx="52" cy="192" r="6" />
+                        <circle cx="170" cy="188" r="6" />
+                      </g>
+
+                      <g id="wizard-think-bubbles" class="wizard-think-bubbles" aria-hidden="true">
+                        <circle cx="164" cy="54" r="6" />
+                        <circle cx="182" cy="36" r="8" />
+                        <circle cx="202" cy="18" r="10" />
+                      </g>
+
+                      <g id="wizard-figure" class="wizard-figure">
+                        <g id="wizard-arm-left" class="wizard-arm wizard-arm-left" aria-hidden="true">
+                          <path d="M72 170 Q48 154 44 128" fill="none" stroke="#8a6b4e" stroke-width="9" stroke-linecap="round" />
+                        </g>
+                        <g id="wizard-arm-right" class="wizard-arm wizard-arm-right" aria-hidden="true">
+                          <path d="M148 170 Q172 154 176 128" fill="none" stroke="#8a6b4e" stroke-width="9" stroke-linecap="round" />
+                        </g>
+
+                        <g id="wizard-hat-group" class="wizard-hat-group">
+                          <path d="M46 92 L110 24 L174 92 Z" fill="url(#wizard-hat-grad)" stroke="#4f4768" stroke-width="3" />
+                          <path d="M64 95 H156" stroke="#7f739f" stroke-width="4" stroke-linecap="round" />
+                        </g>
+
+                        <g id="wizard-face-group" class="wizard-face-group">
+                          <ellipse cx="110" cy="132" rx="56" ry="50" fill="#d4c0a2" stroke="#9d886b" stroke-width="3" />
+                          <ellipse cx="87" cy="130" rx="16" ry="12" fill="#f4e4cc" />
+                          <ellipse cx="133" cy="130" rx="16" ry="12" fill="#f4e4cc" />
+
+                          <path id="coach-wizard-brow-left" d="M70 112 Q87 104 100 112" fill="none" stroke="#2f2518" stroke-width="4" stroke-linecap="round" />
+                          <path id="coach-wizard-brow-right" d="M120 112 Q133 104 150 112" fill="none" stroke="#2f2518" stroke-width="4" stroke-linecap="round" />
+
+                          <circle cx="88" cy="130" r="7" fill="#f7f2e7" />
+                          <circle cx="132" cy="130" r="7" fill="#f7f2e7" />
+                          <circle id="coach-wizard-iris-left" cx="88" cy="130" r="4" fill="#6abcf5" />
+                          <circle id="coach-wizard-iris-right" cx="132" cy="130" r="4" fill="#6abcf5" />
+
+                          <path id="coach-wizard-mouth" d="M92 156 Q110 168 128 156" fill="none" stroke="#5e4130" stroke-width="4" stroke-linecap="round" />
+
+                          <ellipse class="wizard-sweat-drop wizard-sweat-drop-left" cx="55" cy="118" rx="3" ry="5" />
+                          <ellipse class="wizard-sweat-drop wizard-sweat-drop-right" cx="164" cy="120" rx="3" ry="5" />
+                        </g>
+
+                        <circle id="coach-wizard-orb" cx="110" cy="195" r="13" fill="url(#wizard-orb-grad)" stroke="#f0c269" stroke-width="2" />
+                      </g>
+                    </svg>
+                    <span id="wizard-state-label" class="wizard-state-label">IDLE</span>
+                  </div>
+
+                  <div class="board-shell">
+                  <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
+                  <div id="board" class="board" aria-label="Arcane Chess Board"></div>
+                  <div id="game-end-overlay" class="game-end-overlay hidden" aria-hidden="true" aria-live="assertive"></div>
+                  <div
+                    id="game-over-banner"
+                    class="game-over-banner hidden"
+                    aria-live="polite"
+                    aria-hidden="true"
+                  >
+                    <strong id="game-over-title">Game Over</strong>
+                    <span id="game-over-message">Result pending.</span>
+                  </div>
+                  <div id="promotion-panel" class="promotion-panel promotion-popover hidden">
+                    <span class="label">Choose Promotion</span>
+                    <div class="promotion-actions">
+                      <button type="button" class="button-secondary" data-promotion="q">Queen</button>
+                      <button type="button" class="button-secondary" data-promotion="r">Rook</button>
+                      <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
+                      <button type="button" class="button-secondary" data-promotion="n">Knight</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -454,13 +554,7 @@
                   <span class="coach-avatar-flare"></span>
                 </div>
                 <div class="coach-avatar">
-                  <img
-                    id="coach-avatar-image"
-                    class="coach-avatar-image"
-                    src="./assets/arcane-coach-avatar.svg"
-                    alt="Arcane Coach portrait"
-                  />
-                  <span class="coach-avatar-core"></span>
+                  <span class="coach-avatar-orb-placeholder" aria-hidden="true"></span>
                 </div>
               </div>
             </div>
@@ -532,6 +626,7 @@
                 <button id="offer-draw-button" class="button-secondary" type="button">Offer Draw</button>
                 <button id="resign-button" class="button-secondary button-danger" type="button">Resign</button>
               </div>
+              <div id="immersive-controls-host" class="immersive-controls-host hidden" aria-hidden="true"></div>
             </section>
 
             <div class="record-tabs" role="tablist" aria-label="Game records">
@@ -576,8 +671,7 @@
 
       <div id="immersive-hud" class="immersive-hud" aria-hidden="true">
         <div class="immersive-controls">
-          <span class="immersive-mode-chip">Immersive 3D</span>
-          <div class="immersive-control-row">
+          <div class="game-actions immersive-control-row">
             <button
               id="immersive-exit-button"
               class="button-secondary button-small"
@@ -592,8 +686,6 @@
             >
               New Game
             </button>
-          </div>
-          <div class="immersive-control-row">
             <button
               id="immersive-offer-draw-button"
               class="button-secondary button-small"
