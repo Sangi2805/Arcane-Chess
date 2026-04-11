@@ -1526,10 +1526,20 @@ h1 {
   display: none;
   min-height: calc(100% - 24px);
   width: 100%;
-  display: flex;
+  position: relative;
+  z-index: 3;
   justify-content: center;
   align-items: center;
   padding: 18px 0 8px;
+}
+
+body.view-auth #auth-view {
+  display: flex !important;
+}
+
+body.view-hall #auth-view,
+body.view-game #auth-view {
+  display: none !important;
 }
 
 .auth-panel {
@@ -1606,9 +1616,17 @@ h1 {
   margin: 0 0 8px 0;
 }
 
-/* View split layout fix: ensure game view uses a stable 3-column grid. */
+/* View split layout fix - force views to be hidden/shown based on body class */
+#auth-view {
+  display: none !important;
+}
+
+body.view-auth #auth-view {
+  display: flex !important;
+}
+
 #game-view {
-  display: grid !important;
+  display: none !important;
   grid-template-columns: 280px 1fr 320px;
   gap: 20px;
   height: 100%;
@@ -1616,10 +1634,44 @@ h1 {
   grid-column: 1 / -1;
 }
 
+body.view-game #game-view {
+  display: grid !important;
+}
+
+#lobby-view {
+  display: none !important;
+}
+
+body.view-hall #lobby-view {
+  display: block !important;
+}
+
 .play-area {
+  display: none !important;
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
+
+body.view-hall .play-area,
+body.view-game .play-area {
+  display: grid !important;
+  grid-template-columns:
+    minmax(212px, var(--controls-width))
+    minmax(0, 1fr)
+    minmax(228px, var(--records-width));
+  gap: clamp(10px, 0.9vw, 14px);
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+  pointer-events: auto;
+}
+
+body.view-auth .play-area {
+  display: none !important;
+  pointer-events: none !important;
+}
+
 
 #game-view .board-panel {
   grid-column: 2;

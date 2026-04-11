@@ -669,28 +669,47 @@ select optgroup {
 }
 
 /* Hall command-center polish */
-body.view-auth #lobby-view,
-body.view-auth #game-view,
-body.view-hall #game-view,
-body.view-game #lobby-view {
+#auth-view {
+  display: flex !important;
+}
+
+body.view-auth #auth-view {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+body.view-hall #auth-view,
+body.view-game #auth-view {
+  display: none !important;
+}
+
+#lobby-view,
+#game-view {
   display: none !important;
 }
 
 body.view-hall #lobby-view {
-  display: flex !important;
-}
-
-body.view-game #game-view {
-  display: grid !important;
-}
-
-#lobby-view {
   grid-column: 1 / -1 !important;
   width: 100% !important;
   display: flex !important;
   justify-content: center !important;
   align-items: flex-start !important;
   padding: 16px 0 8px !important;
+}
+
+body.view-game #game-view {
+  display: grid !important;
+}
+
+body.view-auth #lobby-view,
+body.view-auth #game-view,
+body.view-game #lobby-view {
+  display: none !important;
+}
+
+body.view-auth .play-area {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 #lobby-view > .controls-panel {
@@ -947,12 +966,21 @@ body {
 
 /* Game view stays a 2-column product layout */
 #game-view {
+  display: none !important;
+}
+
+body.view-game #game-view {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) 360px !important;
   gap: 18px !important;
   align-items: start !important;
   width: 100% !important;
   min-height: 0 !important;
+}
+
+body.view-hall #game-view,
+body.view-auth #game-view {
+  display: none !important;
 }
 
 /* Center board panel should NOT clip stacked content */

@@ -9,6 +9,22 @@
 
   const FILES = ['a','b','c','d','e','f','g','h'];
   const RANKS = ['1','2','3','4','5','6','7','8'];
+  const PIECE_MODEL_PATHS = {
+    p: '/models/Pawn/Pawn.STL',
+    r: '/models/Rook/Rook.STL',
+    n: '/models/Knight/Knight.STL',
+    b: '/models/Bishop/Bishop.STL',
+    q: '/models/Queen/Queen.STL',
+    k: '/models/King/King.STL'
+  };
+  const PIECE_MODEL_HEIGHT = {
+    p: 0.92,
+    r: 1.05,
+    n: 1.08,
+    b: 1.12,
+    q: 1.22,
+    k: 1.3
+  };
 
   class ArcaneBoardV2 {
     constructor(container) {
@@ -38,6 +54,13 @@
       this._boundAnimate    = this._animate.bind(this);
       this._boundResize     = this._onResize.bind(this);
       this._boundClick      = this._onClick.bind(this);
+
+      this._stlLoader         = null;
+      this._modelGeometryByType = new Map();
+      this._modelLoadPromise  = null;
+      this._modelAssetsReady  = false;
+      this._latestBoardState  = null;
+      this._positionVersion   = 0;
     }
 
     // ─────────────────────────────────────────
@@ -55,6 +78,7 @@
       this._setupLights();
       this._buildEnvironment();
       this._buildBoardSquares();
+      this._initModelAssets();
       this.container.addEventListener('click', this._boundClick);
       window.addEventListener('resize', this._boundResize);
       this._animate();
@@ -67,6 +91,14 @@
 
     /** Update piece positions from app.js board array */
     setPosition(board) {
+      this._positionVersion += 1;
+      this._latestBoardState = Array.isArray(board)
+        ? board.map((entry) => ({
+            square: entry.square,
+            piece: entry.piece ? { ...entry.piece } : null
+          }))
+        : [];
+
       this.pieces.forEach(({ mesh }) => {
         this.scene.remove(mesh);
         this._disposeGroup(mesh);
@@ -459,6 +491,13 @@
     }
 
     _makePiece(type, color) {
+      if (this._modelAssetsReady) {
+        const stlPiece = this._makeModelPiece(type, color);
+        if (stlPiece) {
+          return stlPiece;
+        }
+      }
+
       const T = this._T;
       const isWhite = color === 'white';
 
@@ -491,6 +530,106 @@
       }
 
       return group;
+    }
+
+    _makeModelPiece(type, color) {
+      const T = this._T;
+      const geometry = this._modelGeometryByType.get(type);
+
+      if (!geometry) {
+        return null;
+      }
+
+      const material = new T.MeshStandardMaterial({
+        color: color === 'white' ? 0xd9c7a5 : 0x2a241b,
+        emissive: color === 'white' ? 0x1f1408 : 0x0a0704,
+        emissiveIntensity: color === 'white' ? 0.12 : 0.22,
+        roughness: color === 'white' ? 0.44 : 0.62,
+        metalness: color === 'white' ? 0.18 : 0.1
+      });
+
+      const mesh = new T.Mesh(geometry, material);
+      mesh.userData.sharedGeometry = true;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.position.y = 0.02;
+
+      const base = new T.Mesh(
+        new T.CylinderGeometry(0.3, 0.34, 0.08, 18),
+        new T.MeshLambertMaterial({
+          color: color === 'white' ? 0xcab692 : 0x1f1911,
+          emissive: color === 'white' ? 0x1f1309 : 0x080604,
+          emissiveIntensity: 0.16
+        })
+      );
+      base.castShadow = true;
+      base.receiveShadow = true;
+      base.position.y = 0.04;
+
+      const group = new T.Group();
+      group.add(base);
+      group.add(mesh);
+      return group;
+    }
+
+    _initModelAssets() {
+      const T = this._T;
+
+      if (!T || !T.STLLoader || this._modelLoadPromise) {
+        return;
+      }
+
+      this._stlLoader = new T.STLLoader();
+
+      const loadType = (pieceType, url) =>
+        new Promise((resolve) => {
+          this._stlLoader.load(
+            url,
+            (geometry) => {
+              const normalized = this._normalizeModelGeometry(pieceType, geometry);
+              this._modelGeometryByType.set(pieceType, normalized);
+              resolve();
+            },
+            undefined,
+            () => resolve()
+          );
+        });
+
+      const loads = Object.entries(PIECE_MODEL_PATHS).map(([pieceType, url]) =>
+        loadType(pieceType, url)
+      );
+
+      this._modelLoadPromise = Promise.all(loads).then(() => {
+        this._modelAssetsReady = this._modelGeometryByType.size > 0;
+
+        if (this._modelAssetsReady && this._latestBoardState?.length) {
+          this.setPosition(this._latestBoardState);
+        }
+      });
+    }
+
+    _normalizeModelGeometry(pieceType, geometry) {
+      const T = this._T;
+      const normalized = geometry.clone();
+      normalized.computeVertexNormals();
+      normalized.computeBoundingBox();
+
+      const bounds = normalized.boundingBox;
+      if (!bounds) {
+        return normalized;
+      }
+
+      const size = new T.Vector3();
+      const center = new T.Vector3();
+      bounds.getSize(size);
+      bounds.getCenter(center);
+
+      const targetHeight = PIECE_MODEL_HEIGHT[pieceType] || PIECE_MODEL_HEIGHT.p;
+      const scale = size.y > 0 ? targetHeight / size.y : 1;
+
+      normalized.translate(-center.x, -bounds.min.y, -center.z);
+      normalized.scale(scale, scale, scale);
+      return normalized;
     }
 
     _pieceGlowY(t) {
@@ -796,7 +935,7 @@
 
     _disposeGroup(group) {
       group.traverse(child => {
-        if (child.geometry) child.geometry.dispose();
+        if (child.geometry && !child.userData?.sharedGeometry) child.geometry.dispose();
         if (child.material) child.material.dispose();
       });
     }

@@ -23,6 +23,8 @@ const UNTYPED_TIME_CONTROL = {
   incrementMs: 0
 };
 
+const RECONNECT_WINDOW_MS = 60_000;
+
 const roomRegistry = new Map();
 const matchmakingQueue = [];
 const queuedActors = new Map();
@@ -42,18 +44,18 @@ const getColorBySocket = (room, socketId) => {
 };
 
 const getOpenColor = (room) => {
-  if (!room.players.white) {
+  if (!room.players.white || !room.players.white.socketId) {
     return "white";
   }
 
-  if (!room.players.black) {
+  if (!room.players.black || !room.players.black.socketId) {
     return "black";
   }
 
   return null;
 };
 
-const hasBothPlayers = (room) => Boolean(room.players.white && room.players.black);
+const hasBothPlayers = (room) => Boolean(room.players.white?.socketId && room.players.black?.socketId);
 
 const normalizeDisplayName = (value, fallback = "Player") => {
   const trimmed = String(value || "").trim();
@@ -108,7 +110,43 @@ const getPublicPlayers = (room) => ({
     : null
 });
 
-const getResolvedResult = (snapshot, hasStarted) => {
+const getResolvedResult = (snapshot, hasStarted, manualOutcome = null) => {
+  if (manualOutcome) {
+    return {
+      result: manualOutcome.result,
+      resultLabel: manualOutcome.resultLabel || null,
+      status: manualOutcome.status,
+      turn: null,
+      legalMoves: {},
+      isGameOver: true,
+      drawReason: manualOutcome.drawReason || null
+    };
+  }
+
+  if (snapshot.isGameOver) {
+    if (snapshot.status.code === "checkmate") {
+      return {
+        result: snapshot.turn === "white" ? "black-win" : "white-win",
+        resultLabel: snapshot.status.outcomeLabel || "Checkmate",
+        status: snapshot.status,
+        turn: null,
+        legalMoves: {},
+        isGameOver: true,
+        drawReason: null
+      };
+    }
+
+    return {
+      result: "draw",
+      resultLabel: snapshot.status.outcomeLabel || "Draw",
+      status: snapshot.status,
+      turn: null,
+      legalMoves: {},
+      isGameOver: true,
+      drawReason: snapshot.status.drawReason || null
+    };
+  }
+
   if (!hasStarted) {
     return {
       result: "not-started",
@@ -132,35 +170,21 @@ const getResolvedResult = (snapshot, hasStarted) => {
       drawReason: null
     };
   }
-
-  if (snapshot.status.code === "checkmate") {
-    return {
-      result: snapshot.turn === "white" ? "black-win" : "white-win",
-      resultLabel: snapshot.status.outcomeLabel || "Checkmate",
-      status: snapshot.status,
-      turn: null,
-      legalMoves: {},
-      isGameOver: true,
-      drawReason: null
-    };
-  }
-
-  return {
-    result: "draw",
-    resultLabel: snapshot.status.outcomeLabel || "Draw",
-    status: snapshot.status,
-    turn: null,
-    legalMoves: {},
-    isGameOver: true,
-    drawReason: snapshot.status.drawReason || null
-  };
 };
 
 const buildPerspectiveState = (room, playerColor) => {
   const snapshot = serializeGame(room.chess);
   const hasStarted = hasBothPlayers(room);
-  const resolved = getResolvedResult(snapshot, hasStarted);
+  const resolved = getResolvedResult(snapshot, hasStarted, room.manualOutcome || null);
   const timeControl = room.timeControl || UNTYPED_TIME_CONTROL;
+  const pendingDrawOffer =
+    !resolved.isGameOver && room.pendingDrawOffer
+      ? {
+          fromColor: room.pendingDrawOffer.fromColor,
+          offeredAt: room.pendingDrawOffer.offeredAt,
+          awaitingYourResponse: room.pendingDrawOffer.fromColor !== playerColor
+        }
+      : null;
 
   return {
     id: room.id,
@@ -190,6 +214,7 @@ const buildPerspectiveState = (room, playerColor) => {
     status: resolved.status,
     resultLabel: resolved.resultLabel,
     drawReason: resolved.drawReason,
+    pendingDrawOffer,
     coachFeedback: null
   };
 };
@@ -299,6 +324,7 @@ const createRoomFromQueuePair = (io, firstEntry, secondEntry) => {
     createdAt: now,
     updatedAt: now,
     timeControl: BLITZ_FIVE_TIME_CONTROL,
+    pendingDrawOffer: null,
     players: {
       white: {
         socketId: firstSocket.id,
@@ -375,19 +401,26 @@ const removeSocketFromRoom = (io, socket) => {
   const color = getColorBySocket(room, socket.id);
 
   if (color) {
-    room.players[color] = null;
+    room.players[color] = {
+      ...room.players[color],
+      socketId: null,
+      disconnectedAt: Date.now()
+    };
     room.updatedAt = new Date().toISOString();
+    scheduleDisconnectForfeit(io, room, color);
   }
 
-  const hasPlayers = Boolean(room.players.white || room.players.black);
+  const hasPlayers = Boolean(room.players.white?.socketId || room.players.black?.socketId);
 
   if (!hasPlayers) {
+    clearDisconnectForfeitTimer(room);
     roomRegistry.delete(room.id);
     return;
   }
 
   emitRoomState(io, room, {
-    event: "opponent-disconnected"
+    event: "opponent-disconnected",
+    reconnectDeadlineAt: room.disconnectState?.reconnectDeadlineAt || null
   });
 };
 
@@ -410,6 +443,7 @@ const attachRealtimeHub = (io) => {
           createdAt: now,
           updatedAt: now,
           timeControl: UNTYPED_TIME_CONTROL,
+          pendingDrawOffer: null,
           players: {
             white: {
               socketId: socket.id,
@@ -466,9 +500,12 @@ const attachRealtimeHub = (io) => {
 
         room.players[openColor] = {
           socketId: socket.id,
-          name: payload.displayName || "Player"
+          name: payload.displayName || room.players[openColor]?.name || "Player"
         };
         room.updatedAt = new Date().toISOString();
+        if (hasBothPlayers(room)) {
+          clearDisconnectForfeitTimer(room);
+        }
 
         socket.join(roomId);
         socket.data.roomId = roomId;
@@ -488,6 +525,154 @@ const attachRealtimeHub = (io) => {
         callback({
           ok: false,
           message: error.message || "Unable to join room."
+        });
+      }
+    });
+
+    socket.on("multiplayer:resign", (_payload = {}, callback = () => {}) => {
+      try {
+        const roomId = socket.data.roomId;
+
+        if (!roomId) {
+          throw new Error("Join a room before resigning.");
+        }
+
+        const room = roomRegistry.get(roomId);
+
+        if (!room) {
+          throw new Error("Room not found.");
+        }
+
+        const playerColor = getColorBySocket(room, socket.id);
+
+        if (!playerColor) {
+          throw new Error("You are not assigned to this room.");
+        }
+
+        const snapshot = serializeGame(room.chess);
+
+        if (snapshot.isGameOver || room.manualOutcome) {
+          throw new Error("The game is already over.");
+        }
+
+        room.pendingDrawOffer = null;
+        const winnerColor = playerColor === "white" ? "black" : "white";
+        room.manualOutcome = {
+          result: winnerColor === "white" ? "white-win" : "black-win",
+          resultLabel: "Resignation",
+          drawReason: null,
+          status: {
+            code: "resignation",
+            message: `${playerColor === "white" ? "White" : "Black"} resigned.`,
+            outcomeLabel: "Resignation"
+          }
+        };
+        room.updatedAt = new Date().toISOString();
+        clearDisconnectForfeitTimer(room);
+
+        callback({
+          ok: true,
+          state: {
+            roomId,
+            youAre: playerColor,
+            players: getPublicPlayers(room),
+            phase: hasBothPlayers(room) ? "active" : "waiting",
+            game: buildPerspectiveState(room, playerColor)
+          }
+        });
+
+        emitRoomState(io, room, {
+          event: "resignation"
+        });
+      } catch (error) {
+        callback({
+          ok: false,
+          message: error.message || "Unable to resign."
+        });
+      }
+    });
+
+    socket.on("multiplayer:draw", (_payload = {}, callback = () => {}) => {
+      try {
+        const roomId = socket.data.roomId;
+
+        if (!roomId) {
+          throw new Error("Join a room before offering a draw.");
+        }
+
+        const room = roomRegistry.get(roomId);
+
+        if (!room) {
+          throw new Error("Room not found.");
+        }
+
+        const playerColor = getColorBySocket(room, socket.id);
+
+        if (!playerColor) {
+          throw new Error("You are not assigned to this room.");
+        }
+
+        const snapshot = serializeGame(room.chess);
+
+        if (snapshot.isGameOver || room.manualOutcome) {
+          throw new Error("The game is already over.");
+        }
+
+        if (!hasBothPlayers(room)) {
+          throw new Error("Waiting for an opponent.");
+        }
+
+        const pendingOffer = room.pendingDrawOffer;
+
+        if (pendingOffer && pendingOffer.fromColor !== playerColor) {
+          room.pendingDrawOffer = null;
+          room.manualOutcome = {
+            result: "draw",
+            resultLabel: "Draw agreed",
+            drawReason: "agreed",
+            status: {
+              code: "draw-agreed",
+              message: "Draw agreed.",
+              outcomeLabel: "Draw agreed",
+              drawReason: "agreed"
+            }
+          };
+        } else if (pendingOffer && pendingOffer.fromColor === playerColor) {
+          throw new Error("Draw offer already sent. Waiting for opponent response.");
+        } else {
+          room.pendingDrawOffer = {
+            fromColor: playerColor,
+            offeredAt: Date.now()
+          };
+        }
+
+        room.updatedAt = new Date().toISOString();
+        if (room.manualOutcome) {
+          clearDisconnectForfeitTimer(room);
+        }
+
+        const eventName = room.manualOutcome ? "draw-agreed" : "draw-offered";
+
+        callback({
+          ok: true,
+          state: {
+            roomId,
+            youAre: playerColor,
+            players: getPublicPlayers(room),
+            phase: hasBothPlayers(room) ? "active" : "waiting",
+            game: buildPerspectiveState(room, playerColor),
+            event: eventName
+          }
+        });
+
+        emitRoomState(io, room, {
+          event: eventName,
+          offeredBy: playerColor
+        });
+      } catch (error) {
+        callback({
+          ok: false,
+          message: error.message || "Unable to agree draw."
         });
       }
     });
@@ -518,13 +703,16 @@ const attachRealtimeHub = (io) => {
 
         const snapshot = serializeGame(room.chess);
 
-        if (snapshot.isGameOver) {
+        if (snapshot.isGameOver || room.manualOutcome) {
           throw new Error("The game is already over.");
         }
 
         if (snapshot.turn !== playerColor) {
           throw new Error("It is not your turn.");
         }
+
+        const hadPendingDrawOffer = Boolean(room.pendingDrawOffer);
+        room.pendingDrawOffer = null;
 
         const move = applyMove(room.chess, {
           from: payload.from,
@@ -549,6 +737,7 @@ const attachRealtimeHub = (io) => {
         callback({ ok: true, state });
         emitRoomState(io, room, {
           event: "move",
+          drawOfferDeclinedByMove: hadPendingDrawOffer,
           lastMove: {
             from: move.from,
             to: move.to,
@@ -651,4 +840,62 @@ const attachRealtimeHub = (io) => {
 
 module.exports = {
   attachRealtimeHub
+};
+
+const clearDisconnectForfeitTimer = (room) => {
+  if (room.disconnectState?.timerId) {
+    clearTimeout(room.disconnectState.timerId);
+  }
+
+  room.disconnectState = null;
+};
+
+const buildDisconnectForfeitOutcome = (winnerColor) => ({
+  result: winnerColor === "white" ? "white-win" : "black-win",
+  resultLabel: "Disconnect timeout",
+  drawReason: null,
+  status: {
+    code: "timeout",
+    message: `${winnerColor === "white" ? "White" : "Black"} wins on disconnect timeout.`,
+    outcomeLabel: "Disconnect timeout"
+  }
+});
+
+const scheduleDisconnectForfeit = (io, room, disconnectedColor) => {
+  clearDisconnectForfeitTimer(room);
+
+  if (!disconnectedColor) {
+    return;
+  }
+
+  const opponentColor = disconnectedColor === "white" ? "black" : "white";
+
+  if (!room.players[opponentColor]?.socketId) {
+    return;
+  }
+
+  const snapshot = serializeGame(room.chess);
+  if (snapshot.isGameOver || room.manualOutcome) {
+    return;
+  }
+
+  const reconnectDeadlineAt = Date.now() + RECONNECT_WINDOW_MS;
+  room.disconnectState = {
+    disconnectedColor,
+    reconnectDeadlineAt,
+    timerId: setTimeout(() => {
+      const stillDisconnected = !room.players[disconnectedColor]?.socketId;
+
+      if (!stillDisconnected || room.manualOutcome) {
+        return;
+      }
+
+      room.manualOutcome = buildDisconnectForfeitOutcome(opponentColor);
+      room.updatedAt = new Date().toISOString();
+      clearDisconnectForfeitTimer(room);
+      emitRoomState(io, room, {
+        event: "disconnect-forfeit"
+      });
+    }, RECONNECT_WINDOW_MS)
+  };
 };

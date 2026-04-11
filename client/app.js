@@ -87,10 +87,12 @@ const authPasswordInput = document.getElementById("auth-password");
 const authDisplayNameInput = document.getElementById("auth-display-name");
 const loginButton = document.getElementById("login-button");
 const registerButton = document.getElementById("register-button");
+const authContinueGuestButton = document.getElementById("auth-continue-guest-button");
 const authUserView = document.getElementById("auth-user-view");
 const authUserDisplay = document.getElementById("auth-user-display");
 const authUserEmail = document.getElementById("auth-user-email");
 const logoutButton = document.getElementById("logout-button");
+const hallLogoutButton = document.getElementById("hall-logout-button");
 const soloLobbyButton = document.getElementById("solo-lobby-button");
 const multiplayerLobbyButton = document.getElementById("multiplayer-lobby-button");
 const multiplayerGateway = document.getElementById("multiplayer-gateway");
@@ -102,7 +104,9 @@ const multiplayerStatusCopy = document.getElementById("multiplayer-status-copy")
 const multiplayerPresencePill = document.getElementById("multiplayer-presence-pill");
 const multiplayerPlayerList = document.getElementById("multiplayer-player-list");
 const multiplayerInviteList = document.getElementById("multiplayer-invite-list");
+const multiplayerCreateRoomButton = document.getElementById("mp-create-room-button");
 const multiplayerCreateGameButton = document.getElementById("mp-create-game-button");
+const multiplayerRejoinGameButton = document.getElementById("mp-rejoin-game-button");
 const multiplayerRoomIdInput = document.getElementById("mp-room-id-input");
 const multiplayerJoinGameButton = document.getElementById("mp-join-game-button");
 const multiplayerRoomIdLabel = document.getElementById("mp-room-id-label");
@@ -530,12 +534,15 @@ const getMultiplayerActorPayload = () => {
 
 const renderMultiplayerRealtimeControls = () => {
   if (multiplayerRoomIdLabel) {
-    multiplayerRoomIdLabel.textContent = state.multiplayer.roomId
-      ? `Room: ${state.multiplayer.roomId}`
-      : "Room: -";
+    const hasRoom = Boolean(state.multiplayer.roomId);
+    multiplayerRoomIdLabel.classList.toggle("hidden", !hasRoom);
+    multiplayerRoomIdLabel.textContent = hasRoom
+      ? `Room ID: ${state.multiplayer.roomId}`
+      : "";
   }
 
   if (multiplayerConnectionStatus) {
+    multiplayerConnectionStatus.classList.toggle("hidden", !state.multiplayer.connected);
     const queueSuffix = state.multiplayer.queued
       ? ` queued for Blitz 5${
           state.multiplayer.queuePosition
@@ -552,8 +559,8 @@ const renderMultiplayerRealtimeControls = () => {
             ? "queued"
           : "idle";
     multiplayerConnectionStatus.textContent = state.multiplayer.connected
-      ? `Multiplayer socket: connected (${phaseLabel})${queueSuffix}`
-      : "Multiplayer socket: disconnected.";
+      ? `Socket connected (${phaseLabel})${queueSuffix}`
+      : "";
   }
 };
 
@@ -828,9 +835,40 @@ const ensureMultiplayerSocket = () => {
     applyMultiplayerSocketState(socketState);
 
     if (socketState?.event === "opponent-disconnected") {
+      const remainingSeconds = Number.isFinite(Date.parse(socketState.reconnectDeadlineAt || ""))
+        ? Math.max(0, Math.ceil((Date.parse(socketState.reconnectDeadlineAt) - Date.now()) / 1000))
+        : 60;
       setCoachMessage(
         "Opponent disconnected.",
-        "The room stays open. Share the same Room ID for a reconnection."
+        `Waiting ${remainingSeconds}s for reconnection. If they do not return, you win by timeout.`
+      );
+    }
+
+    if (socketState?.event === "disconnect-forfeit") {
+      setCoachMessage(
+        "Reconnect window expired.",
+        "Your opponent did not return in time. The game is awarded by timeout."
+      );
+    }
+
+    if (socketState?.event === "draw-offered") {
+      if (socketState?.offeredBy && socketState.offeredBy !== socketState?.youAre) {
+        setCoachMessage(
+          "Opponent offered a draw.",
+          "Click Offer Draw to accept, or make a move to continue the game."
+        );
+      } else {
+        setCoachMessage(
+          "Draw offer sent.",
+          "Waiting for your opponent to accept, or they can decline by moving."
+        );
+      }
+    }
+
+    if (socketState?.event === "move" && socketState?.drawOfferDeclinedByMove) {
+      setCoachMessage(
+        "Draw offer declined.",
+        "A move was played, so the game continues."
       );
     }
 
@@ -878,6 +916,19 @@ const leaveMultiplayerRoom = () => {
   state.multiplayer.color = null;
   state.multiplayer.phase = "idle";
   renderMultiplayerLobby();
+};
+
+const leaveCompletedMultiplayerGameIfNeeded = () => {
+  const hasLiveRoom = Boolean(state.multiplayer.roomId);
+  const gameIsOver = Boolean(state.game?.isGameOver);
+  const noActiveMoves = !state.game?.hasStarted || gameIsOver;
+
+  if (!hasLiveRoom || !noActiveMoves) {
+    return;
+  }
+
+  leaveMultiplayerRoom();
+  applyQueueStatusState({ queued: false });
 };
 
 const applyQueueStatusState = (queueState = {}) => {
@@ -957,6 +1008,18 @@ const handleQuickPlayClick = async () => {
   }
 
   await joinMatchmakingQueue();
+};
+
+const rejoinMultiplayerMatch = () => {
+  if (!state.multiplayer.roomId) {
+    setCoachMessage("No active multiplayer room found.", "Create or join a room to start a live match.");
+    return;
+  }
+
+  state.view = "game";
+  renderView();
+  syncActionButtons();
+  setCoachMessage("Rejoined live match.", "You are back in the active multiplayer board.");
 };
 
 const createMultiplayerRoom = async () => {
@@ -1967,6 +2030,9 @@ const renderSessionUi = () => {
     if (authUserView) {
       authUserView.classList.remove("hidden");
     }
+    if (hallLogoutButton) {
+      hallLogoutButton.classList.remove("hidden");
+    }
   } else {
     if (authSessionHeading) {
       authSessionHeading.textContent = "Sign in or create an account";
@@ -1985,6 +2051,9 @@ const renderSessionUi = () => {
     }
     if (authUserView) {
       authUserView.classList.add("hidden");
+    }
+    if (hallLogoutButton) {
+      hallLogoutButton.classList.add("hidden");
     }
   }
 
@@ -2005,8 +2074,8 @@ const syncActionButtons = () => {
 
   newGameButton.disabled = state.busy;
   saveGameButton.disabled = saveDisabled;
-  offerDrawButton.disabled = state.busy || !inProgress || realtimeMultiplayer;
-  resignButton.disabled = state.busy || !inProgress || realtimeMultiplayer;
+  offerDrawButton.disabled = state.busy || !inProgress;
+  resignButton.disabled = state.busy || !inProgress;
   difficultySelect.disabled = state.busy;
   if (timeControlSelect) {
     timeControlSelect.disabled = state.busy;
@@ -2054,6 +2123,10 @@ const syncActionButtons = () => {
     logoutButton.disabled = state.busy || !isAuthenticated();
   }
 
+  if (hallLogoutButton) {
+    hallLogoutButton.disabled = state.busy || !isAuthenticated();
+  }
+
   if (soloLobbyButton) {
     soloLobbyButton.disabled = state.busy;
   }
@@ -2085,7 +2158,22 @@ const syncActionButtons = () => {
       Boolean(state.multiplayer.roomId);
     multiplayerCreateGameButton.textContent = state.multiplayer.queued
       ? "Cancel Quick Play"
-      : "Online Quick Play";
+      : "Quick Play (Blitz 5)";
+  }
+
+  if (multiplayerRejoinGameButton) {
+    multiplayerRejoinGameButton.disabled =
+      state.busy ||
+      !state.multiplayer.connected ||
+      !Boolean(state.multiplayer.roomId);
+  }
+
+  if (multiplayerCreateRoomButton) {
+    multiplayerCreateRoomButton.disabled =
+      state.busy ||
+      !state.multiplayer.connected ||
+      state.multiplayer.queued ||
+      Boolean(state.multiplayer.roomId);
   }
 
   if (multiplayerJoinGameButton) {
@@ -2112,15 +2200,21 @@ const syncActionButtons = () => {
     state.game?.turn === state.game?.settings?.playerColor;
 
   if (hintButton) {
+    hintButton.classList.toggle("hidden", realtimeMultiplayer);
     hintButton.disabled = !canHint;
   }
 
   if (hintWhyButton) {
+    hintWhyButton.classList.toggle("hidden", realtimeMultiplayer);
     hintWhyButton.disabled =
       !canHint ||
       !state.hint.bestMove ||
       !Array.isArray(state.hint.continuation) ||
       !state.hint.continuation.length;
+  }
+
+  if (hintWhyText && realtimeMultiplayer) {
+    hintWhyText.classList.add("hidden");
   }
 };
 
@@ -2953,6 +3047,10 @@ const getGameOverBannerKey = (gameState) => {
 };
 
 const clearCompletedLiveBoard = async (gameOverKey) => {
+  if (isRealtimeMultiplayerGame()) {
+    return;
+  }
+
   if (
     state.pendingNewGame ||
     !state.game?.isGameOver ||
@@ -2996,6 +3094,11 @@ const clearCompletedLiveBoard = async (gameOverKey) => {
 };
 
 const scheduleFinishedGameReset = (gameState) => {
+  if (isRealtimeMultiplayerGame()) {
+    resetFinishedGameResetLifecycle();
+    return;
+  }
+
   const gameOverKey = getGameOverBannerKey(gameState);
 
   if (!gameOverKey || state.pendingNewGame) {
@@ -4993,6 +5096,18 @@ const resignCurrentGame = async () => {
   setBusy(true, "Ending the match by resignation...");
 
   try {
+    if (isRealtimeMultiplayerGame()) {
+      const socketState = await emitMultiplayerEvent("multiplayer:resign");
+
+      setApiHealth(true);
+      applyMultiplayerSocketState(socketState);
+      setCoachMessage(
+        "Resignation submitted.",
+        "The multiplayer game has ended."
+      );
+      return;
+    }
+
     const gameState = await request("/api/game/resign", {
       method: "POST"
     });
@@ -5014,6 +5129,26 @@ const offerDraw = async () => {
   setBusy(true, "Offering a draw...");
 
   try {
+    if (isRealtimeMultiplayerGame()) {
+      const socketState = await emitMultiplayerEvent("multiplayer:draw");
+
+      setApiHealth(true);
+      applyMultiplayerSocketState(socketState);
+
+      if (socketState?.event === "draw-agreed") {
+        setCoachMessage(
+          "Draw agreed.",
+          "The multiplayer game has ended as a draw."
+        );
+      } else {
+        setCoachMessage(
+          "Draw offer sent.",
+          "Waiting for your opponent to accept, or they can decline by moving."
+        );
+      }
+      return;
+    }
+
     const payload = await request("/api/game/draw", {
       method: "POST"
     });
@@ -5524,13 +5659,13 @@ const initialize = async () => {
   try {
     await ensureGuestSession();
     const sessionPayload = await loadSession();
-    const savedView = getSavedView();
+    const savedView = !sessionPayload?.authenticated ? null : getSavedView();
     const desiredView = sessionPayload?.authenticated
       ? savedView || "hall"
       : "auth";
 
     state.view = desiredView;
-    console.log("Session restore:", state.view);
+    console.log("Session restore:", state.view, "authenticated:", sessionPayload?.authenticated);
 
     if (sessionPayload?.authenticated) {
       if (desiredView === "game") {
@@ -5729,6 +5864,29 @@ registerButton?.addEventListener("click", () => {
     registerAccount();
 });
 logoutButton?.addEventListener("click", logoutAccount);
+hallLogoutButton?.addEventListener("click", logoutAccount);
+
+authContinueGuestButton?.addEventListener("click", async () => {
+  setBusy(true, "Continuing as guest...");
+
+  try {
+    await ensureGuestSession();
+    state.view = "hall";
+    setLobbyMode("solo");
+    renderView();
+    setApiHealth(true);
+    setCoachMessage(
+      "Guest mode active.",
+      "You can play immediately without signing in."
+    );
+  } catch (error) {
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    setBusy(false);
+  }
+});
+
 soloLobbyButton?.addEventListener("click", () => {
   setLobbyMode("solo");
 });
@@ -5767,6 +5925,7 @@ hallHistoryButton?.addEventListener("click", () => {
 
 if (backToHallButton) {
   backToHallButton.addEventListener("click", () => {
+    leaveCompletedMultiplayerGameIfNeeded();
     clearSelectedSquare();
     clearHintState();
     clearPromotionPrompt();
@@ -5861,6 +6020,14 @@ ensureMultiplayerSocket();
 
 multiplayerCreateGameButton?.addEventListener("click", () => {
   void handleQuickPlayClick();
+});
+
+multiplayerCreateRoomButton?.addEventListener("click", () => {
+  void createMultiplayerRoom();
+});
+
+multiplayerRejoinGameButton?.addEventListener("click", () => {
+  rejoinMultiplayerMatch();
 });
 
 multiplayerJoinGameButton?.addEventListener("click", () => {

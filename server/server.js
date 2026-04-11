@@ -19,6 +19,7 @@ const host = process.env.HOST || "0.0.0.0";
 const isProduction = process.env.NODE_ENV === "production";
 const clientOrigin = process.env.CLIENT_ORIGIN || `http://localhost:${port}`;
 const clientPath = path.resolve(__dirname, "..", "client");
+const modelsPath = path.resolve(__dirname, "..", "models");
 const threeBuildPath = path.resolve(__dirname, "node_modules", "three", "build");
 
 const validateProductionConfig = () => {
@@ -55,6 +56,7 @@ app.use(
 );
 app.use(express.json());
 app.use(express.static(clientPath));
+app.use("/models", express.static(modelsPath));
 app.use("/vendor/three", express.static(threeBuildPath));
 
 app.use("/api", attachRequestAuth, apiRouter);

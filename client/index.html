@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./styles-override.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
     <script src="./3d/ArcaneBoardV2.js"></script>
   </head>
   <body>
@@ -87,6 +88,11 @@
               <button id="login-button" class="button-secondary" type="button">Login</button>
               <button id="register-button" type="button">Create Account</button>
             </div>
+            <div class="cp-row">
+              <button id="auth-continue-guest-button" class="button-secondary" type="button">
+                Continue as Guest
+              </button>
+            </div>
           </div>
 
           <div id="auth-user-view" class="hidden">
@@ -114,6 +120,11 @@
               <span id="guest-subtitle" class="cp-acct-meta">Preparing guest mode...</span>
             </div>
             <span id="auth-session-pill" class="pill">Guest</span>
+          </div>
+          <div class="cp-row">
+            <button id="hall-logout-button" class="button-secondary hidden" type="button">
+              Log Out
+            </button>
           </div>
 
           <!-- Hidden compatibility elements — app.js needs these IDs in the DOM -->
@@ -244,10 +255,12 @@
                 <span class="pill">Phase 1</span>
               </div>
               <p class="card-copy">
-                Click Online Quick Play to instantly queue for a Blitz 5 match.
+                Create a private room for a friend, or jump into Blitz 5 quick play.
               </p>
               <div class="cp-row" style="margin-top: 10px">
-                <button id="mp-create-game-button" type="button">Online Quick Play</button>
+                <button id="mp-create-room-button" type="button">Create Room</button>
+                <button id="mp-create-game-button" class="button-secondary" type="button">Quick Play (Blitz 5)</button>
+                <button id="mp-rejoin-game-button" class="button-secondary" type="button">Rejoin Match</button>
               </div>
               <label class="cp-field" style="margin-top: 10px">
                 <span>Join by Room ID</span>
@@ -273,13 +286,7 @@
               <p id="mp-connection-status" class="lobby-note" style="margin-top: 4px">
                 Multiplayer socket: disconnected.
               </p>
-              <div class="lobby-actions">
-                <button class="button-secondary" type="button" disabled>Queue Soon</button>
-                <button class="button-secondary" type="button" disabled>Challenge Soon</button>
-              </div>
-              <p class="lobby-note">
-                Solo controls remain below while live matchmaking and invites are wired in.
-              </p>
+              
             </article>
 
             <article class="lobby-card">
