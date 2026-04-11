@@ -737,6 +737,7 @@ const syncBoardViewUi = () => {
     immersiveHud.setAttribute("aria-hidden", is3D ? "false" : "true");
   }
 
+  arcaneBoard3D?.setArenaGuardiansVisible?.(is3D);
   syncCoachAvatarMode();
   syncImmersiveControlsMount();
   renderImmersiveHud();
@@ -800,6 +801,7 @@ const resetBoardViewTo2D = () => {
     immersiveHud.setAttribute("aria-hidden", "true");
   }
 
+  arcaneBoard3D?.setArenaGuardiansVisible?.(false);
   syncCoachAvatarMode();
   syncImmersiveControlsMount();
   renderImmersiveHud();
@@ -6494,6 +6496,7 @@ const switchTo3D = () => {
 
   arcaneBoard3D = new ArcaneBoardV2(board3dElement);
   arcaneBoard3D.init();
+  arcaneBoard3D.setArenaGuardiansVisible?.(true);
   arcaneBoard3D.setPerspective?.(getBoardPerspectiveColor());
 
   // Sync current board position

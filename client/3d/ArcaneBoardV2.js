@@ -25,6 +25,13 @@
     q: 1.22,
     k: 1.3
   };
+  const MIN_RENDER_WIDTH = 580;
+  const MIN_RENDER_HEIGHT = 400;
+  const BOARD_CORNER_OFFSET = 3.5;
+  const GUARDIAN_OUTSET = 1.4;
+  const GUARDIAN_RAW_HEIGHT = 1.82;
+  const GUARDIAN_TARGET_HEIGHT = PIECE_MODEL_HEIGHT.p * 2;
+  const GUARDIAN_CORNER_DISTANCE = BOARD_CORNER_OFFSET + GUARDIAN_OUTSET;
 
   class ArcaneBoardV2 {
     constructor(container) {
@@ -61,6 +68,8 @@
       this._modelAssetsReady  = false;
       this._latestBoardState  = null;
       this._positionVersion   = 0;
+      this._curtainMesh       = null;
+      this.arenaGuardians     = null;
     }
 
     // ─────────────────────────────────────────
@@ -78,6 +87,7 @@
       this._setupLights();
       this._buildEnvironment();
       this._buildBoardSquares();
+      this._buildArenaGuardians();
       this._initModelAssets();
       this.container.addEventListener('click', this._boundClick);
       window.addEventListener('resize', this._boundResize);
@@ -235,8 +245,80 @@
       this.camera.lookAt(0, 0, 0);
     }
 
+    setArenaGuardiansVisible(visible = true) {
+      if (!this.arenaGuardians) return;
+      this.arenaGuardians.visible = Boolean(visible);
+    }
+
+    /**
+     * Drop a dark plane from above to cover the board over 800 ms (ease-in).
+     * onCoveredCallback fires at the 600 ms mark so the CSS overlay can fade in
+     * while the curtain is still descending.
+     */
+    showGameEndCurtain(onCoveredCallback) {
+      const T = this._T;
+      if (!T || !this.scene) return;
+
+      this.clearGameEndCurtain();
+
+      const geo = new T.PlaneGeometry(18, 18);
+      const mat = new T.MeshBasicMaterial({
+        color: 0x0a0d14,
+        opacity: 0,
+        transparent: true,
+        depthWrite: false,
+        side: T.DoubleSide
+      });
+      const curtain = new T.Mesh(geo, mat);
+      curtain.rotation.x = -Math.PI / 2;   // lay flat over XZ plane
+      curtain.position.set(0, 14, 0);       // start high above board
+      curtain.renderOrder = 999;
+      this.scene.add(curtain);
+      this._curtainMesh = curtain;
+
+      const dur    = 800;
+      const startY = 14;
+      const endY   = 0.5;
+      const t0     = performance.now();
+      let callbackFired = false;
+
+      const step = (now) => {
+        if (this._curtainMesh !== curtain) return; // cleared externally
+        const elapsed = now - t0;
+        const raw  = Math.min(elapsed / dur, 1);
+        const ease = raw * raw; // ease-in
+
+        curtain.position.y   = startY + (endY - startY) * ease;
+        curtain.material.opacity = 0.92 * ease;
+
+        if (!callbackFired && elapsed >= 600) {
+          callbackFired = true;
+          onCoveredCallback && onCoveredCallback();
+        }
+
+        if (raw < 1) {
+          requestAnimationFrame(step);
+        } else {
+          curtain.position.y      = endY;
+          curtain.material.opacity = 0.92;
+        }
+      };
+      requestAnimationFrame(step);
+    }
+
+    /** Remove the game-end curtain mesh from the scene and dispose it. */
+    clearGameEndCurtain() {
+      if (this._curtainMesh) {
+        this.scene.remove(this._curtainMesh);
+        this._curtainMesh.geometry.dispose();
+        this._curtainMesh.material.dispose();
+        this._curtainMesh = null;
+      }
+    }
+
     /** Tear down renderer, remove from DOM */
     destroy() {
+      this.clearGameEndCurtain();
       cancelAnimationFrame(this._animFrameId);
       this.container.removeEventListener('click', this._boundClick);
       window.removeEventListener('resize', this._boundResize);
@@ -254,6 +336,7 @@
       this.pieces.clear();
       this.squareMeshes.clear();
       this.hintIndicators = [];
+      this.arenaGuardians = null;
     }
 
     // ─────────────────────────────────────────
@@ -262,8 +345,7 @@
 
     _setupRenderer() {
       const T = this._T;
-      const w = this.container.clientWidth  || 480;
-      const h = this.container.clientHeight || 480;
+      const { width: w, height: h } = this._getViewportSize();
       this.renderer = new T.WebGLRenderer({ antialias: true });
       this.renderer.setSize(w, h);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -287,8 +369,7 @@
 
     _setupCamera() {
       const T = this._T;
-      const w = this.container.clientWidth  || 480;
-      const h = this.container.clientHeight || 480;
+      const { width: w, height: h } = this._getViewportSize();
       this.camera = new T.PerspectiveCamera(48, w / h, 0.1, 60);
       this.camera.position.set(
         0,
@@ -442,6 +523,156 @@
         m.position.set(p[0], 0.05, p[2]);
         this.scene.add(m);
       });
+    }
+
+    _buildArenaGuardians() {
+      const T = this._T;
+      this.arenaGuardians = new T.Group();
+      this.arenaGuardians.name = 'arenaGuardians';
+
+      [
+        { x: -GUARDIAN_CORNER_DISTANCE, z: -GUARDIAN_CORNER_DISTANCE },
+        { x: GUARDIAN_CORNER_DISTANCE, z: -GUARDIAN_CORNER_DISTANCE },
+        { x: GUARDIAN_CORNER_DISTANCE, z: GUARDIAN_CORNER_DISTANCE }
+      ].forEach(({ x, z }) => {
+        const guardian = this._createArenaGuardian();
+        guardian.position.set(x, 0, z);
+        guardian.rotation.y = Math.atan2(-x, -z);
+        this.arenaGuardians.add(guardian);
+      });
+
+      [
+        { z: -GUARDIAN_CORNER_DISTANCE, rotationY: 0 },
+        { z: GUARDIAN_CORNER_DISTANCE, rotationY: Math.PI }
+      ].forEach(({ z, rotationY }) => {
+        const torch = this._createArenaTorch();
+        torch.position.set(0, 0, z);
+        torch.rotation.y = rotationY;
+        this.arenaGuardians.add(torch);
+      });
+
+      this.scene.add(this.arenaGuardians);
+      this.setArenaGuardiansVisible(true);
+    }
+
+    _createArenaGuardian() {
+      const T = this._T;
+      const guardian = new T.Group();
+      const guardianScale = GUARDIAN_TARGET_HEIGHT / GUARDIAN_RAW_HEIGHT;
+
+      const robe = new T.Mesh(
+        new T.CylinderGeometry(0.12, 0.28, 0.9, 8),
+        new T.MeshLambertMaterial({ color: 0x0d1117 })
+      );
+      robe.position.y = 0.45;
+      robe.castShadow = true;
+      guardian.add(robe);
+
+      const trim = new T.Mesh(
+        new T.TorusGeometry(0.14, 0.015, 6, 12),
+        new T.MeshLambertMaterial({ color: 0xc9a84c })
+      );
+      trim.rotation.x = Math.PI / 2;
+      trim.position.y = 0.71;
+      trim.castShadow = true;
+      guardian.add(trim);
+
+      const head = new T.Mesh(
+        new T.SphereGeometry(0.14, 8, 8),
+        new T.MeshLambertMaterial({ color: 0xc8a478 })
+      );
+      head.position.y = 1.02;
+      head.castShadow = true;
+      guardian.add(head);
+
+      const hat = new T.Mesh(
+        new T.ConeGeometry(0.18, 0.42, 8),
+        new T.MeshLambertMaterial({ color: 0x060a10 })
+      );
+      hat.position.y = 1.3;
+      hat.castShadow = true;
+      guardian.add(hat);
+
+      const beltOrb = new T.Mesh(
+        new T.SphereGeometry(0.06, 8, 8),
+        new T.MeshLambertMaterial({
+          color: 0x1a3a6a,
+          emissive: 0x1a3a6a,
+          emissiveIntensity: 0.8
+        })
+      );
+      beltOrb.position.set(0.12, 0.42, 0.17);
+      guardian.add(beltOrb);
+
+      const staffGroup = new T.Group();
+      staffGroup.position.set(0.34, 0, 0.06);
+      staffGroup.rotation.z = 0.15;
+
+      const staff = new T.Mesh(
+        new T.CylinderGeometry(0.025, 0.025, 1.6, 6),
+        new T.MeshLambertMaterial({ color: 0x3a2510 })
+      );
+      staff.position.y = 0.8;
+      staff.castShadow = true;
+      staffGroup.add(staff);
+
+      const staffTip = new T.Mesh(
+        new T.ConeGeometry(0.06, 0.22, 6),
+        new T.MeshLambertMaterial({ color: 0x888888 })
+      );
+      staffTip.position.y = 1.71;
+      staffTip.castShadow = true;
+      staffGroup.add(staffTip);
+
+      guardian.add(staffGroup);
+      guardian.scale.setScalar(guardianScale);
+      return guardian;
+    }
+
+    _createArenaTorch() {
+      const T = this._T;
+      const torch = new T.Group();
+
+      const post = new T.Mesh(
+        new T.CylinderGeometry(0.04, 0.04, 0.7, 8),
+        new T.MeshLambertMaterial({ color: 0x3a2510 })
+      );
+      post.position.y = 0.35;
+      post.castShadow = true;
+      torch.add(post);
+
+      const arm = new T.Mesh(
+        new T.CylinderGeometry(0.02, 0.02, 0.3, 6),
+        new T.MeshLambertMaterial({ color: 0x5a4520 })
+      );
+      arm.rotation.x = Math.PI / 2;
+      arm.position.set(0, 0.66, 0.15);
+      arm.castShadow = true;
+      torch.add(arm);
+
+      const flame = new T.Mesh(
+        new T.SphereGeometry(0.1, 8, 8),
+        new T.MeshLambertMaterial({
+          color: 0xe07820,
+          emissive: 0xe05010,
+          emissiveIntensity: 1.4
+        })
+      );
+      flame.position.set(0, 0.72, 0.3);
+      torch.add(flame);
+      this.flameMeshes.push(flame);
+
+      const light = new T.PointLight(0xe07820, 1.0, 5);
+      light.castShadow = false;
+      light.position.copy(flame.position);
+      torch.add(light);
+      this.torchLights.push({
+        light,
+        base: 1.0,
+        phase: this.torchLights.length * 0.87
+      });
+
+      return torch;
     }
 
     // ─────────────────────────────────────────
@@ -922,8 +1153,7 @@
     }
 
     _onResize() {
-      const w = this.container.clientWidth;
-      const h = this.container.clientHeight;
+      const { width: w, height: h } = this._getViewportSize();
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(w, h);
@@ -938,6 +1168,20 @@
         if (child.geometry && !child.userData?.sharedGeometry) child.geometry.dispose();
         if (child.material) child.material.dispose();
       });
+    }
+
+    _getViewportSize() {
+      const bounds = this.container?.getBoundingClientRect?.();
+      const width = Math.max(
+        Math.round(bounds?.width || this.container?.clientWidth || 480),
+        MIN_RENDER_WIDTH
+      );
+      const height = Math.max(
+        Math.round(bounds?.height || this.container?.clientHeight || 480),
+        MIN_RENDER_HEIGHT
+      );
+
+      return { width, height };
     }
   }
 
