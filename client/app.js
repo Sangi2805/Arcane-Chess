@@ -47,6 +47,9 @@ const boardFeedbackMessage = document.getElementById("board-feedback-message");
 const claimDrawButton = document.getElementById("claim-draw-button");
 const continuePlayButton = document.getElementById("continue-play-button");
 const immersiveHud = document.getElementById("immersive-hud");
+const immersiveControls = immersiveHud?.querySelector(".immersive-controls") || null;
+const immersiveStatus = immersiveHud?.querySelector(".immersive-status") || null;
+const immersiveControlsHost = document.getElementById("immersive-controls-host");
 const immersiveExitButton = document.getElementById("immersive-exit-button");
 const immersiveNewGameButton = document.getElementById("immersive-new-game-button");
 const immersiveOfferDrawButton = document.getElementById("immersive-offer-draw-button");
@@ -59,6 +62,16 @@ const gameOverMessage = document.getElementById("game-over-message");
 const moveListElement = document.getElementById("move-list");
 const statusText = document.getElementById("status-text");
 const coachPanel = document.getElementById("coach-panel");
+const coachAvatarImage = document.getElementById("coach-avatar-image");
+const coachWizardSvg = document.getElementById("coach-wizard-svg");
+const wizardSide = document.getElementById("wizard-side");
+const wizardStateLabel = document.getElementById("wizard-state-label");
+const coachWizardMouth = document.getElementById("coach-wizard-mouth");
+const coachWizardBrowLeft = document.getElementById("coach-wizard-brow-left");
+const coachWizardBrowRight = document.getElementById("coach-wizard-brow-right");
+const coachWizardIrisLeft = document.getElementById("coach-wizard-iris-left");
+const coachWizardIrisRight = document.getElementById("coach-wizard-iris-right");
+const coachWizardOrb = document.getElementById("coach-wizard-orb");
 const coachFooter = coachPanel?.querySelector(".coach-footer");
 const coachBubbleCopy = coachPanel?.querySelector(".coach-bubble-copy");
 const feedbackText = document.getElementById("feedback-text");
@@ -353,6 +366,8 @@ let coachMotionAnimationTimeoutId = null;
 let coachSpeakingAnimationTimeoutId = null;
 let coachMotionSequence = 0;
 let lastRenderedCoachMotionPulseId = null;
+let wizardReactionDelayTimeoutId = null;
+let wizardStateResetTimeoutId = null;
 let gameOverBannerTimeoutId = null;
 let activeGameOverBannerKey = "";
 let dismissedGameOverBannerKey = "";
@@ -365,6 +380,7 @@ let activeBoardFeedbackKey = "";
 let dismissedBoardFeedbackKey = "";
 let activeMiniBoardTooltip = null;
 let miniBoardHoverToken = 0;
+let gameEndCinematicShownForKey = "";
 
 // ── Replay state ─────────────────────────────────────────────────────────
 let replayFenSteps = [];
@@ -375,6 +391,323 @@ let replayPlayerColor = "white";
 
 const VALID_RECORD_VIEWS = new Set(["moves", "saves", "history"]);
 const VALID_LOBBY_MODES = new Set(["solo", "multiplayer"]);
+const WIZARD_STATE_CLASSNAMES = [
+  "st-idle",
+  "st-check",
+  "st-capture",
+  "st-blunder",
+  "st-win",
+  "st-think"
+];
+const WIZARD_STATE_LABELS = {
+  "st-idle": "IDLE",
+  "st-check": "CHECK",
+  "st-capture": "CAPTURE",
+  "st-blunder": "BLUNDER",
+  "st-win": "WIN",
+  "st-think": "THINKING"
+};
+let currentWizardState = "st-idle";
+const WIZARD_STATE_VISUALS = {
+  "st-idle": {
+    mouth: "M92 156 Q110 168 128 156",
+    browLeft: "M70 112 Q87 104 100 112",
+    browRight: "M120 112 Q133 104 150 112",
+    iris: "#6abcf5",
+    irisLeft: { cx: 88, cy: 130, r: 4 },
+    irisRight: { cx: 132, cy: 130, r: 4 },
+    orb: "#c7a06e",
+    orbStroke: "#f0c269"
+  },
+  "st-check": {
+    mouth: "M104 150 C104 141 116 141 116 150 C116 159 104 159 104 150 Z",
+    browLeft: "M70 104 Q86 94 100 101",
+    browRight: "M120 101 Q134 94 150 104",
+    iris: "#f4c8b8",
+    irisLeft: { cx: 88, cy: 130, r: 6 },
+    irisRight: { cx: 132, cy: 130, r: 6 },
+    orb: "#cb514a",
+    orbStroke: "#ef8a7f"
+  },
+  "st-capture": {
+    mouth: "M88 148 Q110 182 132 148",
+    browLeft: "M70 108 Q86 96 100 102",
+    browRight: "M120 102 Q134 96 150 108",
+    iris: "#ffefb4",
+    irisLeft: { cx: 89, cy: 129, r: 5 },
+    irisRight: { cx: 131, cy: 129, r: 5 },
+    orb: "#f0c269",
+    orbStroke: "#ffe6a3"
+  },
+  "st-blunder": {
+    mouth: "M90 166 Q110 142 130 166",
+    browLeft: "M68 118 Q84 100 100 96",
+    browRight: "M120 96 Q136 100 152 118",
+    iris: "#d8cdf2",
+    irisLeft: { cx: 88, cy: 132, r: 4 },
+    irisRight: { cx: 132, cy: 132, r: 4 },
+    orb: "#4d396f",
+    orbStroke: "#8b6cc6"
+  },
+  "st-win": {
+    mouth: "M84 146 Q110 188 136 146",
+    browLeft: "M70 108 Q86 96 100 102",
+    browRight: "M120 102 Q134 96 150 108",
+    iris: "#fff4bf",
+    irisLeft: { cx: 89, cy: 128, r: 5 },
+    irisRight: { cx: 131, cy: 128, r: 5 },
+    orb: "#ffd978",
+    orbStroke: "#fff2be"
+  },
+  "st-think": {
+    mouth: "M92 159 L128 159",
+    browLeft: "M68 106 Q84 96 100 102",
+    browRight: "M122 113 Q136 108 150 112",
+    iris: "#d7cbfb",
+    irisLeft: { cx: 85, cy: 126, r: 5 },
+    irisRight: { cx: 129, cy: 126, r: 5 },
+    orb: "#9f8ad0",
+    orbStroke: "#d7cbfb"
+  }
+};
+
+const clearWizardReactionDelayTimer = () => {
+  if (!wizardReactionDelayTimeoutId) {
+    return;
+  }
+
+  window.clearTimeout(wizardReactionDelayTimeoutId);
+  wizardReactionDelayTimeoutId = null;
+};
+
+const clearWizardStateResetTimer = () => {
+  if (!wizardStateResetTimeoutId) {
+    return;
+  }
+
+  window.clearTimeout(wizardStateResetTimeoutId);
+  wizardStateResetTimeoutId = null;
+};
+
+const clearWizardStateTimers = () => {
+  clearWizardReactionDelayTimer();
+  clearWizardStateResetTimer();
+};
+
+const scheduleWizardIdleReset = (delayMs = 2000) => {
+  clearWizardStateResetTimer();
+  wizardStateResetTimeoutId = window.setTimeout(() => {
+    setWizardIdleState();
+    wizardStateResetTimeoutId = null;
+  }, delayMs);
+};
+
+const scheduleWizardReactionState = (
+  nextState,
+  {
+    delayMs = 900,
+    holdMs = 2000,
+    force = false
+  } = {}
+) => {
+  if (!WIZARD_STATE_VISUALS[nextState]) {
+    return;
+  }
+
+  clearWizardStateTimers();
+  const effectiveDelay = currentWizardState === "st-think" ? delayMs : 0;
+
+  wizardReactionDelayTimeoutId = window.setTimeout(() => {
+    wizardReactionDelayTimeoutId = null;
+    setWizardState(nextState, {
+      force
+    });
+    if (holdMs > 0 && nextState !== "st-win") {
+      scheduleWizardIdleReset(holdMs);
+    }
+  }, effectiveDelay);
+};
+
+const setWizardThinkingState = ({ preserveTimers = false } = {}) => {
+  if (!preserveTimers) {
+    clearWizardStateTimers();
+  }
+
+  if (currentWizardState !== "st-think") {
+    setWizardState("st-think", {
+      force: true
+    });
+  }
+};
+
+const setWizardIdleState = () => {
+  clearWizardStateTimers();
+  setWizardState("st-idle", {
+    force: true
+  });
+};
+
+const isHumanBlunderFeedback = (coachFeedback = {}) => {
+  const classification = String(coachFeedback.classification || "").trim().toLowerCase();
+  const motionState = String(coachFeedback.motionState || "").trim().toLowerCase();
+  const advisoryCopy = `${coachFeedback.threatSummary || ""} ${coachFeedback.message || ""}`
+    .trim()
+    .toLowerCase();
+
+  return (
+    coachFeedback.source === "player" &&
+    (
+      Number(coachFeedback.evalDrop) > 1.5 ||
+      ["blunder", "miss"].includes(classification) ||
+      motionState === "blunder" ||
+      advisoryCopy.includes("hanging")
+    )
+  );
+};
+
+const syncCoachAvatarMode = () => {
+  if (!coachPanel) {
+    return;
+  }
+
+  const showWizard = state.view === "game";
+  coachPanel.classList.add("coach-avatar-relocated");
+  coachPanel.classList.remove("coach-avatar-3d");
+  if (coachAvatarImage) {
+    coachAvatarImage.setAttribute("aria-hidden", "true");
+  }
+  if (coachWizardSvg) {
+    coachWizardSvg.setAttribute("aria-hidden", showWizard ? "false" : "true");
+  }
+  wizardSide?.setAttribute("aria-hidden", showWizard ? "false" : "true");
+};
+
+const syncImmersiveControlsMount = () => {
+  if (!immersiveControls || !immersiveHud) {
+    return;
+  }
+
+  const mountInPanel =
+    state.view === "game" &&
+    state.boardViewMode === "3d" &&
+    immersiveControlsHost;
+
+  if (mountInPanel) {
+    if (immersiveControls.parentElement !== immersiveControlsHost) {
+      immersiveControlsHost.appendChild(immersiveControls);
+    }
+    immersiveControls.dataset.mount = "panel";
+    immersiveControlsHost.classList.remove("hidden");
+    immersiveControlsHost.setAttribute("aria-hidden", "false");
+    return;
+  }
+
+  if (immersiveControls.parentElement !== immersiveHud) {
+    immersiveHud.insertBefore(immersiveControls, immersiveStatus || null);
+  }
+  immersiveControls.dataset.mount = "hud";
+  immersiveControlsHost?.classList.add("hidden");
+  immersiveControlsHost?.setAttribute("aria-hidden", "true");
+};
+
+const setWizardState = (nextState) => {
+  if (!coachWizardSvg || !WIZARD_STATE_VISUALS[nextState]) {
+    return;
+  }
+
+  WIZARD_STATE_CLASSNAMES.forEach((stateClass) => {
+    coachWizardSvg.classList.remove(stateClass);
+  });
+  coachWizardSvg.classList.add(nextState);
+  currentWizardState = nextState;
+  wizardSide?.setAttribute("data-state", nextState);
+  if (wizardStateLabel) {
+    wizardStateLabel.textContent = WIZARD_STATE_LABELS[nextState] || "IDLE";
+  }
+
+  const visual = WIZARD_STATE_VISUALS[nextState];
+  coachWizardMouth?.setAttribute("d", visual.mouth);
+  coachWizardBrowLeft?.setAttribute("d", visual.browLeft);
+  coachWizardBrowRight?.setAttribute("d", visual.browRight);
+  coachWizardIrisLeft?.setAttribute("fill", visual.iris);
+  coachWizardIrisRight?.setAttribute("fill", visual.iris);
+  coachWizardIrisLeft?.setAttribute("cx", String(visual.irisLeft.cx));
+  coachWizardIrisLeft?.setAttribute("cy", String(visual.irisLeft.cy));
+  coachWizardIrisLeft?.setAttribute("r", String(visual.irisLeft.r));
+  coachWizardIrisRight?.setAttribute("cx", String(visual.irisRight.cx));
+  coachWizardIrisRight?.setAttribute("cy", String(visual.irisRight.cy));
+  coachWizardIrisRight?.setAttribute("r", String(visual.irisRight.r));
+  coachWizardOrb?.setAttribute("fill", visual.orb);
+  coachWizardOrb?.setAttribute("stroke", visual.orbStroke);
+};
+
+const isPlayerInCheckState = (gameState = state.game) => {
+  const playerColor = gameState?.settings?.playerColor;
+  const checkedColor = gameState?.ruleState?.checkedColor;
+
+  if (checkedColor && playerColor) {
+    return checkedColor === playerColor;
+  }
+
+  return gameState?.status?.code === "check" && gameState?.turn === playerColor;
+};
+
+const applyWizardStateFromGameState = (gameState = state.game, options = {}) => {
+  if (!gameState) {
+    return;
+  }
+
+  const source = options.source || "system";
+
+  if (gameState.isGameOver) {
+    const playerWon =
+      (gameState.result === "white-win" && gameState.settings?.playerColor === "white") ||
+      (gameState.result === "black-win" && gameState.settings?.playerColor === "black");
+    if (playerWon) {
+      clearWizardStateTimers();
+      setWizardState("st-win", {
+        force: true
+      });
+    } else if (gameState.result !== "draw") {
+      scheduleWizardReactionState("st-blunder", {
+        delayMs: 900,
+        holdMs: 3000,
+        force: true
+      });
+    } else {
+      setWizardIdleState();
+    }
+    return;
+  }
+
+  if (source === "engine") {
+    if (isPlayerInCheckState(gameState)) {
+      scheduleWizardReactionState("st-check", {
+        delayMs: 600,
+        holdMs: 2000,
+        force: true
+      });
+      return;
+    }
+
+    if (
+      currentWizardState === "st-think" &&
+      !wizardReactionDelayTimeoutId &&
+      !wizardStateResetTimeoutId
+    ) {
+      setWizardIdleState();
+    }
+    return;
+  }
+
+  if (source === "human" && isPlayerInCheckState(gameState)) {
+    scheduleWizardReactionState("st-check", {
+      delayMs: 600,
+      holdMs: 2000
+    });
+  }
+};
+
 const syncBoardViewUi = () => {
   const is3D = state.boardViewMode === "3d";
   state.viewMode = is3D ? "3D" : "2D";
@@ -404,6 +737,8 @@ const syncBoardViewUi = () => {
     immersiveHud.setAttribute("aria-hidden", is3D ? "false" : "true");
   }
 
+  syncCoachAvatarMode();
+  syncImmersiveControlsMount();
   renderImmersiveHud();
 };
 
@@ -464,6 +799,10 @@ const resetBoardViewTo2D = () => {
   if (immersiveHud) {
     immersiveHud.setAttribute("aria-hidden", "true");
   }
+
+  syncCoachAvatarMode();
+  syncImmersiveControlsMount();
+  renderImmersiveHud();
 
   toggle3dBtn?.classList.remove("mode-btn-active");
   toggle2dBtn?.classList.add("mode-btn-active");
@@ -2009,7 +2348,7 @@ const renderSessionUi = () => {
       authSessionHeading.textContent = "Account connected";
     }
     if (authSessionPill) {
-      authSessionPill.textContent = "Signed In";
+      authSessionPill.textContent = "SIGNED IN";
       authSessionPill.className = "pill pill-ok";
     }
     if (authSessionCopy) {
@@ -2158,7 +2497,7 @@ const syncActionButtons = () => {
       Boolean(state.multiplayer.roomId);
     multiplayerCreateGameButton.textContent = state.multiplayer.queued
       ? "Cancel Quick Play"
-      : "Quick Play (Blitz 5)";
+      : "Quick Play · Blitz 5";
   }
 
   if (multiplayerRejoinGameButton) {
@@ -2501,7 +2840,7 @@ const renderClockCard = ({
   const isPlayerSide = color === playerColor;
   const rowElement = cardElement.closest(".board-player-row");
   const startingTimeLabel =
-    timeControl.id === "untimed" ? "Untimed" : formatClockMs(timeControl.baseMs);
+    timeControl.id === "untimed" ? "UNTIMED" : formatClockMs(timeControl.baseMs);
 
   labelElement.textContent = roleLabel;
   sideElement.textContent = `${formatColor(color)} pieces`;
@@ -2509,7 +2848,7 @@ const renderClockCard = ({
 
   if (!clockDisplayState?.enabled) {
     timeElement.textContent = startingTimeLabel;
-    metaElement.textContent = timeControl.id === "untimed" ? "Untimed" : "";
+    metaElement.textContent = "";
     metaElement.classList.toggle("hidden", !metaElement.textContent);
     cardElement.dataset.active = "false";
     cardElement.dataset.urgent = "false";
@@ -3490,12 +3829,30 @@ const renderMoveRows = (
 
 const renderMoveList = () => {
   destroyMiniBoardTooltip();
+  const liveMoveList = state.game?.moveList || state.game?.moves || [];
   moveListElement.innerHTML = renderMoveRows(
-    state.game?.moveList || [],
+    liveMoveList,
     "No moves have been recorded yet.",
     state.game?.lastMove || null
   );
   attachChronicleWhyHoverListeners();
+};
+
+const getSavedGameHeadline = (game = {}) => {
+  const playerName = getLocalPlayerDisplayName();
+  const isMultiplayerSave = game.actorType === "multiplayer";
+
+  if (isMultiplayerSave) {
+    const opponentName =
+      game.opponentName ||
+      game.opponentDisplayName ||
+      game.opponent ||
+      "Opponent";
+    return `${playerName} vs ${opponentName}`;
+  }
+
+  const difficulty = game.difficulty || "Easy";
+  return `${playerName} vs Stockfish · ${difficulty}`;
 };
 
 const renderSavedGames = () => {
@@ -3529,9 +3886,7 @@ const renderSavedGames = () => {
       (game) => `
         <article class="record-card">
           <div class="record-card-copy">
-            <strong>${escapeHtml(formatColor(game.playerColor))} vs ${escapeHtml(
-              formatColor(game.engineColor)
-            )}</strong>
+            <strong>${escapeHtml(getSavedGameHeadline(game))}</strong>
             <span>${escapeHtml(game.status.message)}</span>
             <span>${escapeHtml(game.difficulty)} difficulty - ${escapeHtml(
               `${game.moveCount} moves`
@@ -4425,13 +4780,15 @@ const renderBoard = () => {
         squareClasses.push("square-selectable");
       }
 
+      const file = entry.square?.[0] || "";
+      const rank = entry.square?.[1] || "";
       const fileLabel =
         index >= 56
-          ? `<span class="square-label square-file">${entry.file}</span>`
+          ? `<span class="square-label square-file">${file}</span>`
           : "";
       const rankLabel =
         index % 8 === 0
-          ? `<span class="square-label square-rank">${entry.rank}</span>`
+          ? `<span class="square-label square-rank">${rank}</span>`
           : "";
       const pieceDescription = entry.piece
         ? `${formatColor(entry.piece.color)} ${PIECE_LABELS[entry.piece.type] || "piece"}`
@@ -4700,6 +5057,124 @@ const setCoachStateForGame = (gameState, options = {}) => {
   state.coach = getDefaultCoachState(gameState, options.coachContext);
 };
 
+// ── Game-End Cinematic ───────────────────────────────────────────────────────
+
+const getCinematicResultLabel = (gameState) => {
+  const code = gameState?.status?.code;
+  if (code === "checkmate")  return "CHECKMATE";
+  if (code === "resignation") return "RESIGNED";
+  if (code === "timeout")    return "TIMEOUT";
+  if (code === "stalemate")  return "STALEMATE";
+  if (gameState?.result === "draw") return "DRAW";
+  return "GAME OVER";
+};
+
+const getCinematicSubtitle = (gameState) => {
+  if (gameState?.result === "draw") return "The duel ends in a draw";
+  const winner = getWinnerFromResult(gameState?.result);
+  return winner ? `${winner} wins the duel` : "";
+};
+
+const dismissGameEndOverlay = () => {
+  const overlay = document.getElementById("game-end-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("gec-visible");
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  // Wipe inner content after the fade-out (if any transition is running)
+  setTimeout(() => { overlay.innerHTML = ""; }, 500);
+  gameEndCinematicShownForKey = "";
+};
+
+const showGameEndOverlay = (gameState) => {
+  const overlay = document.getElementById("game-end-overlay");
+  if (!overlay) return;
+
+  // Clear any prior content before repopulating
+  overlay.innerHTML = "";
+
+  const resultLabel = getCinematicResultLabel(gameState);
+  const subtitle    = getCinematicSubtitle(gameState);
+
+  // Build 24 gold particle divs with random trajectories
+  let particlesHtml = "";
+  for (let i = 0; i < 24; i++) {
+    const leftPct  = (8  + Math.random() * 84).toFixed(1);
+    const tx       = ((Math.random() * 200) - 100).toFixed(1);
+    const ty       = (70 + Math.random() * 150).toFixed(1);
+    const delay    = (Math.random() * 0.9).toFixed(2);
+    const duration = (1.4 + Math.random() * 0.9).toFixed(2);
+    particlesHtml += `<div class="gec-particle" style="left:${leftPct}%;--tx:${tx}px;--ty:${ty}px;animation-delay:${delay}s;animation-duration:${duration}s"></div>`;
+  }
+
+  overlay.innerHTML = `
+    <div class="gec-particles" aria-hidden="true">${particlesHtml}</div>
+    <div class="gec-seal" aria-hidden="true">
+      <svg viewBox="0 0 100 100" width="68" height="68" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="50,4 61,35 95,35 67,57 77,88 50,68 23,88 33,57 5,35 39,35"
+                 fill="none" stroke="#c9a84c" stroke-width="2.2" stroke-linejoin="round"/>
+        <circle cx="50" cy="50" r="21" fill="none" stroke="#c9a84c" stroke-width="1.2" opacity="0.45"/>
+      </svg>
+    </div>
+    <div class="gec-result">${escapeHtml(resultLabel)}</div>
+    ${subtitle ? `<div class="gec-subtitle">${escapeHtml(subtitle)}</div>` : ""}
+    <div class="gec-actions">
+      <button type="button" class="gec-btn gec-btn-primary"  id="gec-rematch-btn">Rematch</button>
+      <button type="button" class="gec-btn gec-btn-secondary" id="gec-hall-btn">Back to Hall</button>
+    </div>
+  `;
+
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  // Force a reflow so the CSS transition fires on the next frame
+  // eslint-disable-next-line no-unused-expressions
+  overlay.offsetHeight;
+  overlay.classList.add("gec-visible");
+
+  const rematchBtn = overlay.querySelector("#gec-rematch-btn");
+  const hallBtn    = overlay.querySelector("#gec-hall-btn");
+
+  rematchBtn?.addEventListener("click", () => {
+    dismissGameEndOverlay();
+    arcaneBoard3D?.clearGameEndCurtain?.();
+    startNewGame();
+  });
+
+  hallBtn?.addEventListener("click", () => {
+    dismissGameEndOverlay();
+    arcaneBoard3D?.clearGameEndCurtain?.();
+    leaveCompletedMultiplayerGameIfNeeded();
+    clearSelectedSquare();
+    clearHintState();
+    clearPromotionPrompt();
+    hideBoardFeedback();
+    resetBoardViewTo2D();
+    state.view = "hall";
+    renderView();
+  });
+};
+
+/**
+ * Entry point called once per unique game-over event.
+ * In 3D: drops the Three.js curtain first, then fades in the HTML overlay.
+ * In 2D: skips the curtain and shows the HTML overlay directly.
+ */
+const triggerGameEndCinematic = (gameState) => {
+  const key = getGameOverBannerKey(gameState);
+  if (!key || gameEndCinematicShownForKey === key) return;
+  gameEndCinematicShownForKey = key;
+
+  if (state.boardViewMode === "3d" && arcaneBoard3D?.showGameEndCurtain) {
+    // Curtain fires callback at the 600 ms mark; overlay fades in from there
+    arcaneBoard3D.showGameEndCurtain(() => showGameEndOverlay(gameState));
+  } else {
+    // 2D: brief delay so board can finish any final render
+    setTimeout(() => showGameEndOverlay(gameState), 120);
+  }
+};
+
+// ── End Game-End Cinematic ────────────────────────────────────────────────────
+
 const applyGameState = (gameState, options = {}) => {
   state.pendingNewGame = false;
   ensureLiveChronicleForGame(gameState);
@@ -4722,6 +5197,12 @@ const applyGameState = (gameState, options = {}) => {
     clearHintState();
   }
   setCoachStateForGame(gameState, options);
+  applyWizardStateFromGameState(gameState, {
+    source: options.wizardSource
+  });
+  if (gameState?.isGameOver) {
+    triggerGameEndCinematic(gameState);
+  }
   if (!options.skipRender) {
     render();
   }
@@ -4984,6 +5465,9 @@ const startNewGame = async () => {
     leaveMultiplayerRoom();
   }
 
+  dismissGameEndOverlay();
+  arcaneBoard3D?.clearGameEndCurtain?.();
+
   state.pendingNewGame = true;
   beginMoveCycle();
   resetFinishedGameResetLifecycle();
@@ -5017,6 +5501,7 @@ const startNewGame = async () => {
       coachContext: "new-game",
       skipRender: true
     });
+    setWizardIdleState();
     console.log("Switching to game view");
     state.view = "game";
     renderView();
@@ -5222,6 +5707,7 @@ const continueAfterDrawClaim = async () => {
   setBusy(true, "Continuing the duel...");
 
   try {
+    setWizardThinkingState();
     const payload = await request("/api/game/engine", {
       method: "POST"
     });
@@ -5230,14 +5716,19 @@ const continueAfterDrawClaim = async () => {
 
     if (payload.game.isGameOver) {
       setCoachStageRank(COACH_STAGE_GAME_OVER);
-      applyGameState(payload.game);
+      applyGameState(payload.game, {
+        wizardSource: "engine"
+      });
       void refreshCollections();
     } else if (payload.game.coachFeedback) {
       setCoachStageRank(COACH_STAGE_ENGINE_FEEDBACK);
-      applyGameState(payload.game);
+      applyGameState(payload.game, {
+        wizardSource: "engine"
+      });
     } else {
       applyGameState(payload.game, {
-        preserveCoach: true
+        preserveCoach: true,
+        wizardSource: "engine"
       });
     }
   } catch (error) {
@@ -5333,6 +5824,12 @@ const loadCoachFeedback = async ({ cycleId, moveToken, plyIndex = null }) => {
     }
 
     setApiHealth(true);
+    if (isHumanBlunderFeedback(payload.coachFeedback)) {
+      scheduleWizardReactionState("st-blunder", {
+        delayMs: 900,
+        holdMs: 3000
+      });
+    }
     setCoachStageRank(COACH_STAGE_PLAYER_FEEDBACK);
     if (isLocalPlayerPly(plyIndex, state.game)) {
       upsertLocalMoveChronicleRating(plyIndex, payload.coachFeedback);
@@ -5353,6 +5850,9 @@ const loadCoachFeedback = async ({ cycleId, moveToken, plyIndex = null }) => {
 
 const loadEngineReply = async ({ cycleId, moveToken }) => {
   try {
+    setWizardThinkingState({
+      preserveTimers: true
+    });
     const payload = await request("/api/game/engine", {
       method: "POST",
       body: JSON.stringify({ moveToken })
@@ -5366,10 +5866,13 @@ const loadEngineReply = async ({ cycleId, moveToken }) => {
 
     if (payload.game.isGameOver) {
       setCoachStageRank(COACH_STAGE_GAME_OVER);
-      applyGameState(payload.game);
+      applyGameState(payload.game, {
+        wizardSource: "engine"
+      });
     } else {
       applyGameState(payload.game, {
-        preserveCoach: true
+        preserveCoach: true,
+        wizardSource: "engine"
       });
 
       if (payload.game.coachFeedback && canApplyCoachStage(cycleId, COACH_STAGE_ENGINE_FEEDBACK)) {
@@ -5432,6 +5935,7 @@ const submitMove = async ({ from, to, promotion, previewMove }) => {
   });
   syncActionButtons();
   state.coach = getThinkingCoachState();
+  setWizardThinkingState();
   renderCoachPanel();
 
   try {
@@ -5445,7 +5949,14 @@ const submitMove = async ({ from, to, promotion, previewMove }) => {
     }
 
     setApiHealth(true);
+    if (previewMove?.captured) {
+      scheduleWizardReactionState("st-capture", {
+        delayMs: 900,
+        holdMs: 2000
+      });
+    }
     applyGameState(payload.game, {
+      wizardSource: "human",
       coachState:
         payload.pending?.engine
           ? getThinkingCoachState()
@@ -5586,6 +6097,7 @@ const handleSquareClick = (square) => {
   if (!state.selectedSquare) {
     if (ownPiece && state.game.legalMoves[square]?.length) {
       setSelectedSquare(square);
+      setWizardThinkingState();
       setCoachMessage(
         `Selected ${square}. Choose a legal destination.`,
         "Highlighted targets show every legal landing square for that piece."
@@ -5603,6 +6115,7 @@ const handleSquareClick = (square) => {
 
   if (state.selectedSquare === square) {
     setSelectedSquare(square);
+    setWizardThinkingState();
     setCoachMessage(
       `Selected ${square}.`,
       "Choose one of the highlighted targets to complete the move."
@@ -5613,6 +6126,7 @@ const handleSquareClick = (square) => {
 
   if (ownPiece && state.game.legalMoves[square]?.length) {
     setSelectedSquare(square);
+    setWizardThinkingState();
     setCoachMessage(
       `Selected ${square}.`,
       "Choose one of the highlighted targets to complete the move."
@@ -5925,6 +6439,8 @@ hallHistoryButton?.addEventListener("click", () => {
 
 if (backToHallButton) {
   backToHallButton.addEventListener("click", () => {
+    dismissGameEndOverlay();
+    arcaneBoard3D?.clearGameEndCurtain?.();
     leaveCompletedMultiplayerGameIfNeeded();
     clearSelectedSquare();
     clearHintState();
@@ -5971,11 +6487,9 @@ const switchTo3D = () => {
   if (arcaneBoard3D) return; // already in 3D
   state.boardViewMode = "3d";
   state.viewMode = "3D";
-  boardElement.classList.add("hidden");
-  board3dElement.classList.remove("hidden");
-  board3dElement.removeAttribute("aria-hidden");
-  toggle2dBtn.classList.remove("mode-btn-active");
-  toggle3dBtn.classList.add("mode-btn-active");
+  syncBoardViewUi();
+  toggle2dBtn?.classList.remove("mode-btn-active");
+  toggle3dBtn?.classList.add("mode-btn-active");
   if (boardModeLabel) boardModeLabel.textContent = "3D duel interface";
 
   arcaneBoard3D = new ArcaneBoardV2(board3dElement);
