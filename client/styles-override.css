@@ -258,6 +258,117 @@ input:focus,select:focus{border-color:rgba(184,149,42,.4)!important;outline:none
 }
 .controls-panel,.move-list,.record-list{scrollbar-color:var(--bg5) transparent!important;scrollbar-width:thin!important}
 
+/* ── Game End Cinematic Overlay ─────────────────────────────────── */
+#game-end-overlay{
+  position:absolute;
+  inset:0;
+  z-index:200;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .45s ease;
+  overflow:hidden;
+  border-radius:inherit;
+}
+#game-end-overlay.hidden{display:none!important}
+#game-end-overlay.gec-visible{
+  opacity:1;
+  pointer-events:auto;
+}
+
+/* Particle container */
+.gec-particles{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  overflow:hidden;
+}
+.gec-particle{
+  position:absolute;
+  top:0;
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:#c9a84c;
+  box-shadow:0 0 4px rgba(201,168,76,.7);
+  animation:gec-fall linear both;
+  will-change:transform,opacity;
+}
+@keyframes gec-fall{
+  0%  {transform:translate(0,0) scale(1);opacity:1}
+  70% {opacity:.65}
+  100%{transform:translate(var(--tx,0px),var(--ty,80px)) scale(.4);opacity:0}
+}
+
+/* Rotating seal */
+.gec-seal{
+  animation:gec-spin 10s linear infinite;
+  filter:drop-shadow(0 0 10px rgba(201,168,76,.5));
+  flex-shrink:0;
+}
+@keyframes gec-spin{to{transform:rotate(360deg)}}
+
+/* Result headline */
+.gec-result{
+  font-family:'Cinzel',serif;
+  font-size:clamp(16px,3.6vw,26px);
+  font-weight:600;
+  color:#c9a84c;
+  letter-spacing:.15em;
+  text-shadow:0 0 22px rgba(201,168,76,.55),0 2px 8px rgba(0,0,0,.7);
+  text-align:center;
+  line-height:1.1;
+}
+
+/* Subtitle */
+.gec-subtitle{
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:10px;
+  font-variant:small-caps;
+  letter-spacing:.06em;
+  color:rgba(230,222,202,.55);
+  text-align:center;
+}
+
+/* Action buttons */
+.gec-actions{
+  display:flex;
+  gap:10px;
+  margin-top:6px;
+}
+.gec-btn{
+  font-family:'Inter',system-ui,sans-serif!important;
+  font-size:11px!important;
+  font-weight:600!important;
+  letter-spacing:.03em!important;
+  height:30px!important;
+  padding:0 20px!important;
+  border-radius:6px!important;
+  cursor:pointer;
+  border:1px solid transparent;
+  transition:background .15s,color .15s;
+  white-space:nowrap;
+}
+.gec-btn-primary{
+  background:#c9a84c!important;
+  color:#0e0c03!important;
+  border-color:transparent!important;
+}
+.gec-btn-primary:hover{background:#d4b85e!important}
+.gec-btn-secondary{
+  background:rgba(255,255,255,.07)!important;
+  color:rgba(230,222,202,.72)!important;
+  border-color:rgba(255,255,255,.13)!important;
+}
+.gec-btn-secondary:hover{
+  background:rgba(255,255,255,.12)!important;
+  color:rgba(230,222,202,1)!important;
+}
+
 /* ============================================================
    CRITICAL FIXES — screenshot pass
    ============================================================ */
@@ -1308,6 +1419,53 @@ body {
   min-height: 320px !important;
 }
 
+/* Requested UI fixes */
+body.view-auth .board-mode-toggle {
+  display: none !important;
+}
+
+#hall-logout-button {
+  border: 0.5px solid rgba(255, 239, 217, 0.14) !important;
+  padding: 11px var(--space-3) !important;
+  font-size: var(--font-size-body) !important;
+  color: var(--text) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)) !important;
+}
+
+body.view-game #game-view {
+  align-items: center !important;
+}
+
+#game-view .board-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+#game-view .board-back-button {
+  align-self: flex-start !important;
+}
+
+#game-view .board-stage {
+  margin: auto !important;
+}
+
+#game-view .eval-bar {
+  display: none !important;
+}
+
+#game-view .board-shell-wrap {
+  gap: 0 !important;
+}
+
+#game-view .board:not(.hidden) .square-label {
+  color: rgba(201, 168, 76, 0.6) !important;
+  background: transparent !important;
+  text-shadow: none !important;
+  display: inline-block !important;
+}
+
 /* Keep the eval bar aligned with the smaller board */
 #game-view .eval-bar {
   width: 10px !important;
@@ -1329,4 +1487,953 @@ body {
 .move-list,
 .record-list {
   overflow-y: auto !important;
+}
+
+#coach-panel .coach-wizard-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+#coach-panel.coach-avatar-3d .coach-avatar-image {
+  display: none;
+}
+
+#coach-panel.coach-avatar-3d .coach-wizard-svg {
+  display: block;
+  opacity: 1;
+}
+
+#coach-panel.coach-avatar-3d .coach-wizard-svg.st-think {
+  animation: wizard-think-pulse 1.1s ease-in-out infinite;
+}
+
+#coach-panel.coach-avatar-3d .coach-wizard-svg.st-capture,
+#coach-panel.coach-avatar-3d .coach-wizard-svg.st-win {
+  animation: wizard-pop 380ms ease-out;
+}
+
+#coach-panel.coach-avatar-3d .coach-wizard-svg.st-check,
+#coach-panel.coach-avatar-3d .coach-wizard-svg.st-blunder {
+  animation: wizard-alert 780ms ease-in-out infinite;
+}
+
+@keyframes wizard-think-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes wizard-pop {
+  0% { transform: scale(0.96); }
+  60% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wizard-alert {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-0.9px); }
+  75% { transform: translateX(0.9px); }
+}
+
+/* ============================================================
+   PROMPT FIXES: hierarchy, hall controls, 3D board stability
+   ============================================================ */
+:root {
+  --prompt-ui-title-size: 18px;
+  --prompt-ui-label-size: 10px;
+  --prompt-ui-body-size: 13px;
+  --prompt-ui-player-size: 14px;
+  --prompt-ui-clock-size: 12px;
+  --prompt-ui-button-size: 13px;
+  --prompt-ui-title-color: #c9a84c;
+  --prompt-ui-label-color: rgba(201, 168, 76, 0.6);
+  --prompt-ui-body-color: rgba(255, 255, 255, 0.55);
+  --prompt-ui-player-color: rgba(255, 255, 255, 0.85);
+  --prompt-ui-clock-color: rgba(255, 255, 255, 0.4);
+  --immersive-side-panel-width: clamp(280px, 22vw, 336px);
+}
+
+#lobby-view .hall-hero-heading h2,
+#lobby-view .lobby-heading > strong,
+#game-view .moves-panel-heading h2,
+#game-view .controls-header h2 {
+  font-family: inherit !important;
+  font-size: var(--prompt-ui-title-size) !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--prompt-ui-title-color) !important;
+}
+
+.label,
+.cp-ilabel,
+#lobby-view .lobby-heading .label,
+#game-view .coach-heading .label,
+#game-view .record-section-header .label {
+  font-size: var(--prompt-ui-label-size) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--prompt-ui-label-color) !important;
+}
+
+.panel-subtitle,
+.card-copy,
+.lobby-note,
+.moves-panel-subtitle,
+.coach-status-line,
+.coach-message,
+.coach-explanation,
+.coach-suggestion,
+.cp-acct-meta,
+.player-row-meta,
+.clock-meta,
+#guest-subtitle,
+#mp-room-id-label,
+#mp-connection-status {
+  font-family: inherit !important;
+  font-size: var(--prompt-ui-body-size) !important;
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--prompt-ui-body-color) !important;
+}
+
+#game-view .player-row-name {
+  font-family: inherit !important;
+  font-size: var(--prompt-ui-player-size) !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+  color: var(--prompt-ui-player-color) !important;
+}
+
+#game-view .clock-time,
+#game-view .clock-display[data-untimed="true"] .clock-time {
+  font-family: inherit !important;
+  font-size: var(--prompt-ui-clock-size) !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--prompt-ui-clock-color) !important;
+}
+
+button,
+.button-secondary,
+.button-danger,
+.button-small {
+  font-family: inherit !important;
+  font-size: var(--prompt-ui-button-size) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+#hall-logout-button {
+  width: auto !important;
+  max-width: 100px !important;
+  min-height: auto !important;
+  height: auto !important;
+  padding: 6px 14px !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+  align-self: flex-start !important;
+}
+
+#mp-create-game-button {
+  white-space: nowrap !important;
+}
+
+.immersive-controls-host {
+  display: none;
+}
+
+.immersive-controls[data-mount="panel"] {
+  position: static !important;
+  inset: auto !important;
+  display: block !important;
+  width: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.immersive-controls[data-mount="panel"] .immersive-control-row {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+}
+
+.immersive-controls[data-mount="panel"] .immersive-control-row button {
+  min-width: 0 !important;
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 8px !important;
+  white-space: nowrap !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view {
+  grid-template-columns: 1fr !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-panel {
+  padding: 6px !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-stage {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+  justify-items: center !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-shell-wrap {
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1 1 auto !important;
+  gap: 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-shell {
+  width: min(calc(100vw - 12px), calc(100dvh - 120px)) !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: calc(100dvh - 120px) !important;
+  min-width: 580px !important;
+  min-height: 580px !important;
+  margin: 0 auto !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-3d,
+.shell[data-board-view-mode="3d"] #game-view .board-3d canvas {
+  min-width: 580px !important;
+  min-height: 400px !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .support-column {
+  position: fixed !important;
+  top: 10px !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  width: var(--immersive-side-panel-width) !important;
+  max-width: calc(100vw - 20px) !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 10px !important;
+  z-index: 18 !important;
+  pointer-events: auto !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view #coach-panel {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  padding: 10px 12px !important;
+  grid-template-columns: 58px minmax(0, 1fr) !important;
+  gap: 10px !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .moves-panel {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  padding: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  overflow: hidden !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .move-list,
+.shell[data-board-view-mode="3d"] #game-view .record-list {
+  max-height: none !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .game-command-strip > .game-screen-actions {
+  display: none !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .immersive-controls-host {
+  display: block !important;
+}
+
+.shell[data-board-view-mode="3d"] .immersive-status {
+  left: 10px !important;
+  right: auto !important;
+  bottom: 10px !important;
+  width: min(260px, calc(100vw - 20px)) !important;
+}
+
+/* ============================================================
+   FONT REVERT + WIZARD RELOCATION
+   ============================================================ */
+#lobby-view .hall-hero-heading h2 {
+  font-family: inherit !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+  line-height: 1.1 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: #c9a84c !important;
+}
+
+#lobby-view .lobby-heading > strong,
+#game-view .coach-title {
+  font-family: inherit !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+#game-view .moves-panel-heading h2 {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.label,
+.cp-ilabel,
+.cp-field span,
+#game-view .coach-heading .label,
+#lobby-view .hall-hero-heading .label,
+#lobby-view .lobby-heading .label {
+  font-size: 10px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: rgba(201, 168, 76, 0.55) !important;
+}
+
+.panel-subtitle,
+.card-copy,
+.lobby-note,
+.moves-panel-subtitle,
+.coach-status-line,
+.coach-explanation,
+.coach-suggestion,
+.player-row-meta,
+.clock-meta,
+.cp-acct-meta,
+#mp-room-id-label,
+#mp-connection-status {
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.coach-message {
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+button,
+.button-secondary,
+.button-danger,
+.button-small {
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+
+#game-view .player-row-name {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+#game-view .clock-display[data-untimed="true"] .clock-time {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+#guest-name {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+#guest-subtitle {
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#auth-session-pill.pill-ok {
+  font-family: var(--fm) !important;
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: rgba(201, 168, 76, 0.6) !important;
+  background: transparent !important;
+  border: 0.5px solid rgba(201, 168, 76, 0.4) !important;
+  padding: 2px 7px !important;
+  box-shadow: none !important;
+}
+
+#hall-logout-button {
+  font-size: 12px !important;
+}
+
+#game-view .board-shell-wrap {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+#game-view .board-panel,
+#game-view .board-stage {
+  overflow: visible !important;
+}
+
+#game-view .board-shell-anchor {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+#wizard-side {
+  position: absolute !important;
+  left: -110px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 100px !important;
+  height: 180px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  pointer-events: none !important;
+  z-index: 6 !important;
+}
+
+#wizard-side .coach-wizard-svg {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1 1 auto !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+}
+
+.wizard-state-label {
+  font-family: var(--fm) !important;
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  line-height: 1.2 !important;
+  color: rgba(201, 168, 76, 0.55) !important;
+  text-align: center !important;
+}
+
+#coach-panel .coach-avatar-stage {
+  justify-content: center !important;
+}
+
+#coach-panel .coach-avatar-frame {
+  width: min(100%, 76px) !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+#coach-panel .coach-avatar,
+#coach-panel .coach-avatar::before,
+#coach-panel .coach-avatar::after {
+  border-radius: 50% !important;
+}
+
+#coach-panel .coach-avatar {
+  display: grid !important;
+  place-items: center !important;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 241, 210, 0.14), transparent 60%),
+    linear-gradient(180deg, rgba(255, 233, 188, 0.08), rgba(34, 24, 18, 0.92)) !important;
+}
+
+#coach-panel .coach-avatar-orb-placeholder {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  background:
+    radial-gradient(circle at 38% 34%, rgba(255, 251, 238, 0.96), rgba(236, 199, 113, 0.88) 38%, rgba(201, 168, 76, 0.14) 100%) !important;
+  box-shadow:
+    0 0 18px rgba(201, 168, 76, 0.42),
+    0 0 34px rgba(201, 168, 76, 0.22) !important;
+  animation: coach-placeholder-orb 2.6s ease-in-out infinite !important;
+}
+
+#wizard-side .wizard-figure,
+#wizard-side .wizard-hat-group,
+#wizard-side .wizard-arm,
+#wizard-side .wizard-particles circle,
+#wizard-side .wizard-think-bubbles circle,
+#wizard-side .wizard-sweat-drop,
+#wizard-side #coach-wizard-orb {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+#wizard-side .wizard-particles circle {
+  fill: rgba(240, 194, 105, 0.72);
+  opacity: 0;
+}
+
+#wizard-side .wizard-think-bubbles circle {
+  fill: rgba(239, 235, 255, 0.95);
+  opacity: 0;
+}
+
+#wizard-side .wizard-sweat-drop {
+  fill: rgba(149, 192, 255, 0.92);
+  opacity: 0;
+}
+
+#wizard-side .wizard-arm-left {
+  transform-origin: 100% 35%;
+}
+
+#wizard-side .wizard-arm-right {
+  transform-origin: 0% 35%;
+}
+
+#wizard-side .coach-wizard-svg.st-check .wizard-figure {
+  animation: wizard-check-shake 380ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-check #coach-wizard-orb {
+  filter: drop-shadow(0 0 14px rgba(203, 81, 74, 0.75));
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-figure {
+  animation: wizard-capture-jump 720ms ease-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-hat-group {
+  animation: wizard-capture-hat 720ms ease-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-capture #coach-wizard-orb {
+  animation: wizard-orb-flash 420ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-particles circle {
+  opacity: 1;
+  animation: wizard-capture-particle-burst 520ms ease-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-blunder .wizard-figure {
+  animation: wizard-blunder-recoil 860ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-blunder .wizard-sweat-drop {
+  opacity: 1;
+  animation: wizard-sweat-fall 700ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-blunder #coach-wizard-orb {
+  filter: drop-shadow(0 0 16px rgba(77, 57, 111, 0.7));
+}
+
+#wizard-side .coach-wizard-svg.st-win .wizard-figure {
+  animation: wizard-win-bounce 760ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-win .wizard-hat-group {
+  animation: wizard-hat-bounce 520ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-win .wizard-arm-left {
+  animation: wizard-arm-left-win 520ms ease-in-out infinite alternate;
+}
+
+#wizard-side .coach-wizard-svg.st-win .wizard-arm-right {
+  animation: wizard-arm-right-win 520ms ease-in-out infinite alternate;
+}
+
+#wizard-side .coach-wizard-svg.st-win #coach-wizard-orb {
+  animation: wizard-orb-pulse-fast 320ms ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-win .wizard-particles circle {
+  opacity: 1;
+  animation: wizard-particle-rain 1.1s linear infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-think .wizard-think-bubbles circle {
+  opacity: 1;
+  animation: wizard-think-bubble 1.2s ease-in-out infinite;
+}
+
+#wizard-side .coach-wizard-svg.st-think .wizard-think-bubbles circle:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+#wizard-side .coach-wizard-svg.st-think .wizard-think-bubbles circle:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+#wizard-side .coach-wizard-svg.st-think #coach-wizard-orb {
+  filter: drop-shadow(0 0 12px rgba(159, 138, 208, 0.55));
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-particles circle:nth-child(2),
+#wizard-side .coach-wizard-svg.st-win .wizard-particles circle:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-particles circle:nth-child(3),
+#wizard-side .coach-wizard-svg.st-win .wizard-particles circle:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-particles circle:nth-child(4),
+#wizard-side .coach-wizard-svg.st-win .wizard-particles circle:nth-child(4) {
+  animation-delay: 0.24s;
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-particles circle:nth-child(5),
+#wizard-side .coach-wizard-svg.st-win .wizard-particles circle:nth-child(5) {
+  animation-delay: 0.32s;
+}
+
+#wizard-side .coach-wizard-svg.st-capture .wizard-particles circle:nth-child(6),
+#wizard-side .coach-wizard-svg.st-win .wizard-particles circle:nth-child(6) {
+  animation-delay: 0.4s;
+}
+
+@keyframes coach-placeholder-orb {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 18px rgba(201, 168, 76, 0.42),
+      0 0 34px rgba(201, 168, 76, 0.22);
+  }
+
+  50% {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 24px rgba(201, 168, 76, 0.56),
+      0 0 42px rgba(201, 168, 76, 0.28);
+  }
+}
+
+@keyframes wizard-check-shake {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  50% { transform: rotate(10deg); }
+  75% { transform: rotate(-8deg); }
+}
+
+@keyframes wizard-capture-jump {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-25px); }
+  60% { transform: translateY(-8px); }
+}
+
+@keyframes wizard-capture-hat {
+  0%, 100% { transform: rotate(0deg); }
+  35%, 70% { transform: rotate(-15deg); }
+}
+
+@keyframes wizard-orb-flash {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(240, 194, 105, 0.4));
+  }
+
+  50% {
+    transform: scale(1.34);
+    filter: drop-shadow(0 0 22px rgba(255, 225, 149, 0.95));
+  }
+}
+
+@keyframes wizard-capture-particle-burst {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 0.2;
+  }
+
+  35% {
+    transform: scale(2) translateY(-7px);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.35) translateY(4px);
+    opacity: 0;
+  }
+}
+
+@keyframes wizard-blunder-recoil {
+  0%, 100% { transform: translateX(0) scaleX(0.9); }
+  35% { transform: translateX(10px) scaleX(0.9); }
+  70% { transform: translateX(-8px) scaleX(0.9); }
+}
+
+@keyframes wizard-sweat-fall {
+  0% {
+    transform: translateY(0) scale(1.9, 1.25);
+    opacity: 0.15;
+  }
+
+  45% {
+    transform: translateY(10px) scale(2, 1.35);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(18px) scale(1.6, 1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes wizard-win-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-18px); }
+  65% { transform: translateY(-8px); }
+}
+
+@keyframes wizard-hat-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  40% { transform: translateY(-10px) rotate(-8deg); }
+  70% { transform: translateY(2px) rotate(6deg); }
+}
+
+@keyframes wizard-arm-left-win {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-55deg) translateY(-8px); }
+}
+
+@keyframes wizard-arm-right-win {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(55deg) translateY(-8px); }
+}
+
+@keyframes wizard-orb-pulse-fast {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 12px rgba(255, 217, 120, 0.55));
+  }
+
+  50% {
+    transform: scale(1.42);
+    filter: drop-shadow(0 0 26px rgba(255, 235, 170, 0.96));
+  }
+}
+
+@keyframes wizard-particle-rain {
+  0% {
+    transform: translateY(-16px) scale(1.2);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(34px) scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes wizard-think-bubble {
+  0%, 100% {
+    transform: translateY(0) scale(0.92);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateY(-9px) scale(1.24);
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+   REQUESTED FONT SYSTEM
+   ============================================================ */
+:root {
+  --requested-logo-font: "Cinzel Decorative", serif;
+  --requested-display-font: "Cinzel", serif;
+  --requested-coach-font: "IM Fell English", serif;
+  --requested-ui-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.hero-title-group h1 {
+  font-family: var(--requested-logo-font) !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+  line-height: 1.04 !important;
+  letter-spacing: 0.02em !important;
+}
+
+#lobby-view .hall-hero-heading h2,
+.gec-result,
+#game-over-title {
+  font-family: var(--requested-display-font) !important;
+  font-size: 20px !important;
+  font-weight: 500 !important;
+  line-height: 1.1 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: none !important;
+  color: #c9a84c !important;
+}
+
+#lobby-view .lobby-heading > strong,
+#game-view .coach-title,
+#game-view .moves-panel-heading h2 {
+  font-family: var(--requested-display-font) !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.label,
+.cp-ilabel,
+#lobby-view .hall-hero-heading .label,
+#lobby-view .lobby-heading .label,
+#game-view .coach-heading .label,
+#game-view .record-section-header .label,
+#promotion-panel .label {
+  font-family: var(--requested-display-font) !important;
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: rgba(201, 168, 76, 0.55) !important;
+}
+
+#feedback-text,
+.coach-message {
+  font-family: var(--requested-coach-font) !important;
+  font-style: italic !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.42 !important;
+  color: rgba(255, 255, 255, 0.68) !important;
+}
+
+.panel-subtitle,
+.card-copy,
+.lobby-note,
+.moves-panel-subtitle,
+.coach-status-line,
+.coach-explanation,
+.coach-suggestion,
+.cp-acct-meta,
+.record-card-copy span,
+.detail-copy,
+.history-pgn,
+.board-feedback span,
+.game-over-banner span,
+.immersive-status-meta,
+.replay-step-label,
+.player-row-meta,
+.clock-meta,
+#mp-room-id-label,
+#mp-connection-status,
+#feedback-explanation,
+#status-text,
+#guest-subtitle {
+  font-family: var(--requested-ui-font) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+button,
+.button-secondary,
+.button-danger,
+.button-small {
+  font-family: var(--requested-display-font) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.15 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.pill,
+#api-health,
+#game-view .clock-display[data-untimed="true"] .clock-time {
+  font-family: var(--requested-ui-font) !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: rgba(255, 255, 255, 0.32) !important;
+}
+
+.wizard-state-label {
+  font-family: var(--requested-display-font) !important;
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0.15em !important;
+  text-transform: uppercase !important;
+  color: rgba(201, 168, 76, 0.45) !important;
 }
