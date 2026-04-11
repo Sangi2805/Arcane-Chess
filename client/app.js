@@ -26,6 +26,9 @@ const PIECES = {
 
 const difficultySelect = document.getElementById("difficulty-select");
 const newGameButton = document.getElementById("new-game-button");
+const hintButton = document.getElementById("hint-button");
+const hintWhyButton = document.getElementById("hint-why-button");
+const hintWhyText = document.getElementById("hint-why-text");
 const saveGameButton = document.getElementById("save-game-button");
 const offerDrawButton = document.getElementById("offer-draw-button");
 const resignButton = document.getElementById("resign-button");
@@ -44,6 +47,7 @@ const boardFeedbackMessage = document.getElementById("board-feedback-message");
 const claimDrawButton = document.getElementById("claim-draw-button");
 const continuePlayButton = document.getElementById("continue-play-button");
 const immersiveHud = document.getElementById("immersive-hud");
+const immersiveExitButton = document.getElementById("immersive-exit-button");
 const immersiveNewGameButton = document.getElementById("immersive-new-game-button");
 const immersiveOfferDrawButton = document.getElementById("immersive-offer-draw-button");
 const immersiveResignButton = document.getElementById("immersive-resign-button");
@@ -61,6 +65,8 @@ const feedbackText = document.getElementById("feedback-text");
 const feedbackBadge = document.getElementById("feedback-classification");
 const feedbackExplanation = document.getElementById("feedback-explanation");
 const feedbackSuggestion = document.getElementById("feedback-suggestion");
+const feedbackWhyToggle = document.getElementById("feedback-why-toggle");
+const feedbackWhyLines = document.getElementById("feedback-why-lines");
 const feedbackThinking = document.getElementById("feedback-thinking");
 const playerSide = document.getElementById("player-side");
 const engineSide = document.getElementById("engine-side");
@@ -145,7 +151,7 @@ const evalBarBlack = document.getElementById('eval-bar-black');
 const evalBarWhite = document.getElementById('eval-bar-white');
 
 const DEFAULT_COACH_EXPLANATION =
-  "I review each completed move against Stockfish.";
+  "Use Hint when you want engine guidance for the current position.";
 const THINKING_COACH_EXPLANATION =
   "Your move is down. The reply is forming now.";
 const GAME_OVER_BANNER_DURATION_MS = 4200;
@@ -280,6 +286,7 @@ const state = {
   },
   game: null,
   boardViewMode: "2d",
+  viewMode: "2D",
   board3D: null,
   selectedSquare: null,
   pendingPromotion: null,
@@ -315,7 +322,21 @@ const state = {
     message: "Preparing the board.",
     explanation: DEFAULT_COACH_EXPLANATION,
     bestMove: null,
+    whyLines: [],
+    whyExpanded: false,
     animate: false
+  },
+  hint: {
+    bestMove: null,
+    continuation: [],
+    fen: "",
+    summary: "",
+    whyExpanded: false
+  },
+  liveChronicle: {
+    gameId: null,
+    ratingsByPly: {},
+    expandedWhyPly: null
   },
   lobbyMode: window.localStorage.getItem(LOBBY_MODE_STORAGE_KEY) || "solo",
   activeRecordView:
@@ -335,6 +356,11 @@ let finishedGameResetTimeoutId = null;
 let activeFinishedGameResetKey = "";
 let clockDisplayIntervalId = null;
 let clockSyncIntervalId = null;
+let boardFeedbackTimeoutId = null;
+let activeBoardFeedbackKey = "";
+let dismissedBoardFeedbackKey = "";
+let activeMiniBoardTooltip = null;
+let miniBoardHoverToken = 0;
 
 // ── Replay state ─────────────────────────────────────────────────────────
 let replayFenSteps = [];
@@ -346,8 +372,8 @@ let replayPlayerColor = "white";
 const VALID_RECORD_VIEWS = new Set(["moves", "saves", "history"]);
 const VALID_LOBBY_MODES = new Set(["solo", "multiplayer"]);
 const syncBoardViewUi = () => {
-  state.boardViewMode = "2d";
-  const is3D = false;
+  const is3D = state.boardViewMode === "3d";
+  state.viewMode = is3D ? "3D" : "2D";
 
   document.body.dataset.boardViewMode = state.boardViewMode;
   document.body.classList.toggle("board-mode-3d", is3D);
@@ -377,8 +403,75 @@ const syncBoardViewUi = () => {
   renderImmersiveHud();
 };
 
-const syncBoard3D = () => {
+const syncBoard3D = ({ refreshPerspective = false } = {}) => {
   syncBoardViewUi();
+
+  if (!arcaneBoard3D || state.boardViewMode !== "3d" || !state.game?.board) {
+    return;
+  }
+
+  if (refreshPerspective) {
+    arcaneBoard3D.setPerspective?.(getBoardPerspectiveColor());
+  }
+  arcaneBoard3D.setPosition(state.game.board);
+  const legalForSelected =
+    state.selectedSquare && state.game.legalMoves
+      ? (state.game.legalMoves[state.selectedSquare] || []).map((move) => move.to)
+      : [];
+  arcaneBoard3D.highlightSquares(
+    state.selectedSquare,
+    legalForSelected,
+    state.hint?.bestMove || null
+  );
+
+  if (state.game.lastMove) {
+    arcaneBoard3D.setLastMove(
+      state.game.lastMove.from,
+      state.game.lastMove.to
+    );
+  }
+};
+
+const resetBoardViewTo2D = () => {
+  state.boardViewMode = "2d";
+  state.viewMode = "2D";
+
+  document.body.classList.remove("board-mode-3d");
+  document.body.dataset.boardViewMode = "2d";
+
+  if (shellElement) {
+    shellElement.dataset.boardViewMode = "2d";
+  }
+
+  if (boardShell) {
+    boardShell.dataset.viewMode = "2d";
+  }
+
+  if (boardElement) {
+    boardElement.classList.remove("hidden");
+    boardElement.setAttribute("aria-hidden", "false");
+  }
+
+  if (board3dElement) {
+    board3dElement.classList.add("hidden");
+    board3dElement.setAttribute("aria-hidden", "true");
+  }
+
+  if (immersiveHud) {
+    immersiveHud.setAttribute("aria-hidden", "true");
+  }
+
+  toggle3dBtn?.classList.remove("mode-btn-active");
+  toggle2dBtn?.classList.add("mode-btn-active");
+
+  if (boardModeLabel) {
+    boardModeLabel.textContent = "2D duel interface";
+  }
+
+  if (arcaneBoard3D) {
+    arcaneBoard3D.destroy();
+    arcaneBoard3D = null;
+  }
 };
 
 const escapeHtml = (value) =>
@@ -1049,6 +1142,8 @@ const createCoachState = (overrides = {}) => ({
   message: "Preparing the board.",
   explanation: DEFAULT_COACH_EXPLANATION,
   bestMove: null,
+  whyLines: [],
+  whyExpanded: false,
   motionState: "idle",
   motionSettleTo: null,
   motionDurationMs: 0,
@@ -1299,47 +1394,214 @@ const getGameOverCoachState = (gameState) => {
   });
 };
 
-const getCoachLead = (classification) => {
-  switch (classification) {
-    case "Good Move":
-      return "That keeps your plan intact.";
-    case "Inaccuracy":
-      return "A little drift from the cleanest line.";
-    case "Blunder":
-      return "That is a major slip.";
-    case "Engine Reply":
-      return "The engine found a precise continuation.";
-    case "Engine Pressure":
-      return "Watch carefully - that move improves its position.";
-    case "Engine Threat":
-      return "The reply is strong. You may need to defend.";
-    default:
-      return "Arcane Coach is watching the board.";
+const COACH_CLASSIFICATION_SET = new Set([
+  "blunder",
+  "miss",
+  "mistake",
+  "inaccuracy",
+  "good",
+  "excellent",
+  "best",
+  "great",
+  "brilliant"
+]);
+
+const CHRONICLE_BADGE_SYMBOLS = {
+  blunder: "??",
+  miss: "?!",
+  mistake: "?",
+  inaccuracy: "!",
+  good: "!",
+  excellent: "!!",
+  best: "★",
+  great: "!!",
+  brilliant: "★!"
+};
+
+const getPlyIndexForTurnColor = (turn, color) => {
+  const normalizedTurn = Number(turn);
+
+  if (!Number.isFinite(normalizedTurn) || normalizedTurn < 1) {
+    return null;
+  }
+
+  return (normalizedTurn - 1) * 2 + (color === "black" ? 1 : 0);
+};
+
+const getPlyColor = (plyIndex) => (plyIndex % 2 === 0 ? "white" : "black");
+
+const isLocalPlayerPly = (plyIndex, gameState = state.game) => {
+  if (!Number.isInteger(plyIndex) || plyIndex < 0) {
+    return false;
+  }
+
+  const localPlayerColor = gameState?.settings?.playerColor;
+
+  if (localPlayerColor !== "white" && localPlayerColor !== "black") {
+    return false;
+  }
+
+  return getPlyColor(plyIndex) === localPlayerColor;
+};
+
+const getLastPlyIndexFromMoveList = (moveList = []) => {
+  if (!Array.isArray(moveList) || !moveList.length) {
+    return null;
+  }
+
+  const lastTurn = moveList.at(-1);
+
+  if (!lastTurn) {
+    return null;
+  }
+
+  if (lastTurn.black) {
+    return getPlyIndexForTurnColor(lastTurn.turn, "black");
+  }
+
+  if (lastTurn.white) {
+    return getPlyIndexForTurnColor(lastTurn.turn, "white");
+  }
+
+  return null;
+};
+
+const normalizeChronicleWhyLines = (whyLines = []) =>
+  Array.isArray(whyLines)
+    ? whyLines
+        .map((line = {}) => {
+          const san = Array.isArray(line.san)
+            ? line.san.filter((move) => typeof move === "string" && move.trim().length > 0)
+            : [];
+
+          return {
+            rank: Number(line.rank) || null,
+            eval: typeof line.eval === "number" ? line.eval : null,
+            san
+          };
+        })
+        .filter((line) => line.san.length > 0)
+    : [];
+
+const resetLiveChronicleState = (gameId = null) => {
+  state.liveChronicle = {
+    gameId,
+    ratingsByPly: {},
+    expandedWhyPly: null
+  };
+};
+
+const ensureLiveChronicleForGame = (gameState = {}) => {
+  const nextGameId = gameState?.id || null;
+
+  if (!nextGameId) {
+    resetLiveChronicleState();
+    return;
+  }
+
+  if (state.liveChronicle.gameId !== nextGameId) {
+    resetLiveChronicleState(nextGameId);
   }
 };
 
+const sanitizeLiveChronicleRatingsForLocalPlayer = (gameState = state.game) => {
+  const entries = Object.entries(state.liveChronicle.ratingsByPly || {});
+
+  entries.forEach(([plyKey]) => {
+    const plyIndex = Number.parseInt(plyKey, 10);
+
+    if (!isLocalPlayerPly(plyIndex, gameState)) {
+      delete state.liveChronicle.ratingsByPly[plyKey];
+      if (state.liveChronicle.expandedWhyPly === plyIndex) {
+        state.liveChronicle.expandedWhyPly = null;
+      }
+    }
+  });
+};
+
+const applyChronicleMoveMetadata = (gameState) => {
+  if (!gameState) {
+    return gameState;
+  }
+
+  sanitizeLiveChronicleRatingsForLocalPlayer(gameState);
+
+  const moveList = Array.isArray(gameState.moveList) ? gameState.moveList : [];
+  const enrichedMoveList = moveList.map((move) => {
+    const nextMove = { ...move };
+    const whitePly = getPlyIndexForTurnColor(move.turn, "white");
+    const blackPly = getPlyIndexForTurnColor(move.turn, "black");
+    const whiteMeta = whitePly !== null ? state.liveChronicle.ratingsByPly[whitePly] : null;
+    const blackMeta = blackPly !== null ? state.liveChronicle.ratingsByPly[blackPly] : null;
+
+    if (whiteMeta && isLocalPlayerPly(whitePly, gameState)) {
+      nextMove.whiteRating = whiteMeta.classification;
+      nextMove.whiteWhyLines = whiteMeta.whyLines;
+      nextMove.whiteWhyFen = whiteMeta.beforeFen || "";
+    }
+
+    if (blackMeta && isLocalPlayerPly(blackPly, gameState)) {
+      nextMove.blackRating = blackMeta.classification;
+      nextMove.blackWhyLines = blackMeta.whyLines;
+      nextMove.blackWhyFen = blackMeta.beforeFen || "";
+    }
+
+    return nextMove;
+  });
+
+  return {
+    ...gameState,
+    moveList: enrichedMoveList
+  };
+};
+
+const upsertLocalMoveChronicleRating = (plyIndex, coachFeedback = {}) => {
+  if (!Number.isInteger(plyIndex) || plyIndex < 0 || !state.game?.settings?.playerColor) {
+    return;
+  }
+
+  if (!isLocalPlayerPly(plyIndex, state.game)) {
+    return;
+  }
+
+  const classification = String(coachFeedback.classification || "").toLowerCase();
+
+  if (!COACH_CLASSIFICATION_SET.has(classification)) {
+    return;
+  }
+
+  const whyLines = normalizeChronicleWhyLines(coachFeedback.whyLines);
+
+  state.liveChronicle.ratingsByPly[plyIndex] = {
+    classification,
+    whyLines,
+    beforeFen:
+      typeof coachFeedback.beforeFen === "string" ? coachFeedback.beforeFen : ""
+  };
+
+  if (!whyLines.length && state.liveChronicle.expandedWhyPly === plyIndex) {
+    state.liveChronicle.expandedWhyPly = null;
+  }
+};
+
+const getCoachLead = (classification) => {
+  if (COACH_CLASSIFICATION_SET.has(classification)) {
+    return classification;
+  }
+
+  return "Arcane Coach is watching the board.";
+};
+
 const getCoachTone = (classification) => {
-  if (classification === "Engine Threat") {
-    return "engine-danger";
-  }
-
-  if (classification === "Engine Pressure") {
-    return "engine-warning";
-  }
-
-  if (classification === "Engine Reply") {
-    return "engine";
-  }
-
-  if (classification === "Blunder") {
+  if (["blunder", "miss"].includes(classification)) {
     return "blunder";
   }
 
-  if (classification === "Inaccuracy") {
+  if (["mistake", "inaccuracy"].includes(classification)) {
     return "inaccuracy";
   }
 
-  if (classification === "Good Move") {
+  if (["good", "excellent", "best", "great", "brilliant"].includes(classification)) {
     return "good";
   }
 
@@ -1351,46 +1613,70 @@ const getReactionMotionState = (coachFeedback = {}) => {
     return coachFeedback.motionState;
   }
 
-  if (coachFeedback.classification === "Good Move") {
+  if (["good", "excellent", "best", "great", "brilliant"].includes(coachFeedback.classification)) {
     return "good";
   }
 
-  if (coachFeedback.classification === "Inaccuracy") {
+  if (["mistake", "inaccuracy"].includes(coachFeedback.classification)) {
     return "inaccuracy";
   }
 
-  if (coachFeedback.classification === "Blunder") {
+  if (["blunder", "miss"].includes(coachFeedback.classification)) {
     return "blunder";
-  }
-
-  if (coachFeedback.classification === "Engine Reply") {
-    return "engine-strong";
-  }
-
-  if (coachFeedback.classification === "Engine Pressure") {
-    return "engine-warning";
-  }
-
-  if (coachFeedback.classification === "Engine Threat") {
-    return "engine-danger";
   }
 
   return "idle";
 };
 
 const buildCoachFeedbackState = (coachFeedback = {}) => {
+  const source = coachFeedback.source || "system";
+  const isOpponentFeedback = source === "engine" || source === "opponent";
   const motionState = getReactionMotionState(coachFeedback);
-  const motionDurationMs =
-    coachFeedback.motionDurationMs ||
-    (motionState.startsWith("engine-") ? 1800 : 1650);
+  const motionDurationMs = coachFeedback.motionDurationMs || 1650;
+  const normalizedClassification =
+    typeof coachFeedback.classification === "string"
+      ? coachFeedback.classification.trim().toLowerCase()
+      : "";
+  const ratingMessage = normalizedClassification && !isOpponentFeedback
+    ? `Your move was rated ${normalizedClassification}.`
+    : null;
+  const threatSummary =
+    typeof coachFeedback.threatSummary === "string" ? coachFeedback.threatSummary.trim() : "";
+  const advisoryMessage =
+    threatSummary ||
+    (typeof coachFeedback.message === "string" ? coachFeedback.message.trim() : "") ||
+    "Your opponent is applying pressure. Choose a concrete defensive plan.";
+  const whyLines = Array.isArray(coachFeedback.whyLines)
+    ? coachFeedback.whyLines
+        .map((line = {}) => ({
+          rank: Number(line.rank) || null,
+          eval: typeof line.eval === "number" ? line.eval : null,
+          san: Array.isArray(line.san)
+            ? line.san.filter((move) => typeof move === "string" && move.trim().length > 0)
+            : []
+        }))
+        .filter((line) => line.san.length > 0)
+    : [];
 
   return createCoachState({
-    source: coachFeedback.source || "system",
+    source,
     classification: coachFeedback.classification || null,
-    tone: coachFeedback.tone || getCoachTone(coachFeedback.classification),
-    message: coachFeedback.message || getCoachLead(coachFeedback.classification),
-    explanation: coachFeedback.explanation || DEFAULT_COACH_EXPLANATION,
+    tone:
+      coachFeedback.tone ||
+      (isOpponentFeedback ? "warning" : getCoachTone(coachFeedback.classification)),
+    message:
+      ratingMessage ||
+      (isOpponentFeedback
+        ? advisoryMessage
+        : coachFeedback.message || getCoachLead(coachFeedback.classification)),
+    explanation:
+      coachFeedback.explanation ||
+      (isOpponentFeedback
+        ? "Advisory mode: read the threat and choose your response."
+        : DEFAULT_COACH_EXPLANATION),
     bestMove: coachFeedback.bestMove || null,
+    whyLines,
+    whyExpanded: false,
     animate: coachFeedback.animate !== false,
     ...(motionState === "idle"
       ? createPersistentCoachMotion("idle")
@@ -1815,6 +2101,81 @@ const syncActionButtons = () => {
       !state.multiplayer.connected ||
       state.multiplayer.queued;
   }
+
+  const canHint =
+    !state.busy &&
+    state.view === "game" &&
+    Boolean(state.game?.hasStarted) &&
+    !state.game?.isGameOver &&
+    !realtimeMultiplayer &&
+    !state.historyModalOpen &&
+    state.game?.turn === state.game?.settings?.playerColor;
+
+  if (hintButton) {
+    hintButton.disabled = !canHint;
+  }
+
+  if (hintWhyButton) {
+    hintWhyButton.disabled =
+      !canHint ||
+      !state.hint.bestMove ||
+      !Array.isArray(state.hint.continuation) ||
+      !state.hint.continuation.length;
+  }
+};
+
+const clearHintState = () => {
+  state.hint = {
+    bestMove: null,
+    continuation: [],
+    fen: "",
+    summary: "",
+    whyExpanded: false
+  };
+};
+
+const applyHintHighlights = () => {
+  if (!state.game) {
+    return;
+  }
+
+  if (state.viewMode === "3D") {
+    syncBoard3D();
+  }
+
+  if (state.viewMode === "2D") {
+    renderBoard();
+  }
+};
+
+const renderHintPanel = () => {
+  if (!hintWhyButton || !hintWhyText) {
+    return;
+  }
+
+  const hasHint = Boolean(state.hint?.bestMove);
+  const hasLine = Array.isArray(state.hint?.continuation) && state.hint.continuation.length > 0;
+
+  hintWhyButton.textContent = state.hint?.whyExpanded ? "Hide Why" : "Why?";
+  hintWhyButton.setAttribute(
+    "aria-expanded",
+    state.hint?.whyExpanded ? "true" : "false"
+  );
+  hintWhyButton.classList.toggle("hidden", !hasHint);
+  hintWhyButton.disabled = !hasHint;
+
+  if (!hasHint || !state.hint?.whyExpanded) {
+    destroyMiniBoardTooltip();
+    hintWhyText.textContent = "";
+    hintWhyText.classList.add("hidden");
+    return;
+  }
+
+  const bestMoveLabel =
+    state.hint.bestMove.san || `${state.hint.bestMove.from}${state.hint.bestMove.to}`;
+  const lineText = hasLine ? ` Line: ${state.hint.continuation.join(" ")}` : "";
+  hintWhyText.textContent = `Hint: ${bestMoveLabel}. ${state.hint.summary}${lineText}`;
+  hintWhyText.classList.remove("hidden");
 };
 
 const setPersistence = (persistence = {}) => {
@@ -1904,7 +2265,9 @@ const renderCoachPanel = () => {
     classification: coachState.classification,
     message: coachState.message,
     explanation: coachState.explanation,
-    bestMove: coachState.bestMove
+    bestMove: coachState.bestMove,
+    whyExpanded: coachState.whyExpanded,
+    whyLines: coachState.whyLines
   });
   const motionPulseChanged = coachState.motionPulseId !== lastRenderedCoachMotionPulseId;
 
@@ -1918,7 +2281,11 @@ const renderCoachPanel = () => {
     coachState.explanation || DEFAULT_COACH_EXPLANATION;
   feedbackExplanation.title = coachState.explanation || DEFAULT_COACH_EXPLANATION;
 
-  if (coachState.classification) {
+  const showClassificationBadge =
+    Boolean(coachState.classification) &&
+    !["engine", "opponent"].includes(coachState.source || "");
+
+  if (showClassificationBadge) {
     feedbackBadge.textContent = coachState.classification;
     feedbackBadge.className = `feedback-badge feedback-badge-${coachState.tone}`;
   } else {
@@ -1936,6 +2303,32 @@ const renderCoachPanel = () => {
     feedbackSuggestion.classList.add("hidden");
   }
 
+  const hasWhyLines = Array.isArray(coachState.whyLines) && coachState.whyLines.length > 0;
+
+  if (feedbackWhyToggle) {
+    feedbackWhyToggle.classList.toggle("hidden", !hasWhyLines);
+    feedbackWhyToggle.disabled = !hasWhyLines;
+    feedbackWhyToggle.textContent = coachState.whyExpanded ? "Hide Why" : "Why?";
+    feedbackWhyToggle.setAttribute("aria-expanded", coachState.whyExpanded ? "true" : "false");
+  }
+
+  if (feedbackWhyLines) {
+    feedbackWhyLines.replaceChildren();
+    feedbackWhyLines.classList.toggle("hidden", !hasWhyLines || !coachState.whyExpanded);
+
+    if (hasWhyLines && coachState.whyExpanded) {
+      coachState.whyLines.forEach((line, index) => {
+        const lineElement = document.createElement("p");
+        lineElement.className = "coach-why-line";
+
+        const rank = Number(line.rank) || index + 1;
+        const evalText = typeof line.eval === "number" ? ` (${line.eval >= 0 ? "+" : ""}${line.eval})` : "";
+        lineElement.textContent = `Line ${rank}${evalText}: ${line.san.join(" ")}`;
+        feedbackWhyLines.appendChild(lineElement);
+      });
+    }
+  }
+
   feedbackThinking?.classList.toggle(
     "hidden",
     coachState.motionState !== "thinking"
@@ -1943,7 +2336,7 @@ const renderCoachPanel = () => {
 
   coachFooter?.classList.toggle(
     "coach-footer-empty",
-    !coachState.classification && !coachState.bestMove
+    !coachState.classification && !coachState.bestMove && !hasWhyLines
   );
 
   if (
@@ -1970,6 +2363,8 @@ const setCoachMessage = (message, explanation = DEFAULT_COACH_EXPLANATION) => {
     message,
     explanation,
     bestMove: null,
+    whyLines: [],
+    whyExpanded: false,
     animate: false,
     ...createPersistentCoachMotion("idle")
   });
@@ -2509,6 +2904,28 @@ const clearFinishedGameResetTimer = () => {
   finishedGameResetTimeoutId = null;
 };
 
+const clearBoardFeedbackTimer = () => {
+  if (!boardFeedbackTimeoutId) {
+    return;
+  }
+
+  window.clearTimeout(boardFeedbackTimeoutId);
+  boardFeedbackTimeoutId = null;
+};
+
+const scheduleBoardFeedbackDismissal = (feedbackKey, durationMs = 1000) => {
+  clearBoardFeedbackTimer();
+  boardFeedbackTimeoutId = window.setTimeout(() => {
+    if (activeBoardFeedbackKey !== feedbackKey) {
+      return;
+    }
+
+    dismissedBoardFeedbackKey = feedbackKey;
+    activeBoardFeedbackKey = "";
+    hideBoardFeedback();
+  }, durationMs);
+};
+
 const resetFinishedGameResetLifecycle = () => {
   clearFinishedGameResetTimer();
   activeFinishedGameResetKey = "";
@@ -2754,11 +3171,15 @@ const renderBoardFeedback = () => {
     state.game?.isGameOver ||
     state.pendingPromotion?.moveChoices?.length
   ) {
+    clearBoardFeedbackTimer();
+    activeBoardFeedbackKey = "";
     hideBoardFeedback();
     return;
   }
 
   if (drawClaim?.available) {
+    clearBoardFeedbackTimer();
+    activeBoardFeedbackKey = "";
     boardFeedbackBanner.classList.remove("hidden");
     boardFeedbackBanner.setAttribute("aria-hidden", "false");
     boardFeedbackBanner.dataset.tone = "draw";
@@ -2772,6 +3193,13 @@ const renderBoardFeedback = () => {
   }
 
   if (state.game?.status?.code === "check") {
+    const checkFeedbackKey = `check:${state.game?.fen || ""}`;
+
+    if (dismissedBoardFeedbackKey === checkFeedbackKey) {
+      hideBoardFeedback();
+      return;
+    }
+
     boardFeedbackBanner.classList.remove("hidden");
     boardFeedbackBanner.setAttribute("aria-hidden", "false");
     boardFeedbackBanner.dataset.tone = "warning";
@@ -2780,8 +3208,17 @@ const renderBoardFeedback = () => {
       trimTerminalPeriod(state.game.status.message) || "The king is under attack.";
     claimDrawButton?.classList.add("hidden");
     continuePlayButton?.classList.add("hidden");
+
+    if (activeBoardFeedbackKey !== checkFeedbackKey) {
+      activeBoardFeedbackKey = checkFeedbackKey;
+      scheduleBoardFeedbackDismissal(checkFeedbackKey, 1000);
+    }
+
     return;
   }
+
+  clearBoardFeedbackTimer();
+  activeBoardFeedbackKey = "";
 
   hideBoardFeedback();
 };
@@ -2796,6 +3233,66 @@ const renderBoardOverlays = () => {
   }
 
   promotionPanel.classList.add("hidden");
+};
+
+const getMoveRatingTone = (classification = "") => {
+  if (["blunder", "miss"].includes(classification)) {
+    return "bad";
+  }
+
+  if (["mistake", "inaccuracy"].includes(classification)) {
+    return "warn";
+  }
+
+  if (classification === "brilliant") {
+    return "brilliant";
+  }
+
+  return "good";
+};
+
+const getChronicleWhyLineText = (whyLines = []) => {
+  const bestLine = Array.isArray(whyLines)
+    ? whyLines.find((line) => Array.isArray(line?.san) && line.san.length > 0)
+    : null;
+
+  return bestLine ? bestLine.san.join(" ") : "";
+};
+
+const renderMoveCell = ({ san, plyIndex, meta, isCurrent, allowRating }) => {
+  if (!san) {
+    return `<span class="move-cell-content"><span class="move-san">-</span></span>`;
+  }
+
+  if (!allowRating || !meta?.classification) {
+    return `
+      <span class="move-cell-content">
+        <span class="move-san">${escapeHtml(san)}</span>
+      </span>
+    `;
+  }
+
+  const badgeSymbol = CHRONICLE_BADGE_SYMBOLS[meta.classification] || "•";
+  const tone = getMoveRatingTone(meta.classification);
+  const hasWhyLines = Array.isArray(meta.whyLines) && meta.whyLines.length > 0;
+
+  return `
+    <span class="move-cell-content">
+      <span class="move-san">${escapeHtml(san)}</span>
+      <span class="move-rating-badge move-rating-${tone}" title="${escapeHtml(meta.classification)}">${escapeHtml(badgeSymbol)}</span>
+      ${
+        hasWhyLines
+          ? `<button
+              type="button"
+              class="move-why-toggle${isCurrent ? " move-why-toggle-current" : ""}"
+              data-move-why-toggle="${plyIndex}"
+              aria-label="Show why line for ${escapeHtml(san)}"
+              title="Why line"
+            >?</button>`
+          : ""
+      }
+    </span>
+  `;
 };
 
 const renderMoveRows = (
@@ -2827,17 +3324,60 @@ const renderMoveRows = (
           currentMoveColor === "white" && currentTurn === move.turn && Boolean(move.white);
         const highlightBlack =
           currentMoveColor === "black" && currentTurn === move.turn && Boolean(move.black);
+        const whitePly = getPlyIndexForTurnColor(move.turn, "white");
+        const blackPly = getPlyIndexForTurnColor(move.turn, "black");
+        const whiteMeta =
+          typeof move.whiteRating === "string"
+            ? {
+                classification: move.whiteRating,
+                whyLines: Array.isArray(move.whiteWhyLines) ? move.whiteWhyLines : []
+              }
+            : null;
+        const blackMeta =
+          typeof move.blackRating === "string"
+            ? {
+                classification: move.blackRating,
+                whyLines: Array.isArray(move.blackWhyLines) ? move.blackWhyLines : []
+              }
+            : null;
+        const whiteAllowRating = isLocalPlayerPly(whitePly, state.game);
+        const blackAllowRating = isLocalPlayerPly(blackPly, state.game);
+        const expandedWhyPly = state.liveChronicle.expandedWhyPly;
+        const expandedMeta =
+          expandedWhyPly === whitePly && whiteAllowRating
+            ? whiteMeta
+            : expandedWhyPly === blackPly && blackAllowRating
+              ? blackMeta
+              : null;
+        const expandedWhyLine = getChronicleWhyLineText(expandedMeta?.whyLines || []);
+        const expandedClassification = expandedMeta?.classification || "";
 
         return `
         <div class="move-row ${highlightWhite || highlightBlack ? "move-row-current" : ""}">
           <strong class="move-turn">${escapeHtml(`${move.turn}.`)}</strong>
-          <span class="move-cell ${highlightWhite ? "move-cell-current" : ""}">${escapeHtml(
-            move.white || "-"
-          )}</span>
-          <span class="move-cell ${highlightBlack ? "move-cell-current" : ""}">${escapeHtml(
-            move.black || "-"
-          )}</span>
+          <span class="move-cell ${highlightWhite ? "move-cell-current" : ""}">${renderMoveCell({
+            san: move.white,
+            plyIndex: whitePly,
+            meta: whiteMeta,
+            isCurrent: highlightWhite,
+            allowRating: whiteAllowRating
+          })}</span>
+          <span class="move-cell ${highlightBlack ? "move-cell-current" : ""}">${renderMoveCell({
+            san: move.black,
+            plyIndex: blackPly,
+            meta: blackMeta,
+            isCurrent: highlightBlack,
+            allowRating: blackAllowRating
+          })}</span>
         </div>
+        ${
+          expandedWhyLine
+            ? `<div class="move-why-row">
+                <span class="move-why-label">${escapeHtml(expandedClassification)} Why:</span>
+                <span class="move-why-line">${escapeHtml(expandedWhyLine)}</span>
+              </div>`
+            : ""
+        }
       `;
       }
     )
@@ -2846,11 +3386,13 @@ const renderMoveRows = (
 };
 
 const renderMoveList = () => {
+  destroyMiniBoardTooltip();
   moveListElement.innerHTML = renderMoveRows(
     state.game?.moveList || [],
     "No moves have been recorded yet.",
     state.game?.lastMove || null
   );
+  attachChronicleWhyHoverListeners();
 };
 
 const renderSavedGames = () => {
@@ -2941,6 +3483,548 @@ const parseFenToBoard = (fen) => {
   });
 
   return board;
+};
+
+const MINI_BOARD_FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
+const MINI_BOARD_RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
+const MINI_BOARD_STEP_MS = 800;
+
+const cloneMiniBoardMap = (boardMap = {}) => {
+  const next = {};
+
+  Object.entries(boardMap).forEach(([square, piece]) => {
+    next[square] = piece ? { ...piece } : null;
+  });
+
+  return next;
+};
+
+const getMiniBoardStateFromFen = (fen = "") => {
+  const boardData = parseFenToBoard(fen);
+  const boardMap = {};
+
+  boardData.forEach((entry) => {
+    boardMap[entry.square] = entry.piece ? { ...entry.piece } : null;
+  });
+
+  const fenParts = String(fen || "").split(" ");
+
+  return {
+    boardMap,
+    turn: fenParts[1] === "b" ? "black" : "white",
+    enPassant: fenParts[3] && fenParts[3] !== "-" ? fenParts[3] : null
+  };
+};
+
+const getSquareCoords = (square = "") => ({
+  file: square.charCodeAt(0),
+  rank: Number(square[1])
+});
+
+const isInsideMiniBoard = (fileCode, rank) =>
+  fileCode >= 97 && fileCode <= 104 && rank >= 1 && rank <= 8;
+
+const sanitizeSanMove = (san = "") =>
+  String(san || "")
+    .trim()
+    .replace(/[+#]+$/g, "")
+    .replace(/[!?]+/g, "");
+
+const isPathClear = (boardMap, fromSquare, toSquare) => {
+  const from = getSquareCoords(fromSquare);
+  const to = getSquareCoords(toSquare);
+  const fileStep = Math.sign(to.file - from.file);
+  const rankStep = Math.sign(to.rank - from.rank);
+  let file = from.file + fileStep;
+  let rank = from.rank + rankStep;
+
+  while (file !== to.file || rank !== to.rank) {
+    const square = `${String.fromCharCode(file)}${rank}`;
+
+    if (boardMap[square]) {
+      return false;
+    }
+
+    file += fileStep;
+    rank += rankStep;
+  }
+
+  return true;
+};
+
+const canPieceReachTarget = ({
+  boardMap,
+  fromSquare,
+  toSquare,
+  piece,
+  isCapture,
+  sideToMove,
+  enPassantSquare
+}) => {
+  const from = getSquareCoords(fromSquare);
+  const to = getSquareCoords(toSquare);
+  const fileDiff = to.file - from.file;
+  const rankDiff = to.rank - from.rank;
+  const absFile = Math.abs(fileDiff);
+  const absRank = Math.abs(rankDiff);
+  const targetPiece = boardMap[toSquare] || null;
+
+  if (targetPiece?.color === piece.color) {
+    return false;
+  }
+
+  if (piece.type === "p") {
+    const direction = sideToMove === "white" ? 1 : -1;
+    const startRank = sideToMove === "white" ? 2 : 7;
+    const oneStepSquare = `${fromSquare[0]}${from.rank + direction}`;
+
+    if (isCapture) {
+      const isDiagonal = absFile === 1 && rankDiff === direction;
+      const capturesEnPassant =
+        !targetPiece && enPassantSquare && enPassantSquare === toSquare;
+
+      return isDiagonal && Boolean(targetPiece || capturesEnPassant);
+    }
+
+    if (fileDiff !== 0 || targetPiece) {
+      return false;
+    }
+
+    if (rankDiff === direction) {
+      return true;
+    }
+
+    return (
+      from.rank === startRank &&
+      rankDiff === direction * 2 &&
+      !boardMap[oneStepSquare]
+    );
+  }
+
+  if (piece.type === "n") {
+    return (absFile === 1 && absRank === 2) || (absFile === 2 && absRank === 1);
+  }
+
+  if (piece.type === "k") {
+    return absFile <= 1 && absRank <= 1;
+  }
+
+  if (piece.type === "b") {
+    return absFile === absRank && isPathClear(boardMap, fromSquare, toSquare);
+  }
+
+  if (piece.type === "r") {
+    return (fileDiff === 0 || rankDiff === 0) && isPathClear(boardMap, fromSquare, toSquare);
+  }
+
+  if (piece.type === "q") {
+    const diagonal = absFile === absRank;
+    const straight = fileDiff === 0 || rankDiff === 0;
+    return (diagonal || straight) && isPathClear(boardMap, fromSquare, toSquare);
+  }
+
+  return false;
+};
+
+const resolveSanMove = ({ boardMap, san, sideToMove, enPassantSquare }) => {
+  const cleanedSan = sanitizeSanMove(san);
+
+  if (!cleanedSan) {
+    return null;
+  }
+
+  if (cleanedSan === "O-O" || cleanedSan === "0-0") {
+    return sideToMove === "white"
+      ? { from: "e1", to: "g1", pieceType: "k", isCastle: "king" }
+      : { from: "e8", to: "g8", pieceType: "k", isCastle: "king" };
+  }
+
+  if (cleanedSan === "O-O-O" || cleanedSan === "0-0-0") {
+    return sideToMove === "white"
+      ? { from: "e1", to: "c1", pieceType: "k", isCastle: "queen" }
+      : { from: "e8", to: "c8", pieceType: "k", isCastle: "queen" };
+  }
+
+  const sanMatch = cleanedSan.match(/^([KQRBN])?([a-h1-8]{0,2})(x)?([a-h][1-8])(=?[QRBN])?$/);
+
+  if (!sanMatch) {
+    return null;
+  }
+
+  const [, pieceLetter, disambiguation, captureFlag, targetSquare, promotionPart] = sanMatch;
+  const pieceType = pieceLetter ? pieceLetter.toLowerCase() : "p";
+  const isCapture = captureFlag === "x";
+  const promotion = promotionPart ? promotionPart.replace("=", "").toLowerCase() : null;
+  const candidateSquares = Object.entries(boardMap)
+    .filter(([, piece]) => piece && piece.color === sideToMove && piece.type === pieceType)
+    .map(([square]) => square)
+    .filter((square) =>
+      canPieceReachTarget({
+        boardMap,
+        fromSquare: square,
+        toSquare: targetSquare,
+        piece: boardMap[square],
+        isCapture,
+        sideToMove,
+        enPassantSquare
+      })
+    )
+    .filter((square) => {
+      if (!disambiguation) {
+        return true;
+      }
+
+      if (disambiguation.length === 2) {
+        return square === disambiguation;
+      }
+
+      const qualifier = disambiguation[0];
+      return /[a-h]/.test(qualifier) ? square[0] === qualifier : square[1] === qualifier;
+    });
+
+  if (!candidateSquares.length) {
+    return null;
+  }
+
+  return {
+    from: candidateSquares[0],
+    to: targetSquare,
+    pieceType,
+    promotion,
+    isCapture
+  };
+};
+
+const applyMiniBoardMove = ({ boardMap, resolvedMove, sideToMove, enPassantSquare }) => {
+  if (!resolvedMove?.from || !resolvedMove?.to) {
+    return null;
+  }
+
+  const nextBoardMap = cloneMiniBoardMap(boardMap);
+  const movingPiece = nextBoardMap[resolvedMove.from]
+    ? { ...nextBoardMap[resolvedMove.from] }
+    : null;
+
+  if (!movingPiece) {
+    return null;
+  }
+
+  nextBoardMap[resolvedMove.from] = null;
+
+  if (movingPiece.type === "p" && resolvedMove.isCapture && !nextBoardMap[resolvedMove.to]) {
+    const to = getSquareCoords(resolvedMove.to);
+    const capturedRank = sideToMove === "white" ? to.rank - 1 : to.rank + 1;
+    const capturedSquare = `${resolvedMove.to[0]}${capturedRank}`;
+    nextBoardMap[capturedSquare] = null;
+  }
+
+  if (resolvedMove.isCastle === "king" || resolvedMove.isCastle === "queen") {
+    if (sideToMove === "white") {
+      if (resolvedMove.isCastle === "king") {
+        nextBoardMap.h1 = null;
+        nextBoardMap.f1 = { type: "r", color: "white" };
+      } else {
+        nextBoardMap.a1 = null;
+        nextBoardMap.d1 = { type: "r", color: "white" };
+      }
+    } else if (resolvedMove.isCastle === "king") {
+      nextBoardMap.h8 = null;
+      nextBoardMap.f8 = { type: "r", color: "black" };
+    } else {
+      nextBoardMap.a8 = null;
+      nextBoardMap.d8 = { type: "r", color: "black" };
+    }
+  }
+
+  const promotedType = movingPiece.type === "p" ? resolvedMove.promotion || movingPiece.type : movingPiece.type;
+  nextBoardMap[resolvedMove.to] = {
+    type: promotedType,
+    color: movingPiece.color
+  };
+
+  const fromCoords = getSquareCoords(resolvedMove.from);
+  const toCoords = getSquareCoords(resolvedMove.to);
+  let nextEnPassant = null;
+
+  if (movingPiece.type === "p" && Math.abs(toCoords.rank - fromCoords.rank) === 2) {
+    const intermediateRank = (toCoords.rank + fromCoords.rank) / 2;
+    nextEnPassant = `${resolvedMove.from[0]}${intermediateRank}`;
+  }
+
+  return {
+    boardMap: nextBoardMap,
+    from: resolvedMove.from,
+    to: resolvedMove.to,
+    ghostPiece: {
+      ...movingPiece
+    },
+    turn: sideToMove === "white" ? "black" : "white",
+    enPassant: nextEnPassant
+  };
+};
+
+const createMiniBoardUI = ({ title = "Why line preview" } = {}) => {
+  const root = document.createElement("div");
+  root.className = "mini-board-tooltip";
+  root.setAttribute("role", "tooltip");
+
+  const heading = document.createElement("div");
+  heading.className = "mini-board-heading";
+  heading.textContent = title;
+  root.appendChild(heading);
+
+  const board = document.createElement("div");
+  board.className = "mini-board-grid";
+  root.appendChild(board);
+
+  const squareNodes = {};
+
+  MINI_BOARD_RANKS.forEach((rank) => {
+    MINI_BOARD_FILES.forEach((file) => {
+      const square = `${file}${rank}`;
+      const squareNode = document.createElement("div");
+      squareNode.className = `mini-board-square ${getSquareColorClass(square).replace("square", "mini-board")}`;
+      squareNode.dataset.square = square;
+
+      const pieceNode = document.createElement("span");
+      pieceNode.className = "mini-board-piece";
+      const ghostNode = document.createElement("span");
+      ghostNode.className = "mini-board-piece ghost-piece";
+      squareNode.appendChild(ghostNode);
+      squareNode.appendChild(pieceNode);
+      board.appendChild(squareNode);
+      squareNodes[square] = {
+        squareNode,
+        ghostNode,
+        pieceNode
+      };
+    });
+  });
+
+  return {
+    root,
+    squareNodes
+  };
+};
+
+const renderMiniBoardPosition = (
+  tooltipState,
+  { lastFrom = "", lastTo = "", ghostSquare = "", ghostPiece = null } = {}
+) => {
+  Object.entries(tooltipState.squareNodes).forEach(([square, refs]) => {
+    const piece = tooltipState.boardMap[square];
+    const hasGhost = Boolean(ghostSquare) && ghostSquare === square && ghostPiece;
+
+    refs.squareNode.classList.toggle("mini-board-last-from", square === lastFrom);
+    refs.squareNode.classList.toggle("mini-board-last-to", square === lastTo);
+    refs.ghostNode.textContent = hasGhost ? PIECES[ghostPiece.color][ghostPiece.type] : "";
+    refs.ghostNode.classList.toggle("mini-board-piece-white", Boolean(hasGhost && ghostPiece.color === "white"));
+    refs.ghostNode.classList.toggle("mini-board-piece-black", Boolean(hasGhost && ghostPiece.color === "black"));
+    refs.pieceNode.textContent = piece ? PIECES[piece.color][piece.type] : "";
+    refs.pieceNode.classList.toggle("mini-board-piece-white", piece?.color === "white");
+    refs.pieceNode.classList.toggle("mini-board-piece-black", piece?.color === "black");
+  });
+};
+
+const positionMiniBoardTooltip = (tooltipElement, anchorElement) => {
+  const margin = 10;
+  const anchorRect = anchorElement.getBoundingClientRect();
+  const tooltipRect = tooltipElement.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  let left = anchorRect.left + anchorRect.width / 2 - tooltipRect.width / 2;
+  let top = anchorRect.bottom + 8;
+
+  if (left + tooltipRect.width > viewportWidth - margin) {
+    left = viewportWidth - tooltipRect.width - margin;
+  }
+
+  if (left < margin) {
+    left = margin;
+  }
+
+  if (top + tooltipRect.height > viewportHeight - margin) {
+    top = anchorRect.top - tooltipRect.height - 8;
+  }
+
+  if (top < margin) {
+    top = margin;
+  }
+
+  tooltipElement.style.left = `${Math.round(left)}px`;
+  tooltipElement.style.top = `${Math.round(top)}px`;
+};
+
+const clearMiniBoardTooltipTimer = () => {
+  if (activeMiniBoardTooltip?.timerId) {
+    window.clearTimeout(activeMiniBoardTooltip.timerId);
+  }
+};
+
+const destroyMiniBoardTooltip = () => {
+  clearMiniBoardTooltipTimer();
+
+  if (activeMiniBoardTooltip?.root?.parentNode) {
+    activeMiniBoardTooltip.root.parentNode.removeChild(activeMiniBoardTooltip.root);
+  }
+
+  activeMiniBoardTooltip = null;
+};
+
+const scheduleMiniBoardStep = (tooltipState, delayMs = MINI_BOARD_STEP_MS) => {
+  clearMiniBoardTooltipTimer();
+  tooltipState.timerId = window.setTimeout(() => {
+    if (activeMiniBoardTooltip !== tooltipState) {
+      return;
+    }
+
+    if (!tooltipState.continuation.length) {
+      scheduleMiniBoardStep(tooltipState, MINI_BOARD_STEP_MS);
+      return;
+    }
+
+    if (tooltipState.stepIndex >= tooltipState.continuation.length) {
+      tooltipState.boardMap = cloneMiniBoardMap(tooltipState.initialBoardMap);
+      tooltipState.turn = tooltipState.initialTurn;
+      tooltipState.enPassant = tooltipState.initialEnPassant;
+      tooltipState.stepIndex = 0;
+      renderMiniBoardPosition(tooltipState, {
+        ghostSquare: "",
+        ghostPiece: null
+      });
+      scheduleMiniBoardStep(tooltipState, 440);
+      return;
+    }
+
+    const san = tooltipState.continuation[tooltipState.stepIndex];
+    const resolvedMove = resolveSanMove({
+      boardMap: tooltipState.boardMap,
+      san,
+      sideToMove: tooltipState.turn,
+      enPassantSquare: tooltipState.enPassant
+    });
+
+    if (!resolvedMove) {
+      tooltipState.stepIndex += 1;
+      scheduleMiniBoardStep(tooltipState, MINI_BOARD_STEP_MS);
+      return;
+    }
+
+    const applied = applyMiniBoardMove({
+      boardMap: tooltipState.boardMap,
+      resolvedMove,
+      sideToMove: tooltipState.turn,
+      enPassantSquare: tooltipState.enPassant
+    });
+
+    if (!applied) {
+      tooltipState.stepIndex += 1;
+      scheduleMiniBoardStep(tooltipState, MINI_BOARD_STEP_MS);
+      return;
+    }
+
+    tooltipState.boardMap = applied.boardMap;
+    tooltipState.turn = applied.turn;
+    tooltipState.enPassant = applied.enPassant;
+    tooltipState.stepIndex += 1;
+    renderMiniBoardPosition(tooltipState, {
+      lastFrom: applied.from,
+      lastTo: applied.to,
+      ghostSquare: applied.from,
+      ghostPiece: applied.ghostPiece || null
+    });
+    scheduleMiniBoardStep(tooltipState, MINI_BOARD_STEP_MS);
+  }, delayMs);
+};
+
+const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }) => {
+  if (!anchorElement || !fen || !Array.isArray(continuation) || !continuation.length) {
+    return;
+  }
+
+  const filteredContinuation = continuation
+    .map((move) => String(move || "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  if (!filteredContinuation.length) {
+    return;
+  }
+
+  destroyMiniBoardTooltip();
+  miniBoardHoverToken += 1;
+
+  const baseState = getMiniBoardStateFromFen(fen);
+  const ui = createMiniBoardUI({
+    title: label || "Why line preview"
+  });
+
+  document.body.appendChild(ui.root);
+  positionMiniBoardTooltip(ui.root, anchorElement);
+
+  const tooltipState = {
+    id: miniBoardHoverToken,
+    root: ui.root,
+    squareNodes: ui.squareNodes,
+    timerId: null,
+    continuation: filteredContinuation,
+    initialBoardMap: cloneMiniBoardMap(baseState.boardMap),
+    boardMap: cloneMiniBoardMap(baseState.boardMap),
+    initialTurn: baseState.turn,
+    turn: baseState.turn,
+    initialEnPassant: baseState.enPassant,
+    enPassant: baseState.enPassant,
+    stepIndex: 0
+  };
+
+  activeMiniBoardTooltip = tooltipState;
+  renderMiniBoardPosition(tooltipState);
+  scheduleMiniBoardStep(tooltipState, 360);
+};
+
+const getPrimaryWhyLineSan = (whyLines = []) => {
+  const bestLine = Array.isArray(whyLines)
+    ? whyLines.find((line) => Array.isArray(line?.san) && line.san.length > 0)
+    : null;
+
+  return bestLine?.san || [];
+};
+
+const attachChronicleWhyHoverListeners = () => {
+  if (!moveListElement) {
+    return;
+  }
+
+  moveListElement.querySelectorAll("[data-move-why-toggle]").forEach((button) => {
+    if (button.dataset.hoverVisualizerBound === "true") {
+      return;
+    }
+
+    button.dataset.hoverVisualizerBound = "true";
+
+    button.addEventListener("mouseenter", () => {
+      const plyIndex = Number.parseInt(button.dataset.moveWhyToggle || "", 10);
+
+      if (!Number.isInteger(plyIndex) || plyIndex < 0) {
+        return;
+      }
+
+      const moveMeta = state.liveChronicle.ratingsByPly[plyIndex];
+      const continuation = getPrimaryWhyLineSan(moveMeta?.whyLines || []);
+      const fen = moveMeta?.beforeFen || "";
+
+      showMiniBoardTooltip({
+        anchorElement: button,
+        fen,
+        continuation,
+        label: "Chronicle Why Line"
+      });
+    });
+
+    button.addEventListener("mouseleave", () => {
+      destroyMiniBoardTooltip();
+    });
+  });
 };
 
 const renderReplayBoard = () => {
@@ -3226,6 +4310,14 @@ const renderBoard = () => {
         squareClasses.push("square-check");
       }
 
+      if (state.hint?.bestMove?.from === entry.square) {
+        squareClasses.push("square-hint-from");
+      }
+
+      if (state.hint?.bestMove?.to === entry.square) {
+        squareClasses.push("square-hint-to");
+      }
+
       if (isSelectable) {
         squareClasses.push("square-selectable");
       }
@@ -3281,24 +4373,6 @@ const renderBoard = () => {
     .join("");
 
   updateEvalBar();
-
-  if (arcaneBoard3D?.setPerspective) {
-    arcaneBoard3D.setPerspective(getBoardPerspectiveColor());
-  }
-
-  if (arcaneBoard3D && state.game && state.game.board) {
-    arcaneBoard3D.setPosition(state.game.board);
-    const legalForSelected = state.selectedSquare && state.game.legalMoves
-      ? (state.game.legalMoves[state.selectedSquare] || []).map(m => m.to)
-      : [];
-    arcaneBoard3D.highlightSquares(state.selectedSquare, legalForSelected);
-    if (state.game.lastMove) {
-      arcaneBoard3D.setLastMove(
-        state.game.lastMove.from,
-        state.game.lastMove.to
-      );
-    }
-  }
 };
 
 const updateSummary = () => {
@@ -3363,6 +4437,12 @@ const renderImmersiveHud = () => {
 
 const renderBoardSurface = () => {
   if (state.view !== "game") {
+    return;
+  }
+
+  if (state.viewMode === "3D") {
+    syncBoard3D();
+    renderBoardOverlays();
     return;
   }
 
@@ -3442,7 +4522,6 @@ const renderBoardSurface = () => {
   }
 
   renderBoard();
-  syncBoard3D();
   renderBoardOverlays();
 };
 
@@ -3459,6 +4538,7 @@ const render = () => {
   renderSavedGames();
   renderHistory();
   renderCoachPanel();
+  renderHintPanel();
   updateSummary();
   setRecordView(state.activeRecordView);
   syncActionButtons();
@@ -3519,7 +4599,8 @@ const setCoachStateForGame = (gameState, options = {}) => {
 
 const applyGameState = (gameState, options = {}) => {
   state.pendingNewGame = false;
-  state.game = gameState;
+  ensureLiveChronicleForGame(gameState);
+  state.game = applyChronicleMoveMetadata(gameState);
   if (gameState?.isGameOver) {
     scheduleFinishedGameReset(gameState);
   } else {
@@ -3534,6 +4615,9 @@ const applyGameState = (gameState, options = {}) => {
   });
   syncControls();
   setPersistence(gameState.persistence);
+  if (!options.preserveHint) {
+    clearHintState();
+  }
   setCoachStateForGame(gameState, options);
   if (!options.skipRender) {
     render();
@@ -4098,7 +5182,7 @@ const openHistoryDetail = async (gameId) => {
   }
 };
 
-const loadCoachFeedback = async ({ cycleId, moveToken }) => {
+const loadCoachFeedback = async ({ cycleId, moveToken, plyIndex = null }) => {
   try {
     const payload = await request("/api/game/coach", {
       method: "POST",
@@ -4115,6 +5199,11 @@ const loadCoachFeedback = async ({ cycleId, moveToken }) => {
 
     setApiHealth(true);
     setCoachStageRank(COACH_STAGE_PLAYER_FEEDBACK);
+    if (isLocalPlayerPly(plyIndex, state.game)) {
+      upsertLocalMoveChronicleRating(plyIndex, payload.coachFeedback);
+    }
+    state.game = applyChronicleMoveMetadata(state.game);
+    renderMoveList();
     state.coach = buildCoachFeedbackState(payload.coachFeedback);
     renderCoachPanel();
   } catch (error) {
@@ -4143,16 +5232,16 @@ const loadEngineReply = async ({ cycleId, moveToken }) => {
     if (payload.game.isGameOver) {
       setCoachStageRank(COACH_STAGE_GAME_OVER);
       applyGameState(payload.game);
-    } else if (
-      payload.game.coachFeedback &&
-      canApplyCoachStage(cycleId, COACH_STAGE_ENGINE_FEEDBACK)
-    ) {
-      setCoachStageRank(COACH_STAGE_ENGINE_FEEDBACK);
-      applyGameState(payload.game);
     } else {
       applyGameState(payload.game, {
         preserveCoach: true
       });
+
+      if (payload.game.coachFeedback && canApplyCoachStage(cycleId, COACH_STAGE_ENGINE_FEEDBACK)) {
+        setCoachStageRank(COACH_STAGE_ENGINE_FEEDBACK);
+        state.coach = buildCoachFeedbackState(payload.game.coachFeedback);
+        renderCoachPanel();
+      }
     }
 
     setBusy(false);
@@ -4196,15 +5285,8 @@ const submitMove = async ({ from, to, promotion, previewMove }) => {
   }
 
   const cycleId = beginMoveCycle();
-  const previousGame = cloneValue(state.game);
-  const optimisticGame = buildOptimisticGameState(state.game, {
-    ...previewMove,
-    from,
-    to,
-    promotion: promotion || previewMove?.promotion || null
-  });
-
-  state.busy = true;
+  setBusy(true);
+  clearHintState();
   setCoachStageRank(1);
   clearSelectedSquare();
   debugGameplaySync("move:submit", {
@@ -4214,9 +5296,8 @@ const submitMove = async ({ from, to, promotion, previewMove }) => {
     previewMove
   });
   syncActionButtons();
-  applyGameState(optimisticGame, {
-    coachState: getThinkingCoachState()
-  });
+  state.coach = getThinkingCoachState();
+  renderCoachPanel();
 
   try {
     const payload = await request("/api/game/move", {
@@ -4231,19 +5312,18 @@ const submitMove = async ({ from, to, promotion, previewMove }) => {
     setApiHealth(true);
     applyGameState(payload.game, {
       coachState:
-        payload.pending?.coach || payload.pending?.engine
+        payload.pending?.engine
           ? getThinkingCoachState()
           : null
     });
 
-    if (payload.pending?.coach) {
+    if (payload.pending?.engine) {
+      const localMovePly = getLastPlyIndexFromMoveList(payload.game?.moveList || []);
       void loadCoachFeedback({
         cycleId,
-        moveToken: payload.moveToken
+        moveToken: payload.moveToken,
+        plyIndex: localMovePly
       });
-    }
-
-    if (payload.pending?.engine) {
       void loadEngineReply({
         cycleId,
         moveToken: payload.moveToken
@@ -4261,12 +5341,55 @@ const submitMove = async ({ from, to, promotion, previewMove }) => {
       return;
     }
 
-    state.game = previousGame;
     clearSelectedSquare();
-    syncControls();
     setApiHealth(false);
-    render();
     setCoachMessage(error.message);
+    setBusy(false);
+  }
+};
+
+const requestHint = async () => {
+  if (!state.game || isRealtimeMultiplayerGame()) {
+    setCoachMessage(
+      "Hints are unavailable in this mode.",
+      "Hints can be requested only during solo games on your turn."
+    );
+    return;
+  }
+
+  setBusy(true, "Consulting Arcane Coach for the best line...");
+
+  try {
+    const payload = await request("/api/game/hint", {
+      method: "POST"
+    });
+
+    setApiHealth(true);
+    state.hint = {
+      bestMove: payload.hint?.bestMove || null,
+      continuation: Array.isArray(payload.hint?.continuation)
+        ? payload.hint.continuation.slice(0, 6)
+        : [],
+      fen: typeof payload.hint?.fen === "string" ? payload.hint.fen : "",
+      summary: payload.hint?.summary || "This line improves your position.",
+      whyExpanded: false
+    };
+
+    const hintMove = state.hint.bestMove;
+    const hintLabel = hintMove?.san || `${hintMove?.from || ""}${hintMove?.to || ""}`;
+    setCoachMessage(
+      hintMove ? `Hint ready: ${hintLabel}` : "Hint ready.",
+      state.hint.summary
+    );
+    renderHintPanel();
+    applyHintHighlights();
+  } catch (error) {
+    clearHintState();
+    renderHintPanel();
+    applyHintHighlights();
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
     setBusy(false);
   }
 };
@@ -4309,7 +5432,7 @@ const handleSquareClick = (square) => {
       isRealtimeMultiplayerGame() ? "Wait for your opponent to move." : "Wait for Stockfish to move.",
       isRealtimeMultiplayerGame()
         ? "The board will update automatically when your opponent plays."
-        : "Your coach will grade your next move once the engine replies."
+        : "Use Hint when you want engine guidance for your next move."
     );
     return;
   }
@@ -4444,6 +5567,31 @@ boardElement.addEventListener("click", (event) => {
   handleSquareClick(squareButton.dataset.square);
 });
 
+moveListElement?.addEventListener("click", (event) => {
+  const whyToggle = event.target.closest("[data-move-why-toggle]");
+
+  if (!whyToggle) {
+    return;
+  }
+
+  event.preventDefault();
+  const plyIndex = Number.parseInt(whyToggle.dataset.moveWhyToggle || "", 10);
+
+  if (!Number.isInteger(plyIndex) || plyIndex < 0) {
+    return;
+  }
+
+  const moveMeta = state.liveChronicle.ratingsByPly[plyIndex];
+
+  if (!moveMeta?.whyLines?.length) {
+    return;
+  }
+
+  state.liveChronicle.expandedWhyPly =
+    state.liveChronicle.expandedWhyPly === plyIndex ? null : plyIndex;
+  renderMoveList();
+});
+
 promotionPanel.addEventListener("click", (event) => {
   const action = event.target.closest("[data-promotion]");
 
@@ -4536,6 +5684,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", () => {
+  destroyMiniBoardTooltip();
   state.board3D?.scheduleResize?.({
     immediate: true
   });
@@ -4618,6 +5767,11 @@ hallHistoryButton?.addEventListener("click", () => {
 
 if (backToHallButton) {
   backToHallButton.addEventListener("click", () => {
+    clearSelectedSquare();
+    clearHintState();
+    clearPromotionPrompt();
+    hideBoardFeedback();
+    resetBoardViewTo2D();
     state.view = "hall";
     renderView();
   });
@@ -4656,6 +5810,8 @@ document.addEventListener("visibilitychange", () => {
 // ── 2D / 3D TOGGLE ─────────────────────────────────────────
 const switchTo3D = () => {
   if (arcaneBoard3D) return; // already in 3D
+  state.boardViewMode = "3d";
+  state.viewMode = "3D";
   boardElement.classList.add("hidden");
   board3dElement.classList.remove("hidden");
   board3dElement.removeAttribute("aria-hidden");
@@ -4670,6 +5826,14 @@ const switchTo3D = () => {
   // Sync current board position
   if (state.game && state.game.board) {
     arcaneBoard3D.setPosition(state.game.board);
+    const legalForSelected = state.selectedSquare && state.game.legalMoves
+      ? (state.game.legalMoves[state.selectedSquare] || []).map((move) => move.to)
+      : [];
+    arcaneBoard3D.highlightSquares(
+      state.selectedSquare,
+      legalForSelected,
+      state.hint?.bestMove || null
+    );
   }
   if (state.game && state.game.lastMove) {
     arcaneBoard3D.setLastMove(state.game.lastMove.from, state.game.lastMove.to);
@@ -4683,19 +5847,13 @@ const switchTo3D = () => {
 
 const switchTo2D = () => {
   if (!arcaneBoard3D) return; // already in 2D
-  arcaneBoard3D.destroy();
-  arcaneBoard3D = null;
-  if (!arcaneBoard3D) board3dElement.classList.add("hidden");
-  if (!arcaneBoard3D) board3dElement.setAttribute("aria-hidden", "true");
-  if (!arcaneBoard3D) boardElement.classList.remove("hidden");
-  toggle3dBtn.classList.remove("mode-btn-active");
-  toggle2dBtn.classList.add("mode-btn-active");
-  if (boardModeLabel) boardModeLabel.textContent = "2D duel interface";
+  resetBoardViewTo2D();
   renderBoard();
 };
 
 if (toggle2dBtn) toggle2dBtn.addEventListener("click", switchTo2D);
 if (toggle3dBtn) toggle3dBtn.addEventListener("click", switchTo3D);
+if (immersiveExitButton) immersiveExitButton.addEventListener("click", switchTo2D);
 
 initialize();
 
@@ -4714,4 +5872,54 @@ multiplayerRoomIdInput?.addEventListener("keydown", (event) => {
     event.preventDefault();
     void joinMultiplayerRoom();
   }
+});
+
+hintButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  void requestHint();
+});
+
+hintWhyButton?.addEventListener("click", () => {
+  const hasHintLine =
+    Array.isArray(state.hint?.continuation) && state.hint.continuation.length > 0;
+
+  if (!hasHintLine) {
+    return;
+  }
+
+  state.hint.whyExpanded = !state.hint.whyExpanded;
+  renderHintPanel();
+});
+
+hintWhyButton?.addEventListener("mouseenter", () => {
+  const continuation = Array.isArray(state.hint?.continuation)
+    ? state.hint.continuation.slice(0, 6)
+    : [];
+
+  showMiniBoardTooltip({
+    anchorElement: hintWhyButton,
+    fen: state.hint?.fen || state.game?.fen || "",
+    continuation,
+    label: "Hint Why Line"
+  });
+});
+
+hintWhyButton?.addEventListener("mouseleave", () => {
+  destroyMiniBoardTooltip();
+});
+
+feedbackWhyToggle?.addEventListener("click", () => {
+  const hasWhyLines = Array.isArray(state.coach?.whyLines) && state.coach.whyLines.length > 0;
+
+  if (!hasWhyLines) {
+    return;
+  }
+
+  state.coach = createCoachState({
+    ...state.coach,
+    whyExpanded: !state.coach.whyExpanded,
+    animate: false
+  });
+  renderCoachPanel();
 });

@@ -5,6 +5,7 @@ const {
   claimDraw,
   getSerializableState,
   getLiveSerializableState,
+  getPositionHint,
   makePlayerMove,
   offerDraw,
   performEngineMove,
@@ -46,6 +47,16 @@ router.post("/move", async (request, response) => {
       actor: getRequestActor(request),
       ...request.body
     });
+
+    response.json(outcome);
+  } catch (error) {
+    sendApiError(response, error, 400);
+  }
+});
+
+router.post("/hint", async (request, response) => {
+  try {
+    const outcome = await getPositionHint(getRequestActor(request));
 
     response.json(outcome);
   } catch (error) {

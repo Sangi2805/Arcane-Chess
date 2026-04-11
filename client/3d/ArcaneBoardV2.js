@@ -23,6 +23,7 @@
       this.pieces       = new Map();   // square -> { mesh, type, color }
       this.squareMeshes = new Map();   // square -> mesh
       this.indicators   = [];          // legal-move dot meshes
+      this.hintIndicators = [];
 
       this.selectedSquare = null;
       this.legalTargets   = new Set();
@@ -78,7 +79,7 @@
     }
 
     /** Highlight selected square and legal move targets */
-    highlightSquares(selectedSquare, legalMoves) {
+    highlightSquares(selectedSquare, legalMoves, hintMove = null) {
       const T = this._T;
 
       // Reset square tints
@@ -94,6 +95,13 @@
         m.material.dispose();
       });
       this.indicators = [];
+
+      this.hintIndicators.forEach((marker) => {
+        this.scene.remove(marker);
+        marker.geometry.dispose();
+        marker.material.dispose();
+      });
+      this.hintIndicators = [];
 
       this.selectedSquare = selectedSquare;
       this.legalTargets   = new Set(legalMoves || []);
@@ -119,6 +127,46 @@
         this.scene.add(dot);
         this.indicators.push(dot);
       });
+
+      if (hintMove?.from) {
+        const fromMesh = this.squareMeshes.get(hintMove.from);
+        if (fromMesh) {
+          const fromRing = new T.Mesh(
+            new T.RingGeometry(0.32, 0.43, 24),
+            new T.MeshLambertMaterial({
+              color: 0xffa84b,
+              emissive: 0x6b3208,
+              emissiveIntensity: 0.38,
+              transparent: true,
+              opacity: 0.88,
+              side: T.DoubleSide
+            })
+          );
+          fromRing.rotation.x = -Math.PI / 2;
+          fromRing.position.set(fromMesh.position.x, 0.105, fromMesh.position.z);
+          this.scene.add(fromRing);
+          this.hintIndicators.push(fromRing);
+        }
+      }
+
+      if (hintMove?.to) {
+        const toMesh = this.squareMeshes.get(hintMove.to);
+        if (toMesh) {
+          const toDot = new T.Mesh(
+            new T.CylinderGeometry(0.17, 0.17, 0.06, 18),
+            new T.MeshLambertMaterial({
+              color: 0xffd26f,
+              emissive: 0x7f4c0d,
+              emissiveIntensity: 0.55,
+              transparent: true,
+              opacity: 0.95
+            })
+          );
+          toDot.position.set(toMesh.position.x, 0.115, toMesh.position.z);
+          this.scene.add(toDot);
+          this.hintIndicators.push(toDot);
+        }
+      }
     }
 
     /** Flash last-move squares gold */
@@ -173,6 +221,7 @@
       }
       this.pieces.clear();
       this.squareMeshes.clear();
+      this.hintIndicators = [];
     }
 
     // ─────────────────────────────────────────
@@ -699,6 +748,9 @@
     // ─────────────────────────────────────────
 
     _onClick(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
       const rect = this.container.getBoundingClientRect();
       this.mouse.x = ((e.clientX - rect.left)  / rect.width)  * 2 - 1;
       this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;

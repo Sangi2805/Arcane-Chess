@@ -7,12 +7,28 @@ const ANALYSIS_SETTINGS = {
   skillLevel: 20
 };
 
-const GOOD_MOVE_THRESHOLD = 0.5;
-const BLUNDER_THRESHOLD = 1.1;
-const ENGINE_PRESSURE_THRESHOLD = 0.45;
-const ENGINE_THREAT_THRESHOLD = 1.15;
-const ENGINE_PRESSURE_SCORE = -0.6;
-const ENGINE_THREAT_SCORE = -2;
+const WHY_ANALYSIS_SETTINGS = {
+  depth: 6,
+  moveTime: 120,
+  skillLevel: 20,
+  multipv: 3
+};
+
+const MAX_WHY_LINES = 3;
+const WHY_PLY_LIMIT = 6;
+
+const RATING_THRESHOLDS = [
+  { maxDelta: -2.5, classification: "blunder", tone: "blunder", motionState: "blunder" },
+  { maxDelta: -1.5, classification: "miss", tone: "blunder", motionState: "blunder" },
+  { maxDelta: -0.8, classification: "mistake", tone: "inaccuracy", motionState: "inaccuracy" },
+  { maxDelta: -0.25, classification: "inaccuracy", tone: "inaccuracy", motionState: "inaccuracy" },
+  { maxDelta: 0.25, classification: "good", tone: "good", motionState: "good" },
+  { maxDelta: 0.8, classification: "excellent", tone: "good", motionState: "good" },
+  { maxDelta: 1.5, classification: "best", tone: "good", motionState: "good" },
+  { maxDelta: 2.5, classification: "great", tone: "good", motionState: "good" },
+  { maxDelta: Number.POSITIVE_INFINITY, classification: "brilliant", tone: "good", motionState: "good" }
+];
+
 const MATE_PAWN_EQUIVALENT = 100;
 
 const analysisEngine = new EngineService();
@@ -39,6 +55,18 @@ const normalizeScoreForPerspective = (score, fen, perspectiveColor) => {
 
 const buildUciMove = (move = {}) => `${move.from || ""}${move.to || ""}${move.promotion || ""}`;
 
+const createMoveFromUci = (uciMove = "") => {
+  if (!uciMove || uciMove.length < 4) {
+    return null;
+  }
+
+  return {
+    from: uciMove.slice(0, 2),
+    to: uciMove.slice(2, 4),
+    promotion: uciMove.slice(4, 5) || undefined
+  };
+};
+
 const formatSuggestedMove = ({ beforeFen, bestMove }) => {
   if (!bestMove) {
     return null;
@@ -50,97 +78,182 @@ const formatSuggestedMove = ({ beforeFen, bestMove }) => {
   return move?.san || buildUciMove(bestMove) || null;
 };
 
-const classifyMove = (evalDrop) => {
-  if (evalDrop > BLUNDER_THRESHOLD) {
+const normalizeLineScore = (score, perspectiveColor, fen) =>
+  normalizeScoreForPerspective(score, fen, perspectiveColor);
+
+const classifyByDelta = (delta) => {
+  const match =
+    RATING_THRESHOLDS.find((entry) => delta <= entry.maxDelta) ||
+    RATING_THRESHOLDS[RATING_THRESHOLDS.length - 1];
+
+  return {
+    classification: match.classification,
+    tone: match.tone,
+    motionState: match.motionState,
+    message: match.classification
+  };
+};
+
+const promoteBestMoveClassification = ({ classification, delta, bestMoveMatches }) => {
+  if (!bestMoveMatches) {
+    return classification;
+  }
+
+  if (delta >= 2) {
+    return "brilliant";
+  }
+
+  if (delta >= 1) {
+    return "great";
+  }
+
+  if (["blunder", "miss", "mistake", "inaccuracy", "good", "excellent"].includes(classification)) {
+    return "best";
+  }
+
+  return classification;
+};
+
+const normalizeHintMatchedClassification = (classification) => {
+  if (["brilliant", "great", "best"].includes(classification)) {
+    return classification;
+  }
+
+  return "best";
+};
+
+const buildWhyLineSanSequence = ({ beforeFen, uciPv = [] }) => {
+  if (!beforeFen || !uciPv.length) {
+    return [];
+  }
+
+  const chess = restoreChessGame({ fen: beforeFen });
+  const sanMoves = [];
+
+  for (const uciMove of uciPv.slice(0, WHY_PLY_LIMIT)) {
+    const move = applyMove(chess, createMoveFromUci(uciMove));
+
+    if (!move?.san) {
+      break;
+    }
+
+    sanMoves.push(move.san);
+  }
+
+  return sanMoves;
+};
+
+const buildWhyLines = ({ beforeFen, perspectiveColor, analysis }) => {
+  const lines = Array.isArray(analysis?.pvLines)
+    ? analysis.pvLines
+    : analysis?.pv?.length
+      ? [{ multipv: 1, score: analysis.score, pv: analysis.pv }]
+      : [];
+
+  return lines
+    .slice(0, MAX_WHY_LINES)
+    .map((line, index) => {
+      const sanSequence = buildWhyLineSanSequence({
+        beforeFen,
+        uciPv: line.pv || []
+      });
+
+      const evalScore = normalizeLineScore(line.score, perspectiveColor, beforeFen);
+
+      if (!sanSequence.length) {
+        return null;
+      }
+
+      return {
+        rank: index + 1,
+        san: sanSequence,
+        eval: evalScore === null ? null : roundScore(evalScore)
+      };
+    })
+    .filter(Boolean);
+};
+
+const buildExplanation = ({ classification }) =>
+  `Rated as ${classification}. Use Why? to view principal continuations.`;
+
+const formatColorLabel = (color) =>
+  color === "black" ? "Black" : color === "white" ? "White" : "Opponent";
+
+const getAdvisoryPresentation = ({ evalDelta = 0, playedMove = {} }) => {
+  const isCheck = Boolean(playedMove.isCheck || /[+#]/.test(playedMove.san || ""));
+  const isCapture = Boolean(playedMove.captured || (playedMove.san || "").includes("x"));
+
+  if (isCheck || evalDelta <= -1.4) {
     return {
-      classification: "Blunder",
-      tone: "blunder",
-      motionState: "blunder",
-      message: "That is a major slip."
+      tone: "warning",
+      motionState: "engine-danger"
     };
   }
 
-  if (evalDrop >= GOOD_MOVE_THRESHOLD) {
+  if (isCapture || evalDelta <= -0.35) {
     return {
-      classification: "Inaccuracy",
-      tone: "inaccuracy",
-      motionState: "inaccuracy",
-      message: "A little drift from the cleanest line."
+      tone: "warning",
+      motionState: "engine-warning"
     };
   }
 
   return {
-    classification: "Good Move",
-    tone: "good",
-    motionState: "good",
-    message: "That keeps your plan intact."
+    tone: "thinking",
+    motionState: "thinking"
   };
 };
 
-const buildExplanation = ({
-  classification,
-  bestMoveMatches,
-  afterScore
-}) => {
-  if (classification === "Good Move") {
-    if (bestMoveMatches) {
-      return "Best move. You found the cleanest line.";
-    }
+const analyzeOpponentIntent = ({ playedMove = {}, opponentColor, evalDelta = 0 }) => {
+  const actor = formatColorLabel(opponentColor);
+  const targetSquare = typeof playedMove.to === "string" ? playedMove.to : "";
+  const centerSquares = new Set(["d4", "d5", "e4", "e5"]);
+  const isCenterIncursion = centerSquares.has(targetSquare);
+  const isCheck = Boolean(playedMove.isCheck || /[+#]/.test(playedMove.san || ""));
+  const isCapture = Boolean(playedMove.captured || (playedMove.san || "").includes("x"));
 
-    if (afterScore >= 1.5) {
-      return "Strong move. Your edge stays intact.";
-    }
-
-    return "Solid move. Your position holds.";
+  if (isCheck && isCapture) {
+    return `${actor} combines a capture with check. Stabilize king safety before counterplay.`;
   }
 
-  if (classification === "Inaccuracy") {
-    return "A slight drift. The engine sees a cleaner line.";
+  if (isCheck) {
+    return `${actor} just gave check. Address the immediate threat before improving your position.`;
   }
 
-  return "A serious mistake. Material or initiative may be lost.";
-};
-
-const classifyEngineReply = ({ evalSwing, afterScore }) => {
-  if (evalSwing > ENGINE_THREAT_THRESHOLD || afterScore <= ENGINE_THREAT_SCORE) {
-    return {
-      classification: "Engine Threat",
-      tone: "engine-danger",
-      motionState: "engine-danger",
-      message: "Strong reply. You may need to defend.",
-      explanation: "It found immediate pressure."
-    };
+  if (isCapture) {
+    return `Watch out, ${actor} just initiated a capture.`;
   }
 
-  if (evalSwing >= ENGINE_PRESSURE_THRESHOLD || afterScore <= ENGINE_PRESSURE_SCORE) {
-    return {
-      classification: "Engine Pressure",
-      tone: "engine-warning",
-      motionState: "engine-warning",
-      message: "The engine improved its position.",
-      explanation: "A precise reply. Be ready to absorb pressure."
-    };
+  if (evalDelta <= -1.5) {
+    return `${actor} is pressing hard. Look for a precise defensive resource.`;
   }
 
-  return {
-    classification: "Engine Reply",
-    tone: "engine",
-    motionState: "engine-strong",
-    message:
-      afterScore >= 0.9
-        ? "Strong reply. Your edge still holds."
-        : "The engine defended well.",
-    explanation:
-      afterScore >= 0.9
-        ? "It defended well, but chances remain."
-        : "Its continuation is precise. Stay alert."
-  };
+  if (evalDelta <= -0.6) {
+    return isCenterIncursion
+      ? `${actor} is applying pressure to the center.`
+      : `${actor} is increasing pressure. Watch tactical threats around your king and center.`;
+  }
+
+  if (evalDelta >= 0.9) {
+    return `${actor}'s move loses the advantage. Look for a counter-attack.`;
+  }
+
+  if (evalDelta >= 0.35) {
+    return `${actor} eased the pressure. You may have a small initiative window.`;
+  }
+
+  return `${actor} is improving piece activity. Keep development coordinated and watch central tension.`;
 };
 
 const getAnalysisForPosition = async (fen) =>
   analysisEngine.getPositionAnalysis({
     fen,
     ...ANALYSIS_SETTINGS
+  });
+
+const getWhyAnalysisForPosition = async (fen) =>
+  analysisEngine.getPositionAnalysis({
+    fen,
+    ...WHY_ANALYSIS_SETTINGS
   });
 
 const analyzePositionShift = async ({
@@ -183,44 +296,95 @@ const evaluateMove = async ({
   beforeFen,
   afterFen,
   playerColor,
-  playedMove
+  moveColor = playerColor,
+  playedMove,
+  hintedMoveMatches = false
 }) => {
-  const transition = await analyzePositionShift({
-    beforeFen,
-    afterFen,
-    perspectiveColor: playerColor
-  });
+  const [transition, whyAnalysis] = await Promise.all([
+    analyzePositionShift({
+      beforeFen,
+      afterFen,
+      perspectiveColor: playerColor
+    }),
+    getWhyAnalysisForPosition(beforeFen).catch(() => null)
+  ]);
 
   if (!transition) {
     return null;
   }
 
-  const evalDrop = Math.max(0, transition.evalSwing);
-  const { classification, tone, motionState, message } = classifyMove(evalDrop);
+  const delta = roundScore(transition.afterScore - transition.beforeScore);
+
+  if (moveColor !== playerColor) {
+    const threatSummary = analyzeOpponentIntent({
+      playedMove,
+      opponentColor: moveColor,
+      evalDelta: delta
+    });
+    const advisory = getAdvisoryPresentation({
+      evalDelta: delta,
+      playedMove
+    });
+
+    return {
+      source: "opponent",
+      classification: null,
+      tone: advisory.tone,
+      motionState: advisory.motionState,
+      threatSummary,
+      message: threatSummary,
+      explanation: "Advisory mode: read the threat and choose a concrete defensive or counter-attacking plan.",
+      bestMove: null,
+      whyLines: [],
+      beforeFen,
+      evalBefore: roundScore(transition.beforeScore),
+      evalAfter: roundScore(transition.afterScore),
+      evalDrop: roundScore(Math.max(0, transition.beforeScore - transition.afterScore)),
+      evalDelta: delta
+    };
+  }
+
+  const baseClassification = classifyByDelta(delta);
   const suggestedMove = formatSuggestedMove({
     beforeFen,
     bestMove: transition.beforeAnalysis.bestMove
   });
   const playedMoveSan = playedMove?.san || buildUciMove(playedMove);
-  const bestMoveMatches =
+  const computedBestMoveMatches =
     Boolean(suggestedMove) && suggestedMove === playedMoveSan;
+  const bestMoveMatches = Boolean(hintedMoveMatches) || computedBestMoveMatches;
+  let classification = promoteBestMoveClassification({
+    classification: baseClassification.classification,
+    delta,
+    bestMoveMatches
+  });
+
+  if (hintedMoveMatches) {
+    classification = normalizeHintMatchedClassification(classification);
+  }
+  const whyLines = buildWhyLines({
+    beforeFen,
+    perspectiveColor: playerColor,
+    analysis: whyAnalysis || transition.beforeAnalysis
+  });
 
   return {
     source: "player",
     classification,
-    tone,
-    motionState,
-    message,
+    tone: baseClassification.tone,
+    motionState: baseClassification.motionState,
+    message: classification,
     explanation: buildExplanation({
       classification,
-      bestMoveMatches,
-      afterScore: transition.afterScore
+      bestMoveMatches
     }),
-    bestMove:
-      classification === "Good Move" || bestMoveMatches ? null : suggestedMove,
+    bestMove: bestMoveMatches ? null : suggestedMove,
+    whyLines,
+    beforeFen,
     evalBefore: roundScore(transition.beforeScore),
     evalAfter: roundScore(transition.afterScore),
-    evalDrop
+    evalDrop: roundScore(Math.max(0, transition.beforeScore - transition.afterScore)),
+    evalDelta: delta
   };
 };
 
@@ -228,6 +392,7 @@ const evaluateEngineMove = async ({
   beforeFen,
   afterFen,
   playerColor,
+  playedMove,
   beforeAnalysis = null
 }) => {
   const transition = await analyzePositionShift({
@@ -241,19 +406,33 @@ const evaluateEngineMove = async ({
     return null;
   }
 
-  const evalSwing = Math.max(0, transition.evalSwing);
-  const commentary = classifyEngineReply({
-    evalSwing,
-    afterScore: transition.afterScore
+  const delta = roundScore(transition.afterScore - transition.beforeScore);
+  const moveColor = getTurnFromFen(beforeFen);
+  const threatSummary = analyzeOpponentIntent({
+    playedMove,
+    opponentColor: moveColor,
+    evalDelta: delta
+  });
+  const advisory = getAdvisoryPresentation({
+    evalDelta: delta,
+    playedMove
   });
 
   return {
     source: "engine",
-    ...commentary,
+    classification: null,
+    tone: advisory.tone,
+    motionState: advisory.motionState,
+    threatSummary,
+    message: threatSummary,
+    explanation: "Advisory mode: evaluate the threat before committing your next move.",
+    whyLines: [],
     bestMove: null,
+    beforeFen,
     evalBefore: roundScore(transition.beforeScore),
     evalAfter: roundScore(transition.afterScore),
-    evalSwing
+    evalSwing: roundScore(Math.max(0, transition.beforeScore - transition.afterScore)),
+    evalDelta: delta
   };
 };
 

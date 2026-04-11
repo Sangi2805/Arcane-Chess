@@ -73,8 +73,10 @@ const parseAnalysisLine = (line) => {
   }
 
   const pvMatch = line.match(/\bpv (.+)$/);
+  const multipvMatch = line.match(/\bmultipv (\d+)/);
 
   return {
+    multipv: multipvMatch ? Number(multipvMatch[1]) : 1,
     score: cpMatch
       ? {
           type: "cp",
@@ -142,6 +144,7 @@ class EngineService {
     depth = 8,
     moveTime = 150,
     skillLevel = 20,
+    multipv = 1,
     searchMoves = []
   }) {
     const nextTask = this.queue
@@ -152,6 +155,7 @@ class EngineService {
           depth,
           moveTime,
           skillLevel,
+          multipv,
           searchMoves
         })
       );
@@ -166,6 +170,7 @@ class EngineService {
     depth,
     moveTime,
     skillLevel,
+    multipv = 1,
     searchMoves = []
   }) {
     await this.ensureReady();
@@ -175,15 +180,18 @@ class EngineService {
     await this.waitForLine((line) => line === "readyok", 15000);
 
     let latestInfo = null;
+    const pvByRank = new Map();
     const observer = (line) => {
       const parsed = parseAnalysisLine(line);
 
       if (parsed) {
         latestInfo = parsed;
+        pvByRank.set(parsed.multipv || 1, parsed);
       }
     };
 
     this.lineObservers.push(observer);
+    this.send(`setoption name MultiPV value ${Math.max(1, Number(multipv) || 1)}`);
     this.send(`position fen ${fen}`);
     this.send(
       [
@@ -202,12 +210,20 @@ class EngineService {
         20000
       );
       const bestMoveUci = bestMoveLine.split(" ")[1];
+      const pvLines = Array.from(pvByRank.entries())
+        .sort((entryA, entryB) => entryA[0] - entryB[0])
+        .map((entry) => ({
+          multipv: entry[0],
+          score: entry[1].score || null,
+          pv: entry[1].pv || []
+        }));
 
       return {
         bestMoveUci,
         bestMove: createMoveFromUci(bestMoveUci),
         score: latestInfo?.score || null,
-        pv: latestInfo?.pv || []
+        pv: latestInfo?.pv || [],
+        pvLines
       };
     } finally {
       this.removeLineObserver(observer);

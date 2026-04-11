@@ -375,33 +375,6 @@
                 <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
                 <div id="board" class="board" aria-label="Arcane Chess Board"></div>
                 <div
-                  id="board-feedback-banner"
-                  class="board-feedback hidden"
-                  aria-live="polite"
-                  aria-hidden="true"
-                >
-                  <div class="board-feedback-copy">
-                    <strong id="board-feedback-title">Board Status</strong>
-                    <span id="board-feedback-message">The duel is underway.</span>
-                  </div>
-                  <div class="board-feedback-actions">
-                    <button
-                      id="claim-draw-button"
-                      type="button"
-                      class="button-secondary button-small hidden"
-                    >
-                      Claim Draw
-                    </button>
-                    <button
-                      id="continue-play-button"
-                      type="button"
-                      class="button-secondary button-small hidden"
-                    >
-                      Continue Play
-                    </button>
-                  </div>
-                </div>
-                <div
                   id="game-over-banner"
                   class="game-over-banner hidden"
                   aria-live="polite"
@@ -418,6 +391,33 @@
                     <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
                     <button type="button" class="button-secondary" data-promotion="n">Knight</button>
                   </div>
+                </div>
+              </div>
+              <div
+                id="board-feedback-banner"
+                class="board-feedback hidden"
+                aria-live="polite"
+                aria-hidden="true"
+              >
+                <div class="board-feedback-copy">
+                  <strong id="board-feedback-title">Board Status</strong>
+                  <span id="board-feedback-message">The duel is underway.</span>
+                </div>
+                <div class="board-feedback-actions">
+                  <button
+                    id="claim-draw-button"
+                    type="button"
+                    class="button-secondary button-small hidden"
+                  >
+                    Claim Draw
+                  </button>
+                  <button
+                    id="continue-play-button"
+                    type="button"
+                    class="button-secondary button-small hidden"
+                  >
+                    Continue Play
+                  </button>
                 </div>
               </div>
               </div>
@@ -480,12 +480,29 @@
                   </div>
                   <div class="coach-footer">
                     <span id="feedback-classification" class="feedback-badge hidden">
-                      Good Move
+                      good
                     </span>
+                    <button
+                      id="feedback-why-toggle"
+                      class="coach-why-toggle hidden"
+                      type="button"
+                      aria-controls="feedback-why-lines"
+                      aria-expanded="false"
+                    >
+                      Why?
+                    </button>
                     <p id="feedback-suggestion" class="coach-suggestion hidden">
                       Better move: Nf3
                     </p>
                   </div>
+                  <div class="coach-hint-actions">
+                    <button id="hint-button" class="button-secondary" type="button">Hint</button>
+                    <button id="hint-why-button" class="button-secondary hint-why-button hidden" type="button" disabled>
+                      Why?
+                    </button>
+                  </div>
+                  <p id="hint-why-text" class="hint-why-text hidden"></p>
+                  <div id="feedback-why-lines" class="coach-why-lines hidden" aria-live="polite"></div>
                 </div>
               </div>
             </div>

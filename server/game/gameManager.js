@@ -30,6 +30,17 @@ const {
 } = require("../services/evaluationService");
 const { getMongoStatus, isMongoAvailable } = require("../db/mongo");
 
+const HINT_ANALYSIS_SETTINGS = {
+  depth: 6,
+  moveTime: 120,
+  skillLevel: 20,
+  multipv: 3
+};
+const HINT_PLY_LIMIT = 6;
+
+const buildUciMove = ({ from, to, promotion } = {}) =>
+  `${from || ""}${to || ""}${promotion || ""}`;
+
 const DEFAULT_SETTINGS = {
   difficulty: "easy",
   playerColor: "white",
@@ -383,7 +394,8 @@ const createGame = ({
     manualOutcome: null,
     pendingCoachReview: null,
     pendingEngineTurn: null,
-    resolvedEngineTurn: null
+    resolvedEngineTurn: null,
+    lastHint: null
   };
 
   activeGames.set(game.actor.key, game);
@@ -531,6 +543,18 @@ const makePlayerMove = async ({ actor, from, to, promotion }) => {
   }
 
   const moveTimestamp = Date.now();
+  const playedMoveUci = buildUciMove({
+    from: move.from,
+    to: move.to,
+    promotion: move.promotion || undefined
+  });
+  const hintedMoveMatches =
+    Boolean(game.lastHint) &&
+    game.lastHint.fen === beforeFen &&
+    game.lastHint.playerColor === game.settings.playerColor &&
+    game.lastHint.uci === playedMoveUci;
+
+  game.lastHint = null;
 
   if (game.clockState) {
     game.clockState = switchClockTurn(
@@ -568,6 +592,8 @@ const makePlayerMove = async ({ actor, from, to, promotion }) => {
       beforeFen,
       afterFen: game.chess.fen(),
       playerColor: game.settings.playerColor,
+      moveColor: move.color === "w" ? "white" : "black",
+      hintedMoveMatches,
       playedMove: {
         from: move.from,
         to: move.to,
@@ -626,6 +652,122 @@ const makePlayerMove = async ({ actor, from, to, promotion }) => {
     pending: {
       coach: Boolean(game.pendingCoachReview),
       engine: shouldQueueEngine
+    }
+  };
+};
+
+const createHintSummary = ({ score }) => {
+  if (!score) {
+    return "This line improves your activity and keeps your position coordinated.";
+  }
+
+  if (score.type === "mate") {
+    if (score.value > 0) {
+      return `This line points to a forced mate in ${Math.abs(score.value)}.`;
+    }
+
+    return "This line is the best defensive resource to avoid a mating net.";
+  }
+
+  const cp = Number(score.value || 0);
+
+  if (cp >= 140) {
+    return "This sequence wins material or creates a decisive tactical advantage.";
+  }
+
+  if (cp >= 60) {
+    return "This sequence builds pressure and improves your initiative.";
+  }
+
+  if (cp <= -120) {
+    return "This is a defensive save that reduces immediate tactical danger.";
+  }
+
+  if (cp <= -40) {
+    return "This line helps stabilize your position and limit your opponent's threats.";
+  }
+
+  return "This continuation keeps the position balanced while improving your piece coordination.";
+};
+
+const buildHintLineFromAnalysis = ({ fen, analysis }) => {
+  const chess = restoreChessGame({ fen });
+  const pv = (analysis?.pvLines?.[0]?.pv || analysis?.pv || []).slice(0, HINT_PLY_LIMIT);
+  const san = [];
+
+  pv.forEach((uciMove) => {
+    if (!uciMove || uciMove.length < 4) {
+      return;
+    }
+
+    const move = applyMove(chess, {
+      from: uciMove.slice(0, 2),
+      to: uciMove.slice(2, 4),
+      promotion: uciMove.slice(4, 5) || undefined
+    });
+
+    if (move?.san) {
+      san.push(move.san);
+    }
+  });
+
+  return san;
+};
+
+const getPositionHint = async (actor) => {
+  const game = ensureGame(actor);
+
+  if (!game.hasStarted) {
+    throw new Error("Start a new game before requesting a hint.");
+  }
+
+  if (isGameFinished(game)) {
+    throw new Error("Hints are unavailable after the game is over.");
+  }
+
+  if (getTurn(game) !== game.settings.playerColor) {
+    throw new Error("Hints are only available on your turn.");
+  }
+
+  const fen = game.chess.fen();
+  const analysis = await engineService.getPositionAnalysis({
+    fen,
+    ...HINT_ANALYSIS_SETTINGS
+  });
+
+  if (!analysis?.bestMove) {
+    throw new Error("No hint line is available for this position.");
+  }
+
+  const suggestedMove = applyMove(restoreChessGame({ fen }), analysis.bestMove);
+  const hintUci = buildUciMove({
+    from: analysis.bestMove.from,
+    to: analysis.bestMove.to,
+    promotion: analysis.bestMove.promotion || undefined
+  });
+  const continuation = buildHintLineFromAnalysis({
+    fen,
+    analysis
+  });
+
+  game.lastHint = {
+    fen,
+    playerColor: game.settings.playerColor,
+    uci: hintUci,
+    issuedAt: Date.now()
+  };
+
+  return {
+    hint: {
+      bestMove: {
+        from: analysis.bestMove.from,
+        to: analysis.bestMove.to,
+        promotion: analysis.bestMove.promotion || null,
+        san: suggestedMove?.san || null
+      },
+      continuation,
+      fen,
+      summary: createHintSummary({ score: analysis.pvLines?.[0]?.score || analysis.score })
     }
   };
 };
@@ -722,6 +864,14 @@ const performEngineMove = async (
       beforeFen,
       afterFen: game.chess.fen(),
       playerColor: game.settings.playerColor,
+      playedMove: {
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion || undefined,
+        san: move.san,
+        captured: move.captured || null,
+        isCheck: /[+#]/.test(move.san || "")
+      },
       beforeAnalysis: engineAnalysis
     }).catch((error) => {
       console.warn("Arcane Coach engine commentary skipped:", error.message);
@@ -1025,6 +1175,7 @@ module.exports = {
   createNewGame,
   getSerializableState,
   getLiveSerializableState,
+  getPositionHint,
   makePlayerMove,
   offerDraw,
   performEngineMove,
