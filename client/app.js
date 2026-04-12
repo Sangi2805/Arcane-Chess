@@ -156,6 +156,8 @@ const multiplayerRoomIdLabel = document.getElementById("mp-room-id-label");
 const multiplayerConnectionStatus = document.getElementById("mp-connection-status");
 const hallResumeButton = document.getElementById("hall-resume-button");
 const hallHistoryButton = document.getElementById("hall-history-button");
+const hallRandomTimeControlButton = document.getElementById("hall-random-time-control-button");
+const hallRandomTimeControlLabel = document.getElementById("hall-random-time-label");
 const lobbyView = document.getElementById("lobby-view");
 const gameView = document.getElementById("game-view");
 const authView = document.getElementById("auth-view");
@@ -302,6 +304,14 @@ const TIME_CONTROL_PRESETS = {
     incrementMs: 0
   }
 };
+const HALL_RANDOM_TIME_CONTROL_IDS = [
+  "bullet-1",
+  "blitz-3-2",
+  "blitz-5",
+  "rapid-10",
+  "rapid-15-10",
+  "rapid-30"
+];
 const DRAW_OUTCOME_LABELS = {
   stalemate: "Stalemate",
   "draw-repetition": "Draw by repetition",
@@ -936,13 +946,12 @@ const renderMultiplayerRealtimeControls = () => {
 };
 
 const renderLobbyTimeControlButtons = () => {
-  const activeTimeControlId = getSelectedTimeControlId();
+  if (!hallRandomTimeControlLabel) {
+    return;
+  }
 
-  dashboardTimeControlButtons.forEach((button) => {
-    const isActive = button.dataset.dashboardTimeControl === activeTimeControlId;
-    button.classList.toggle("lobby-time-chip-active", isActive);
-    button.setAttribute("aria-pressed", isActive ? "true" : "false");
-  });
+  const activeTimeControl = getResolvedTimeControl(getSelectedTimeControlId());
+  hallRandomTimeControlLabel.textContent = `Selected: ${activeTimeControl.label}`;
 };
 
 function renderView() {
@@ -2346,25 +2355,16 @@ const setSessionState = (session = {}) => {
 const renderGuestProfile = () => {
   if (isAuthenticated()) {
     guestName.textContent = getSessionDisplayName();
-    guestSubtitle.textContent = state.persistence.available
-      ? "Account sync is active for this archive."
-      : "Account session is active, but MongoDB persistence is offline.";
+    guestSubtitle.textContent = "Signed in";
     guestMeta.textContent = "Unfinished and completed games belong to your account.";
     return;
   }
 
   guestName.textContent = state.guest?.displayName || "Playing as Guest";
-
-  if (!state.persistence.available) {
-    guestSubtitle.textContent = "Guest mode is local until MongoDB returns.";
-    guestMeta.textContent =
-      "Saved games and history stay on this browser when persistence is available.";
-    return;
-  }
-
-  guestSubtitle.textContent = "Guest mode is active on this browser.";
-  guestMeta.textContent =
-    "Save and resume untimed games here without creating an account.";
+  guestSubtitle.textContent = "Guest mode active";
+  guestMeta.textContent = state.persistence.available
+    ? "Save and resume untimed games here without creating an account."
+    : "Saved games and history stay on this browser when persistence is available.";
 };
 
 const renderSessionUi = () => {
@@ -2496,6 +2496,10 @@ const syncActionButtons = () => {
 
   if (hallLogoutButton) {
     hallLogoutButton.disabled = state.busy || !isAuthenticated();
+  }
+
+  if (hallRandomTimeControlButton) {
+    hallRandomTimeControlButton.disabled = state.busy;
   }
 
   if (soloLobbyButton) {
@@ -6483,22 +6487,28 @@ if (backToHallButton) {
     renderView();
   });
 }
-dashboardTimeControlButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const nextTimeControlId = button.dataset.dashboardTimeControl;
+hallRandomTimeControlButton?.addEventListener("click", () => {
+  const availableRandomTimeControlIds = HALL_RANDOM_TIME_CONTROL_IDS.filter(
+    (timeControlId) => Boolean(TIME_CONTROL_PRESETS[timeControlId])
+  );
 
-    if (!timeControlSelect || !TIME_CONTROL_PRESETS[nextTimeControlId]) {
-      return;
-    }
+  if (!timeControlSelect || availableRandomTimeControlIds.length === 0) {
+    return;
+  }
 
-    timeControlSelect.value = nextTimeControlId;
-    renderClocks();
-    renderMultiplayerLobby();
-  });
+  const nextTimeControlId =
+    availableRandomTimeControlIds[Math.floor(Math.random() * availableRandomTimeControlIds.length)] ||
+    getSelectedTimeControlId();
+
+  timeControlSelect.value = nextTimeControlId;
+  setLobbyMode("solo");
+  renderLobbyTimeControlButtons();
+  void startNewGame();
 });
 timeControlSelect?.addEventListener("change", () => {
   renderClocks();
   renderMultiplayerLobby();
+  renderLobbyTimeControlButtons();
 });
 colorInputs.forEach((input) => {
   input.addEventListener("change", () => {

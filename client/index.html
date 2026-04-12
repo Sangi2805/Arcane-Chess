@@ -135,23 +135,17 @@
         <article class="panel controls-panel">
 
           <div class="hall-hero-heading">
-            <p class="label">Arcane Command Center</p>
-            <h2>Hall</h2>
-            <p class="card-copy">Choose your route, prepare a duel, or jump into your archive.</p>
-          </div>
-
-          <!-- Compact account strip -->
-          <div class="cp-acct-strip hall-account-strip">
-            <div>
-              <strong id="guest-name" class="cp-acct-name">Playing as Guest</strong>
-              <span id="guest-subtitle" class="cp-acct-meta">Preparing guest mode...</span>
+            <div class="hall-hero-topline">
+              <p class="label">Arcane Command Center</p>
+              <button id="hall-logout-button" class="button-secondary button-small hidden" type="button">
+                Log Out
+              </button>
             </div>
-            <span id="auth-session-pill" class="pill">Guest</span>
-          </div>
-          <div class="cp-row">
-            <button id="hall-logout-button" class="button-secondary hidden" type="button">
-              Log Out
-            </button>
+            <div class="hall-hero-copy">
+              <h2>HALL — <span id="guest-name">Playing as Guest</span></h2>
+              <p id="guest-subtitle" class="hall-signed-in-line">Guest mode active</p>
+              <p class="card-copy">Choose your route, prepare a duel, or jump into your archive.</p>
+            </div>
           </div>
 
           <!-- Hidden compatibility elements — app.js needs these IDs in the DOM -->
@@ -358,25 +352,15 @@
               <button id="hall-resume-button" class="button-secondary" type="button">Resume Game</button>
               <button id="hall-history-button" class="button-secondary" type="button">Match History</button>
             </div>
-          </section>
-          </section>
-
-          <section class="lobby-card hall-quick-duel-strip" aria-live="polite">
-            <div class="lobby-card-header">
-              <div class="lobby-heading">
-                <span class="label">Quick Duel</span>
-                <strong>Time shortcuts</strong>
-              </div>
-              <span class="pill">Utility</span>
+            <div class="hall-random-duel-strip" aria-live="polite">
+              <p class="hall-random-wheel-kicker">Arcane Wheel</p>
+              <button id="hall-random-time-control-button" class="button-secondary hall-random-time-control-button" type="button">
+                <span class="hall-random-wheel-orbit" aria-hidden="true"></span>
+                <span class="hall-random-wheel-core">Spin a Duel</span>
+              </button>
+              <p id="hall-random-time-label" class="lobby-note">Selected: 5 min</p>
             </div>
-            <div class="lobby-time-grid" aria-label="Recommended multiplayer time controls">
-              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="bullet-1">1 min</button>
-              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="blitz-3-2">3 | 2</button>
-              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="blitz-5">5 min</button>
-              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="rapid-10">10 min</button>
-              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="rapid-15-10">15 | 10</button>
-              <button type="button" class="button-secondary lobby-time-chip" data-dashboard-time-control="rapid-30">30 min</button>
-            </div>
+          </section>
           </section>
 
         </article>
