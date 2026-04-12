@@ -137,9 +137,14 @@
           <div class="hall-hero-heading">
             <div class="hall-hero-topline">
               <p class="label">Arcane Command Center</p>
-              <button id="hall-logout-button" class="button-secondary button-small hidden" type="button">
-                Log Out
-              </button>
+              <div class="hall-hero-actions">
+                <button id="ambient-audio-toggle" class="button-secondary button-small audio-toggle-button" type="button">
+                  Mute Music
+                </button>
+                <button id="hall-logout-button" class="button-secondary button-small hidden" type="button">
+                  Log Out
+                </button>
+              </div>
             </div>
             <div class="hall-hero-copy">
               <h2>HALL — <span id="guest-name">Playing as Guest</span></h2>
@@ -547,6 +552,7 @@
                 <span class="label">Coach Channel</span>
                 <strong class="coach-title">Arcane Coach</strong>
                 <span id="status-text" class="coach-status-line">Loading game...</span>
+                <div class="coach-heading-actions"></div>
               </div>
               <div class="coach-speech">
                 <div class="coach-bubble">

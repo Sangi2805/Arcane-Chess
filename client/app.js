@@ -158,6 +158,9 @@ const hallResumeButton = document.getElementById("hall-resume-button");
 const hallHistoryButton = document.getElementById("hall-history-button");
 const hallRandomTimeControlButton = document.getElementById("hall-random-time-control-button");
 const hallRandomTimeControlLabel = document.getElementById("hall-random-time-label");
+const ambientAudioToggleButton = document.getElementById("ambient-audio-toggle");
+const hallHeroActions = document.querySelector(".hall-hero-actions");
+const coachHeadingActions = document.querySelector(".coach-heading-actions");
 const lobbyView = document.getElementById("lobby-view");
 const gameView = document.getElementById("game-view");
 const authView = document.getElementById("auth-view");
@@ -398,6 +401,35 @@ const state = {
   lobbyMode: window.localStorage.getItem(LOBBY_MODE_STORAGE_KEY) || "solo",
   activeRecordView:
     window.localStorage.getItem(RECORD_VIEW_STORAGE_KEY) || "moves"
+};
+
+const AMBIENT_TRACK_VOLUMES = {
+  hall: 0.2,
+  game: 0.15
+};
+
+const createAmbientTrack = (src) => {
+  const audio = new Audio(src);
+
+  audio.loop = true;
+  audio.preload = "auto";
+  audio.volume = 0;
+
+  return audio;
+};
+
+const ambientTracks = {
+  hall: createAmbientTrack("assets/audio/hall-ambient.mp3"),
+  game: createAmbientTrack("assets/audio/game-ambient.mp3")
+};
+
+const ambientState = {
+  muted: false,
+  unlocked: false,
+  activeKey: null,
+  transitionId: 0,
+  fadeTimerId: null,
+  fadeResolve: null
 };
 
 let lastRenderedCoachSignature = "";
@@ -954,6 +986,180 @@ const renderLobbyTimeControlButtons = () => {
   hallRandomTimeControlLabel.textContent = `Selected: ${activeTimeControl.label}`;
 };
 
+const getAmbientTargetKey = () => (state.view === "game" ? "game" : "hall");
+
+const clearAmbientFade = () => {
+  if (ambientState.fadeTimerId !== null) {
+    window.cancelAnimationFrame(ambientState.fadeTimerId);
+    ambientState.fadeTimerId = null;
+  }
+
+  if (ambientState.fadeResolve) {
+    const resolveFade = ambientState.fadeResolve;
+    ambientState.fadeResolve = null;
+    resolveFade();
+  }
+};
+
+const updateAmbientToggleLabel = () => {
+  if (!ambientAudioToggleButton) {
+    return;
+  }
+
+  const muted = ambientState.muted;
+  const nextLabel = muted ? "Unmute Music" : "Mute Music";
+
+  ambientAudioToggleButton.textContent = nextLabel;
+  ambientAudioToggleButton.setAttribute("aria-label", muted ? "Unmute ambient music" : "Mute ambient music");
+  ambientAudioToggleButton.setAttribute("aria-pressed", muted ? "true" : "false");
+};
+
+const syncAmbientTogglePlacement = () => {
+  if (!ambientAudioToggleButton) {
+    return;
+  }
+
+  const targetMount = state.view === "game" ? coachHeadingActions : hallHeroActions;
+
+  if (targetMount && ambientAudioToggleButton.parentElement !== targetMount) {
+    targetMount.appendChild(ambientAudioToggleButton);
+  }
+};
+
+const fadeAmbientAudio = (audio, fromVolume, toVolume, durationMs, token = ambientState.transitionId) =>
+  new Promise((resolve) => {
+    const startTime = performance.now();
+
+    clearAmbientFade();
+    ambientState.fadeResolve = resolve;
+
+    const step = () => {
+      if (token !== ambientState.transitionId) {
+        ambientState.fadeTimerId = null;
+        ambientState.fadeResolve = null;
+        resolve();
+        return;
+      }
+
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / durationMs, 1);
+
+      audio.volume = fromVolume + (toVolume - fromVolume) * progress;
+
+      if (progress >= 1) {
+        ambientState.fadeTimerId = null;
+        ambientState.fadeResolve = null;
+        resolve();
+        return;
+      }
+
+      ambientState.fadeTimerId = window.requestAnimationFrame(step);
+    };
+
+    ambientState.fadeTimerId = window.requestAnimationFrame(step);
+  });
+
+const stopAmbientMusic = () => {
+  ambientState.transitionId += 1;
+  clearAmbientFade();
+
+  Object.values(ambientTracks).forEach((audio) => {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = 0;
+  });
+
+  ambientState.activeKey = null;
+};
+
+const syncAmbientMusic = async () => {
+  const targetKey = getAmbientTargetKey();
+  const targetAudio = ambientTracks[targetKey];
+  const targetVolume = AMBIENT_TRACK_VOLUMES[targetKey];
+
+  if (ambientState.muted) {
+    stopAmbientMusic();
+    updateAmbientToggleLabel();
+    return;
+  }
+
+  if (!ambientState.unlocked) {
+    updateAmbientToggleLabel();
+    return;
+  }
+
+  if (ambientState.activeKey === targetKey && !targetAudio.paused) {
+    targetAudio.volume = targetVolume;
+    updateAmbientToggleLabel();
+    return;
+  }
+
+  const transitionId = ++ambientState.transitionId;
+  const previousKey = ambientState.activeKey;
+  const previousAudio = previousKey ? ambientTracks[previousKey] : null;
+
+  ambientState.activeKey = targetKey;
+
+  if (previousAudio && previousAudio !== targetAudio) {
+    const fromVolume = previousAudio.volume || AMBIENT_TRACK_VOLUMES[previousKey] || 0;
+    await fadeAmbientAudio(previousAudio, fromVolume, 0, 240, transitionId);
+
+    if (transitionId !== ambientState.transitionId) {
+      return;
+    }
+
+    previousAudio.pause();
+    previousAudio.currentTime = 0;
+  }
+
+  if (transitionId !== ambientState.transitionId) {
+    return;
+  }
+
+  targetAudio.currentTime = 0;
+  targetAudio.volume = 0;
+
+  try {
+    await targetAudio.play();
+  } catch {
+    if (transitionId === ambientState.transitionId) {
+      ambientState.activeKey = null;
+    }
+
+    return;
+  }
+
+  if (transitionId !== ambientState.transitionId) {
+    targetAudio.pause();
+    targetAudio.currentTime = 0;
+    return;
+  }
+
+  await fadeAmbientAudio(targetAudio, 0, targetVolume, 360, transitionId);
+  updateAmbientToggleLabel();
+};
+
+const unlockAmbientMusic = () => {
+  if (ambientState.unlocked) {
+    return;
+  }
+
+  ambientState.unlocked = true;
+  void syncAmbientMusic();
+};
+
+const setAmbientMuted = (muted) => {
+  ambientState.muted = muted;
+
+  if (muted) {
+    stopAmbientMusic();
+  } else {
+    void syncAmbientMusic();
+  }
+
+  updateAmbientToggleLabel();
+};
+
 function renderView() {
   document.body.classList.toggle("view-auth", state.view === "auth");
   document.body.classList.toggle("view-hall", state.view === "hall");
@@ -979,6 +1185,10 @@ function renderView() {
 
   console.log("renderView:", state.view);
   console.log("Hall visible:", lobbyView?.style.display, "Game visible:", gameView?.style.display);
+
+  syncAmbientTogglePlacement();
+  updateAmbientToggleLabel();
+  void syncAmbientMusic();
 }
 
 const renderMultiplayerLobby = () => {
@@ -6473,6 +6683,15 @@ hallHistoryButton?.addEventListener("click", () => {
   });
 });
 
+ambientAudioToggleButton?.addEventListener("click", () => {
+  if (ambientState.muted) {
+    unlockAmbientMusic();
+    setAmbientMuted(false);
+  } else {
+    setAmbientMuted(true);
+  }
+});
+
 if (backToHallButton) {
   backToHallButton.addEventListener("click", () => {
     dismissGameEndOverlay();
@@ -6487,6 +6706,9 @@ if (backToHallButton) {
     renderView();
   });
 }
+document.addEventListener("pointerdown", unlockAmbientMusic, { capture: true, passive: true });
+document.addEventListener("keydown", unlockAmbientMusic, { capture: true });
+document.addEventListener("touchstart", unlockAmbientMusic, { capture: true, passive: true });
 hallRandomTimeControlButton?.addEventListener("click", () => {
   const availableRandomTimeControlIds = HALL_RANDOM_TIME_CONTROL_IDS.filter(
     (timeControlId) => Boolean(TIME_CONTROL_PRESETS[timeControlId])

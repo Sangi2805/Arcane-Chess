@@ -1670,6 +1670,12 @@ button,
   white-space: nowrap !important;
 }
 
+.immersive-controls[data-mount="panel"] .immersive-control-row button:first-child {
+  padding-inline: 6px !important;
+  white-space: normal !important;
+  line-height: 1.05 !important;
+}
+
 .shell[data-board-view-mode="3d"] #game-view {
   grid-template-columns: 1fr !important;
 }
@@ -1681,14 +1687,84 @@ button,
 }
 
 .shell[data-board-view-mode="3d"] #game-view .board-stage {
-  width: 100% !important;
+  width: min(calc(100vw - 12px), calc(100dvh - 120px)) !important;
   max-width: none !important;
   height: 100% !important;
   min-height: 0 !important;
   margin: 0 !important;
-  gap: 8px !important;
+  gap: 5px !important;
   align-items: stretch !important;
   justify-items: center !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-player-row {
+  width: 100% !important;
+  max-width: min(640px, 100%) !important;
+  justify-self: stretch !important;
+  padding: 3px 4px !important;
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  opacity: 0.92 !important;
+  text-shadow: 0 0 10px rgba(255, 240, 213, 0.08) !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-player-row[data-active="true"] {
+  opacity: 1 !important;
+  background: linear-gradient(90deg, rgba(240, 194, 105, 0.06), transparent) !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .player-row-copy {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  gap: 1px !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .player-row-name {
+  font-size: 11px !important;
+  letter-spacing: 0.04em !important;
+  color: rgba(255, 244, 226, 0.96) !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .player-row-meta {
+  font-size: 8px !important;
+  letter-spacing: 0.1em !important;
+  color: rgba(255, 239, 217, 0.42) !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .clock-display {
+  min-width: 70px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  background: rgba(10, 9, 12, 0.3) !important;
+  border: 1px solid rgba(255, 223, 173, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .clock-display[data-active="true"] {
+  background: rgba(240, 194, 105, 0.1) !important;
+  border-color: rgba(240, 194, 105, 0.2) !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .clock-time {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.03em !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .clock-display[data-untimed="true"] {
+  min-width: auto !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .clock-display[data-untimed="true"] .clock-time {
+  font-size: 0.72rem !important;
+  letter-spacing: 0.14em !important;
 }
 
 .shell[data-board-view-mode="3d"] #game-view .board-shell-wrap {
@@ -1920,6 +1996,65 @@ button,
 #game-view .board-panel,
 #game-view .board-stage {
   overflow: visible !important;
+}
+
+body:not(.board-mode-3d) #game-view .board-stage {
+  gap: 4px !important;
+}
+
+body:not(.board-mode-3d) #game-view .board-player-row {
+  width: min(100%, 640px) !important;
+  max-width: min(640px, 100%) !important;
+  margin-inline: auto !important;
+  padding: 2px 4px !important;
+  min-height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body:not(.board-mode-3d) #game-view .board-player-row[data-active="true"] {
+  background: linear-gradient(90deg, rgba(240, 194, 105, 0.08), rgba(255, 255, 255, 0.02)) !important;
+  box-shadow: none !important;
+}
+
+body:not(.board-mode-3d) #game-view .player-row-copy {
+  gap: 1px !important;
+}
+
+body:not(.board-mode-3d) #game-view .player-row-name {
+  font-size: 11px !important;
+}
+
+body:not(.board-mode-3d) #game-view .player-row-meta {
+  font-size: 8px !important;
+  letter-spacing: 0.08em !important;
+}
+
+body:not(.board-mode-3d) #game-view .clock-display {
+  min-width: 76px !important;
+  padding: 4px 8px !important;
+  border-radius: 10px !important;
+}
+
+body:not(.board-mode-3d) #game-view .clock-time {
+  font-size: 1rem !important;
+}
+
+body:not(.board-mode-3d) #game-view .clock-meta {
+  font-size: 8px !important;
+}
+
+body:not(.board-mode-3d) #game-view .coach-message {
+  font-family: var(--requested-ui-font) !important;
+  font-style: normal !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0 !important;
 }
 
 #game-view .board-shell-anchor {
@@ -2463,6 +2598,31 @@ button,
   align-items: start !important;
   justify-content: space-between !important;
   gap: 12px !important;
+}
+
+.hall-hero-actions,
+.coach-heading-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+
+.hall-hero-actions {
+  flex-wrap: nowrap !important;
+}
+
+.coach-heading-actions {
+  margin-top: 2px !important;
+}
+
+.audio-toggle-button {
+  min-height: 24px !important;
+  height: 24px !important;
+  padding: 0 9px !important;
+  font-size: 9px !important;
+  letter-spacing: 0.1em !important;
+  white-space: nowrap !important;
 }
 
 .hall-hero-topline .label {
