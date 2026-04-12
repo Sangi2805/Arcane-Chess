@@ -103,14 +103,14 @@ const PIECE_PALETTES = {
   },
   black: {
     core: {
-      color: 0x20252d,
-      roughness: 0.34,
-      metalness: 0.3,
+      color: 0x252b34,
+      roughness: 0.3,
+      metalness: 0.32,
       clearcoat: 0.58,
       clearcoatRoughness: 0.2,
       emissive: 0x0b1118,
-      emissiveIntensity: 0.034,
-      specularIntensity: 0.74,
+      emissiveIntensity: 0.04,
+      specularIntensity: 0.78,
       specularColor: 0xd4e2f5
     },
     trim: {

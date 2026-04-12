@@ -398,7 +398,7 @@ class ArcaneBoard3D {
     blackReadTarget.position.set(0, 0.76, -2.8);
     this.scene.add(blackReadTarget);
 
-    const blackReadFillLight = registerAnimatedLight(new THREE.SpotLight(0xdbe7f8, 0.22, 24, 0.52, 0.84, 1.65));
+    const blackReadFillLight = registerAnimatedLight(new THREE.SpotLight(0xdbe7f8, 0.25, 24, 0.52, 0.84, 1.65));
     blackReadFillLight.position.set(0.2, 5.2, 8.5);
     blackReadFillLight.target = blackReadTarget;
     this.scene.add(blackReadFillLight);
@@ -408,7 +408,7 @@ class ArcaneBoard3D {
     blackRimTarget.position.set(0.2, 0.92, -3.15);
     this.scene.add(blackRimTarget);
 
-    const blackPieceRimLight = registerAnimatedLight(new THREE.DirectionalLight(0xaec2de, 0.13));
+    const blackPieceRimLight = registerAnimatedLight(new THREE.DirectionalLight(0xb7cbe5, 0.16));
     blackPieceRimLight.position.set(-6.6, 5.7, -8.6);
     blackPieceRimLight.target = blackRimTarget;
     this.scene.add(blackPieceRimLight);

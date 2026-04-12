@@ -160,7 +160,7 @@ const hallRandomTimeControlButton = document.getElementById("hall-random-time-co
 const hallRandomTimeControlLabel = document.getElementById("hall-random-time-label");
 const ambientAudioToggleButton = document.getElementById("ambient-audio-toggle");
 const hallHeroActions = document.querySelector(".hall-hero-actions");
-const coachHeadingActions = document.querySelector(".coach-heading-actions");
+const movesPanelHeaderActions = document.querySelector(".moves-panel-header-actions");
 const lobbyView = document.getElementById("lobby-view");
 const gameView = document.getElementById("game-view");
 const authView = document.getElementById("auth-view");
@@ -882,7 +882,7 @@ const resetBoardViewTo2D = () => {
   toggle2dBtn?.classList.add("mode-btn-active");
 
   if (boardModeLabel) {
-    boardModeLabel.textContent = "2D duel interface";
+    boardModeLabel.textContent = "Duel Interface";
   }
 
   if (arcaneBoard3D) {
@@ -1019,7 +1019,7 @@ const syncAmbientTogglePlacement = () => {
     return;
   }
 
-  const targetMount = state.view === "game" ? coachHeadingActions : hallHeroActions;
+  const targetMount = state.view === "game" ? movesPanelHeaderActions : hallHeroActions;
 
   if (targetMount && ambientAudioToggleButton.parentElement !== targetMount) {
     targetMount.appendChild(ambientAudioToggleButton);
