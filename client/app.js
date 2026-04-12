@@ -1,3 +1,35 @@
+import {
+  AMBIENT_TRACK_VOLUMES,
+  CLOCK_SYNC_INTERVAL_MS,
+  CLOCK_TICK_INTERVAL_MS,
+  COACH_STAGE_ENGINE_FEEDBACK,
+  COACH_STAGE_GAME_OVER,
+  COACH_STAGE_PLAYER_FEEDBACK,
+  DEFAULT_COACH_EXPLANATION,
+  DRAW_OUTCOME_LABELS,
+  GAME_OVER_BANNER_DURATION_MS,
+  GUEST_STORAGE_KEY,
+  HALL_RANDOM_TIME_CONTROL_IDS,
+  LOBBY_MODE_STORAGE_KEY,
+  PIECES,
+  QUICK_PLAY_TIME_CONTROL_ID,
+  RECORD_VIEW_STORAGE_KEY,
+  THINKING_COACH_EXPLANATION,
+  TIME_CONTROL_PRESETS,
+  VALID_APP_VIEWS,
+  VALID_LOBBY_MODES,
+  VALID_RECORD_VIEWS,
+  VIEW_STORAGE_KEY,
+  WIZARD_STATE_CLASSNAMES,
+  WIZARD_STATE_LABELS,
+  WIZARD_STATE_VISUALS
+} from "./app/constants.js";
+import {
+  replayState,
+  runtimeState,
+  state
+} from "./app/state.js";
+
 (function() {
   if (sessionStorage.getItem('ss-intro-seen')) {
     const s = document.getElementById('ss-intro-splash');
@@ -27,32 +59,6 @@
   splash.addEventListener('click', dismiss);
   document.addEventListener('keydown', dismiss, { once: true });
 })();
-
-const GUEST_STORAGE_KEY = "arcane-chess-guest-profile";
-const RECORD_VIEW_STORAGE_KEY = "arcane-chess-record-view";
-const LOBBY_MODE_STORAGE_KEY = "arcane-chess-lobby-mode";
-const VIEW_STORAGE_KEY = "arcane-chess-view";
-const VALID_APP_VIEWS = new Set(["auth", "hall", "game"]);
-const QUICK_PLAY_TIME_CONTROL_ID = "blitz-5";
-
-const PIECES = {
-  white: {
-    p: "\u2659",
-    r: "\u2656",
-    n: "\u2658",
-    b: "\u2657",
-    q: "\u2655",
-    k: "\u2654"
-  },
-  black: {
-    p: "\u265F",
-    r: "\u265C",
-    n: "\u265E",
-    b: "\u265D",
-    q: "\u265B",
-    k: "\u265A"
-  }
-};
 
 const difficultySelect = document.getElementById("difficulty-select");
 const newGameButton = document.getElementById("new-game-button");
@@ -206,133 +212,6 @@ const bottomClockMeta = document.getElementById("bottom-clock-meta");
 const evalBarBlack = document.getElementById('eval-bar-black');
 const evalBarWhite = document.getElementById('eval-bar-white');
 
-const DEFAULT_COACH_EXPLANATION =
-  "Use Hint when you want engine guidance for the current position.";
-const THINKING_COACH_EXPLANATION =
-  "Your move is down. The reply is forming now.";
-const GAME_OVER_BANNER_DURATION_MS = 4200;
-const CLOCK_TICK_INTERVAL_MS = 250;
-const CLOCK_SYNC_INTERVAL_MS = 1000;
-const TIME_CONTROL_PRESETS = {
-  untimed: {
-    label: "Untimed",
-    enabled: false,
-    baseMs: 0,
-    incrementMs: 0
-  },
-  "bullet-30": {
-    label: "30 sec",
-    enabled: true,
-    baseMs: 30_000,
-    incrementMs: 0
-  },
-  "bullet-1": {
-    label: "1 min",
-    enabled: true,
-    baseMs: 60_000,
-    incrementMs: 0
-  },
-  "bullet-1-1": {
-    label: "1 | 1",
-    enabled: true,
-    baseMs: 60_000,
-    incrementMs: 1_000
-  },
-  "bullet-2-1": {
-    label: "2 | 1",
-    enabled: true,
-    baseMs: 120_000,
-    incrementMs: 1_000
-  },
-  "blitz-3": {
-    label: "3 min",
-    enabled: true,
-    baseMs: 180_000,
-    incrementMs: 0
-  },
-  "blitz-3-2": {
-    label: "3 | 2",
-    enabled: true,
-    baseMs: 180_000,
-    incrementMs: 2_000
-  },
-  "blitz-5": {
-    label: "5 min",
-    enabled: true,
-    baseMs: 300_000,
-    incrementMs: 0
-  },
-  "blitz-5-2": {
-    label: "5 | 2",
-    enabled: true,
-    baseMs: 300_000,
-    incrementMs: 2_000
-  },
-  "blitz-5-5": {
-    label: "5 | 5",
-    enabled: true,
-    baseMs: 300_000,
-    incrementMs: 5_000
-  },
-  "rapid-10": {
-    label: "10 min",
-    enabled: true,
-    baseMs: 600_000,
-    incrementMs: 0
-  },
-  "rapid-10-5": {
-    label: "10 | 5",
-    enabled: true,
-    baseMs: 600_000,
-    incrementMs: 5_000
-  },
-  "rapid-15-10": {
-    label: "15 | 10",
-    enabled: true,
-    baseMs: 900_000,
-    incrementMs: 10_000
-  },
-  "rapid-20": {
-    label: "20 min",
-    enabled: true,
-    baseMs: 1_200_000,
-    incrementMs: 0
-  },
-  "rapid-30": {
-    label: "30 min",
-    enabled: true,
-    baseMs: 1_800_000,
-    incrementMs: 0
-  },
-  "rapid-60": {
-    label: "60 min",
-    enabled: true,
-    baseMs: 3_600_000,
-    incrementMs: 0
-  }
-};
-const HALL_RANDOM_TIME_CONTROL_IDS = [
-  "bullet-1",
-  "blitz-3-2",
-  "blitz-5",
-  "rapid-10",
-  "rapid-15-10",
-  "rapid-30"
-];
-const DRAW_OUTCOME_LABELS = {
-  stalemate: "Stalemate",
-  "draw-repetition": "Draw by repetition",
-  "draw-fivefold-repetition": "Draw by fivefold repetition",
-  "draw-insufficient-material": "Draw by insufficient material",
-  "draw-fifty-move": "Draw by fifty-move rule",
-  "draw-seventy-five-move": "Draw by seventy-five-move rule",
-  "draw-timeout-insufficient-material": "Draw by timeout vs insufficient material",
-  "draw-agreed": "Draw agreed",
-  draw: "Draw"
-};
-const COACH_STAGE_PLAYER_FEEDBACK = 2;
-const COACH_STAGE_ENGINE_FEEDBACK = 3;
-const COACH_STAGE_GAME_OVER = 4;
 const isGameplayDebugEnabled = () => window.__ARCANE_DEBUG_SYNC !== false;
 const debugGameplaySync = (event, payload = {}) => {
   if (!isGameplayDebugEnabled()) {
@@ -342,75 +221,6 @@ const debugGameplaySync = (event, payload = {}) => {
   console.debug(`[ArcaneSync] ${event}`, payload);
 };
 
-const state = {
-  guest: null,
-  session: {
-    authenticated: false,
-    user: null
-  },
-  game: null,
-  boardViewMode: "2d",
-  viewMode: "2D",
-  selectedSquare: null,
-  pendingPromotion: null,
-  pendingNewGame: false,
-  busy: false,
-  savedGames: [],
-  history: [],
-  persistence: {
-    available: false,
-    status: "disconnected"
-  },
-  historyDetailLoading: false,
-  historyModalOpen: false,
-  activeHistoryRequestId: 0,
-  activeMoveCycleId: 0,
-  activeCoachStageRank: 0,
-  clockSyncInFlight: false,
-  multiplayer: {
-    socket: null,
-    connected: false,
-    roomId: null,
-    color: null,
-    phase: "idle",
-    queued: false,
-    queuePosition: null,
-    queueTimeControlId: null
-  },
-  view: "auth",
-  authMode: "login",
-  coach: {
-    classification: null,
-    tone: "neutral",
-    message: "Preparing the board.",
-    explanation: DEFAULT_COACH_EXPLANATION,
-    bestMove: null,
-    whyLines: [],
-    whyExpanded: false,
-    animate: false
-  },
-  hint: {
-    bestMove: null,
-    continuation: [],
-    fen: "",
-    summary: "",
-    whyExpanded: false,
-    requestedThisTurn: false
-  },
-  liveChronicle: {
-    gameId: null,
-    ratingsByPly: {},
-    expandedWhyPly: null
-  },
-  lobbyMode: window.localStorage.getItem(LOBBY_MODE_STORAGE_KEY) || "solo",
-  activeRecordView:
-    window.localStorage.getItem(RECORD_VIEW_STORAGE_KEY) || "moves"
-};
-
-const AMBIENT_TRACK_VOLUMES = {
-  hall: 0.2,
-  game: 0.15
-};
 
 const createAmbientTrack = (src) => {
   const audio = new Audio(src);
@@ -436,133 +246,24 @@ const ambientState = {
   fadeResolve: null
 };
 
-let lastRenderedCoachSignature = "";
-let coachMessageAnimationTimeoutId = null;
-let coachMotionAnimationTimeoutId = null;
-let coachSpeakingAnimationTimeoutId = null;
-let coachMotionSequence = 0;
-let lastRenderedCoachMotionPulseId = null;
-let wizardReactionDelayTimeoutId = null;
-let wizardStateResetTimeoutId = null;
-let gameOverBannerTimeoutId = null;
-let activeGameOverBannerKey = "";
-let dismissedGameOverBannerKey = "";
-let finishedGameResetTimeoutId = null;
-let activeFinishedGameResetKey = "";
-let clockDisplayIntervalId = null;
-let clockSyncIntervalId = null;
-let boardFeedbackTimeoutId = null;
-let activeBoardFeedbackKey = "";
-let dismissedBoardFeedbackKey = "";
-let activeMiniBoardTooltip = null;
-let miniBoardHoverToken = 0;
-let gameEndCinematicShownForKey = "";
-
 // ── Replay state ─────────────────────────────────────────────────────────
-let replayFenSteps = [];
-let replayMoveHistory = [];
-let replayMoveList = [];
-let replayIndex = 0;
-let replayPlayerColor = "white";
-
-const VALID_RECORD_VIEWS = new Set(["moves", "saves", "history"]);
-const VALID_LOBBY_MODES = new Set(["solo", "multiplayer"]);
-const WIZARD_STATE_CLASSNAMES = [
-  "st-idle",
-  "st-check",
-  "st-capture",
-  "st-blunder",
-  "st-win",
-  "st-think"
-];
-const WIZARD_STATE_LABELS = {
-  "st-idle": "IDLE",
-  "st-check": "CHECK",
-  "st-capture": "CAPTURE",
-  "st-blunder": "BLUNDER",
-  "st-win": "WIN",
-  "st-think": "THINKING"
-};
-let currentWizardState = "st-idle";
-const WIZARD_STATE_VISUALS = {
-  "st-idle": {
-    mouth: "M92 156 Q110 168 128 156",
-    browLeft: "M70 112 Q87 104 100 112",
-    browRight: "M120 112 Q133 104 150 112",
-    iris: "#6abcf5",
-    irisLeft: { cx: 88, cy: 130, r: 4 },
-    irisRight: { cx: 132, cy: 130, r: 4 },
-    orb: "#c7a06e",
-    orbStroke: "#f0c269"
-  },
-  "st-check": {
-    mouth: "M104 150 C104 141 116 141 116 150 C116 159 104 159 104 150 Z",
-    browLeft: "M70 104 Q86 94 100 101",
-    browRight: "M120 101 Q134 94 150 104",
-    iris: "#f4c8b8",
-    irisLeft: { cx: 88, cy: 130, r: 6 },
-    irisRight: { cx: 132, cy: 130, r: 6 },
-    orb: "#cb514a",
-    orbStroke: "#ef8a7f"
-  },
-  "st-capture": {
-    mouth: "M88 148 Q110 182 132 148",
-    browLeft: "M70 108 Q86 96 100 102",
-    browRight: "M120 102 Q134 96 150 108",
-    iris: "#ffefb4",
-    irisLeft: { cx: 89, cy: 129, r: 5 },
-    irisRight: { cx: 131, cy: 129, r: 5 },
-    orb: "#f0c269",
-    orbStroke: "#ffe6a3"
-  },
-  "st-blunder": {
-    mouth: "M90 166 Q110 142 130 166",
-    browLeft: "M68 118 Q84 100 100 96",
-    browRight: "M120 96 Q136 100 152 118",
-    iris: "#d8cdf2",
-    irisLeft: { cx: 88, cy: 132, r: 4 },
-    irisRight: { cx: 132, cy: 132, r: 4 },
-    orb: "#4d396f",
-    orbStroke: "#8b6cc6"
-  },
-  "st-win": {
-    mouth: "M84 146 Q110 188 136 146",
-    browLeft: "M70 108 Q86 96 100 102",
-    browRight: "M120 102 Q134 96 150 108",
-    iris: "#fff4bf",
-    irisLeft: { cx: 89, cy: 128, r: 5 },
-    irisRight: { cx: 131, cy: 128, r: 5 },
-    orb: "#ffd978",
-    orbStroke: "#fff2be"
-  },
-  "st-think": {
-    mouth: "M92 159 L128 159",
-    browLeft: "M68 106 Q84 96 100 102",
-    browRight: "M122 113 Q136 108 150 112",
-    iris: "#d7cbfb",
-    irisLeft: { cx: 85, cy: 126, r: 5 },
-    irisRight: { cx: 129, cy: 126, r: 5 },
-    orb: "#9f8ad0",
-    orbStroke: "#d7cbfb"
-  }
-};
 
 const clearWizardReactionDelayTimer = () => {
-  if (!wizardReactionDelayTimeoutId) {
+  if (!runtimeState.wizardReactionDelayTimeoutId) {
     return;
   }
 
-  window.clearTimeout(wizardReactionDelayTimeoutId);
-  wizardReactionDelayTimeoutId = null;
+  window.clearTimeout(runtimeState.wizardReactionDelayTimeoutId);
+  runtimeState.wizardReactionDelayTimeoutId = null;
 };
 
 const clearWizardStateResetTimer = () => {
-  if (!wizardStateResetTimeoutId) {
+  if (!runtimeState.wizardStateResetTimeoutId) {
     return;
   }
 
-  window.clearTimeout(wizardStateResetTimeoutId);
-  wizardStateResetTimeoutId = null;
+  window.clearTimeout(runtimeState.wizardStateResetTimeoutId);
+  runtimeState.wizardStateResetTimeoutId = null;
 };
 
 const clearWizardStateTimers = () => {
@@ -572,9 +273,9 @@ const clearWizardStateTimers = () => {
 
 const scheduleWizardIdleReset = (delayMs = 2000) => {
   clearWizardStateResetTimer();
-  wizardStateResetTimeoutId = window.setTimeout(() => {
+  runtimeState.wizardStateResetTimeoutId = window.setTimeout(() => {
     setWizardIdleState();
-    wizardStateResetTimeoutId = null;
+    runtimeState.wizardStateResetTimeoutId = null;
   }, delayMs);
 };
 
@@ -591,10 +292,10 @@ const scheduleWizardReactionState = (
   }
 
   clearWizardStateTimers();
-  const effectiveDelay = currentWizardState === "st-think" ? delayMs : 0;
+  const effectiveDelay = runtimeState.currentWizardState === "st-think" ? delayMs : 0;
 
-  wizardReactionDelayTimeoutId = window.setTimeout(() => {
-    wizardReactionDelayTimeoutId = null;
+  runtimeState.wizardReactionDelayTimeoutId = window.setTimeout(() => {
+    runtimeState.wizardReactionDelayTimeoutId = null;
     setWizardState(nextState, {
       force
     });
@@ -609,7 +310,7 @@ const setWizardThinkingState = ({ preserveTimers = false } = {}) => {
     clearWizardStateTimers();
   }
 
-  if (currentWizardState !== "st-think") {
+  if (runtimeState.currentWizardState !== "st-think") {
     setWizardState("st-think", {
       force: true
     });
@@ -695,7 +396,7 @@ const setWizardState = (nextState) => {
     coachWizardSvg.classList.remove(stateClass);
   });
   coachWizardSvg.classList.add(nextState);
-  currentWizardState = nextState;
+  runtimeState.currentWizardState = nextState;
   wizardSide?.setAttribute("data-state", nextState);
   if (wizardStateLabel) {
     wizardStateLabel.textContent = WIZARD_STATE_LABELS[nextState] || "IDLE";
@@ -771,9 +472,9 @@ const applyWizardStateFromGameState = (gameState = state.game, options = {}) => 
     }
 
     if (
-      currentWizardState === "st-think" &&
-      !wizardReactionDelayTimeoutId &&
-      !wizardStateResetTimeoutId
+      runtimeState.currentWizardState === "st-think" &&
+      !runtimeState.wizardReactionDelayTimeoutId &&
+      !runtimeState.wizardStateResetTimeoutId
     ) {
       setWizardIdleState();
     }
@@ -1934,8 +1635,8 @@ const createCoachState = (overrides = {}) => ({
 });
 
 const getNextCoachMotionPulseId = () => {
-  coachMotionSequence += 1;
-  return coachMotionSequence;
+  runtimeState.coachMotionSequence += 1;
+  return runtimeState.coachMotionSequence;
 };
 
 const createTransientCoachMotion = (
@@ -3010,8 +2711,8 @@ const animateCoachMessage = () => {
     return;
   }
 
-  if (coachMessageAnimationTimeoutId) {
-    window.clearTimeout(coachMessageAnimationTimeoutId);
+  if (runtimeState.coachMessageAnimationTimeoutId) {
+    window.clearTimeout(runtimeState.coachMessageAnimationTimeoutId);
   }
 
   coachBubbleCopy.classList.remove("coach-bubble-copy-update");
@@ -3019,32 +2720,32 @@ const animateCoachMessage = () => {
   coachBubbleCopy.classList.add("coach-bubble-copy-update");
 
   if (coachPanel) {
-    if (coachSpeakingAnimationTimeoutId) {
-      window.clearTimeout(coachSpeakingAnimationTimeoutId);
+    if (runtimeState.coachSpeakingAnimationTimeoutId) {
+      window.clearTimeout(runtimeState.coachSpeakingAnimationTimeoutId);
     }
 
     coachPanel.classList.remove("coach-panel-speaking");
     void coachPanel.offsetWidth;
     coachPanel.classList.add("coach-panel-speaking");
 
-    coachSpeakingAnimationTimeoutId = window.setTimeout(() => {
+    runtimeState.coachSpeakingAnimationTimeoutId = window.setTimeout(() => {
       coachPanel.classList.remove("coach-panel-speaking");
     }, 360);
   }
 
-  coachMessageAnimationTimeoutId = window.setTimeout(() => {
+  runtimeState.coachMessageAnimationTimeoutId = window.setTimeout(() => {
     coachBubbleCopy.classList.remove("coach-bubble-copy-update");
   }, 180);
 };
 
 const scheduleCoachMotionReset = (coachState) => {
-  if (coachMotionAnimationTimeoutId) {
-    window.clearTimeout(coachMotionAnimationTimeoutId);
-    coachMotionAnimationTimeoutId = null;
+  if (runtimeState.coachMotionAnimationTimeoutId) {
+    window.clearTimeout(runtimeState.coachMotionAnimationTimeoutId);
+    runtimeState.coachMotionAnimationTimeoutId = null;
   }
 
   if (!coachState.motionPulseId || !coachState.motionDurationMs) {
-    lastRenderedCoachMotionPulseId = coachState.motionPulseId || null;
+    runtimeState.lastRenderedCoachMotionPulseId = coachState.motionPulseId || null;
     return;
   }
 
@@ -3052,7 +2753,7 @@ const scheduleCoachMotionReset = (coachState) => {
   const settleTo = coachState.motionSettleTo || "idle";
   const nextOutcome = settleTo === "game-over" ? coachState.outcome : "neutral";
 
-  coachMotionAnimationTimeoutId = window.setTimeout(() => {
+  runtimeState.coachMotionAnimationTimeoutId = window.setTimeout(() => {
     if (state.coach.motionPulseId !== motionPulseId) {
       return;
     }
@@ -3066,7 +2767,7 @@ const scheduleCoachMotionReset = (coachState) => {
     renderCoachPanel();
   }, coachState.motionDurationMs);
 
-  lastRenderedCoachMotionPulseId = motionPulseId;
+  runtimeState.lastRenderedCoachMotionPulseId = motionPulseId;
 };
 
 const renderCoachPanel = () => {
@@ -3085,7 +2786,7 @@ const renderCoachPanel = () => {
     whyExpanded: coachState.whyExpanded,
     whyLines: coachState.whyLines
   });
-  const motionPulseChanged = coachState.motionPulseId !== lastRenderedCoachMotionPulseId;
+  const motionPulseChanged = coachState.motionPulseId !== runtimeState.lastRenderedCoachMotionPulseId;
 
   coachPanel.dataset.tone = coachState.tone || "neutral";
   coachPanel.dataset.motionState = coachState.motionState || "idle";
@@ -3158,7 +2859,7 @@ const renderCoachPanel = () => {
   if (
     coachState.animate &&
     coachState.motionState !== "thinking" &&
-    coachSignature !== lastRenderedCoachSignature
+    coachSignature !== runtimeState.lastRenderedCoachSignature
   ) {
     animateCoachMessage();
   }
@@ -3167,7 +2868,7 @@ const renderCoachPanel = () => {
     scheduleCoachMotionReset(coachState);
   }
 
-  lastRenderedCoachSignature = coachSignature;
+  runtimeState.lastRenderedCoachSignature = coachSignature;
   state.coach.animate = false;
 };
 
@@ -3358,14 +3059,14 @@ const syncTimedGameState = async () => {
 };
 
 const updateClockLoops = () => {
-  if (clockDisplayIntervalId) {
-    window.clearInterval(clockDisplayIntervalId);
-    clockDisplayIntervalId = null;
+  if (runtimeState.clockDisplayIntervalId) {
+    window.clearInterval(runtimeState.clockDisplayIntervalId);
+    runtimeState.clockDisplayIntervalId = null;
   }
 
-  if (clockSyncIntervalId) {
-    window.clearInterval(clockSyncIntervalId);
-    clockSyncIntervalId = null;
+  if (runtimeState.clockSyncIntervalId) {
+    window.clearInterval(runtimeState.clockSyncIntervalId);
+    runtimeState.clockSyncIntervalId = null;
   }
 
   renderClocks();
@@ -3374,8 +3075,8 @@ const updateClockLoops = () => {
     return;
   }
 
-  clockDisplayIntervalId = window.setInterval(renderClocks, CLOCK_TICK_INTERVAL_MS);
-  clockSyncIntervalId = window.setInterval(syncTimedGameState, CLOCK_SYNC_INTERVAL_MS);
+  runtimeState.clockDisplayIntervalId = window.setInterval(renderClocks, CLOCK_TICK_INTERVAL_MS);
+  runtimeState.clockSyncIntervalId = window.setInterval(syncTimedGameState, CLOCK_SYNC_INTERVAL_MS);
 };
 
 const request = async (url, options = {}) => {
@@ -3704,54 +3405,54 @@ const clearSelectedSquare = () => {
 };
 
 const clearGameOverBannerTimer = () => {
-  if (!gameOverBannerTimeoutId) {
+  if (!runtimeState.gameOverBannerTimeoutId) {
     return;
   }
 
-  window.clearTimeout(gameOverBannerTimeoutId);
-  gameOverBannerTimeoutId = null;
+  window.clearTimeout(runtimeState.gameOverBannerTimeoutId);
+  runtimeState.gameOverBannerTimeoutId = null;
 };
 
 const clearFinishedGameResetTimer = () => {
-  if (!finishedGameResetTimeoutId) {
+  if (!runtimeState.finishedGameResetTimeoutId) {
     return;
   }
 
-  window.clearTimeout(finishedGameResetTimeoutId);
-  finishedGameResetTimeoutId = null;
+  window.clearTimeout(runtimeState.finishedGameResetTimeoutId);
+  runtimeState.finishedGameResetTimeoutId = null;
 };
 
 const clearBoardFeedbackTimer = () => {
-  if (!boardFeedbackTimeoutId) {
+  if (!runtimeState.boardFeedbackTimeoutId) {
     return;
   }
 
-  window.clearTimeout(boardFeedbackTimeoutId);
-  boardFeedbackTimeoutId = null;
+  window.clearTimeout(runtimeState.boardFeedbackTimeoutId);
+  runtimeState.boardFeedbackTimeoutId = null;
 };
 
 const scheduleBoardFeedbackDismissal = (feedbackKey, durationMs = 1000) => {
   clearBoardFeedbackTimer();
-  boardFeedbackTimeoutId = window.setTimeout(() => {
-    if (activeBoardFeedbackKey !== feedbackKey) {
+  runtimeState.boardFeedbackTimeoutId = window.setTimeout(() => {
+    if (runtimeState.activeBoardFeedbackKey !== feedbackKey) {
       return;
     }
 
-    dismissedBoardFeedbackKey = feedbackKey;
-    activeBoardFeedbackKey = "";
+    runtimeState.dismissedBoardFeedbackKey = feedbackKey;
+    runtimeState.activeBoardFeedbackKey = "";
     hideBoardFeedback();
   }, durationMs);
 };
 
 const resetFinishedGameResetLifecycle = () => {
   clearFinishedGameResetTimer();
-  activeFinishedGameResetKey = "";
+  runtimeState.activeFinishedGameResetKey = "";
 };
 
 const resetGameOverBannerLifecycle = () => {
   clearGameOverBannerTimer();
-  activeGameOverBannerKey = "";
-  dismissedGameOverBannerKey = "";
+  runtimeState.activeGameOverBannerKey = "";
+  runtimeState.dismissedGameOverBannerKey = "";
 };
 
 const getGameOverBannerKey = (gameState) => {
@@ -3810,8 +3511,8 @@ const clearCompletedLiveBoard = async (gameOverKey) => {
     setApiHealth(false);
     setCoachMessage(error.message);
   } finally {
-    if (activeFinishedGameResetKey === gameOverKey && state.game?.isGameOver) {
-      activeFinishedGameResetKey = "";
+    if (runtimeState.activeFinishedGameResetKey === gameOverKey && state.game?.isGameOver) {
+      runtimeState.activeFinishedGameResetKey = "";
     }
   }
 };
@@ -3829,27 +3530,27 @@ const scheduleFinishedGameReset = (gameState) => {
     return;
   }
 
-  if (activeFinishedGameResetKey === gameOverKey) {
+  if (runtimeState.activeFinishedGameResetKey === gameOverKey) {
     return;
   }
 
   clearFinishedGameResetTimer();
-  activeFinishedGameResetKey = gameOverKey;
-  finishedGameResetTimeoutId = window.setTimeout(() => {
-    finishedGameResetTimeoutId = null;
+  runtimeState.activeFinishedGameResetKey = gameOverKey;
+  runtimeState.finishedGameResetTimeoutId = window.setTimeout(() => {
+    runtimeState.finishedGameResetTimeoutId = null;
     void clearCompletedLiveBoard(gameOverKey);
   }, GAME_OVER_BANNER_DURATION_MS + 80);
 };
 
 const scheduleGameOverBannerDismissal = (bannerKey) => {
   clearGameOverBannerTimer();
-  gameOverBannerTimeoutId = window.setTimeout(() => {
-    if (activeGameOverBannerKey !== bannerKey) {
+  runtimeState.gameOverBannerTimeoutId = window.setTimeout(() => {
+    if (runtimeState.activeGameOverBannerKey !== bannerKey) {
       return;
     }
 
-    dismissedGameOverBannerKey = bannerKey;
-    activeGameOverBannerKey = "";
+    runtimeState.dismissedGameOverBannerKey = bannerKey;
+    runtimeState.activeGameOverBannerKey = "";
     hideGameOverBanner({
       resetCopy: true
     });
@@ -3886,7 +3587,7 @@ const renderGameOverBanner = () => {
 
   const bannerKey = getGameOverBannerKey(state.game);
 
-  if (dismissedGameOverBannerKey === bannerKey) {
+  if (runtimeState.dismissedGameOverBannerKey === bannerKey) {
     hideGameOverBanner({
       resetCopy: true
     });
@@ -3898,8 +3599,8 @@ const renderGameOverBanner = () => {
   gameOverBanner.classList.remove("hidden");
   gameOverBanner.setAttribute("aria-hidden", "false");
 
-  if (activeGameOverBannerKey !== bannerKey) {
-    activeGameOverBannerKey = bannerKey;
+  if (runtimeState.activeGameOverBannerKey !== bannerKey) {
+    runtimeState.activeGameOverBannerKey = bannerKey;
     scheduleGameOverBannerDismissal(bannerKey);
   }
 };
@@ -3998,14 +3699,14 @@ const renderBoardFeedback = () => {
     state.pendingPromotion?.moveChoices?.length
   ) {
     clearBoardFeedbackTimer();
-    activeBoardFeedbackKey = "";
+    runtimeState.activeBoardFeedbackKey = "";
     hideBoardFeedback();
     return;
   }
 
   if (drawClaim?.available) {
     clearBoardFeedbackTimer();
-    activeBoardFeedbackKey = "";
+    runtimeState.activeBoardFeedbackKey = "";
     boardFeedbackBanner.classList.remove("hidden");
     boardFeedbackBanner.setAttribute("aria-hidden", "false");
     boardFeedbackBanner.dataset.tone = "draw";
@@ -4021,7 +3722,7 @@ const renderBoardFeedback = () => {
   if (state.game?.status?.code === "check") {
     const checkFeedbackKey = `check:${state.game?.fen || ""}`;
 
-    if (dismissedBoardFeedbackKey === checkFeedbackKey) {
+    if (runtimeState.dismissedBoardFeedbackKey === checkFeedbackKey) {
       hideBoardFeedback();
       return;
     }
@@ -4035,8 +3736,8 @@ const renderBoardFeedback = () => {
     claimDrawButton?.classList.add("hidden");
     continuePlayButton?.classList.add("hidden");
 
-    if (activeBoardFeedbackKey !== checkFeedbackKey) {
-      activeBoardFeedbackKey = checkFeedbackKey;
+    if (runtimeState.activeBoardFeedbackKey !== checkFeedbackKey) {
+      runtimeState.activeBoardFeedbackKey = checkFeedbackKey;
       scheduleBoardFeedbackDismissal(checkFeedbackKey, 1000);
     }
 
@@ -4044,7 +3745,7 @@ const renderBoardFeedback = () => {
   }
 
   clearBoardFeedbackTimer();
-  activeBoardFeedbackKey = "";
+  runtimeState.activeBoardFeedbackKey = "";
 
   hideBoardFeedback();
 };
@@ -4698,25 +4399,25 @@ const positionMiniBoardTooltip = (tooltipElement, anchorElement) => {
 };
 
 const clearMiniBoardTooltipTimer = () => {
-  if (activeMiniBoardTooltip?.timerId) {
-    window.clearTimeout(activeMiniBoardTooltip.timerId);
+  if (runtimeState.activeMiniBoardTooltip?.timerId) {
+    window.clearTimeout(runtimeState.activeMiniBoardTooltip.timerId);
   }
 };
 
 const destroyMiniBoardTooltip = () => {
   clearMiniBoardTooltipTimer();
 
-  if (activeMiniBoardTooltip?.root?.parentNode) {
-    activeMiniBoardTooltip.root.parentNode.removeChild(activeMiniBoardTooltip.root);
+  if (runtimeState.activeMiniBoardTooltip?.root?.parentNode) {
+    runtimeState.activeMiniBoardTooltip.root.parentNode.removeChild(runtimeState.activeMiniBoardTooltip.root);
   }
 
-  activeMiniBoardTooltip = null;
+  runtimeState.activeMiniBoardTooltip = null;
 };
 
 const scheduleMiniBoardStep = (tooltipState, delayMs = MINI_BOARD_STEP_MS) => {
   clearMiniBoardTooltipTimer();
   tooltipState.timerId = window.setTimeout(() => {
-    if (activeMiniBoardTooltip !== tooltipState) {
+    if (runtimeState.activeMiniBoardTooltip !== tooltipState) {
       return;
     }
 
@@ -4794,7 +4495,7 @@ const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }) => {
   }
 
   destroyMiniBoardTooltip();
-  miniBoardHoverToken += 1;
+  runtimeState.miniBoardHoverToken += 1;
 
   const baseState = getMiniBoardStateFromFen(fen);
   const ui = createMiniBoardUI({
@@ -4805,7 +4506,7 @@ const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }) => {
   positionMiniBoardTooltip(ui.root, anchorElement);
 
   const tooltipState = {
-    id: miniBoardHoverToken,
+    id: runtimeState.miniBoardHoverToken,
     root: ui.root,
     squareNodes: ui.squareNodes,
     timerId: null,
@@ -4819,7 +4520,7 @@ const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }) => {
     stepIndex: 0
   };
 
-  activeMiniBoardTooltip = tooltipState;
+  runtimeState.activeMiniBoardTooltip = tooltipState;
   renderMiniBoardPosition(tooltipState);
   scheduleMiniBoardStep(tooltipState, 360);
 };
@@ -4872,7 +4573,7 @@ const attachChronicleWhyHoverListeners = () => {
 const renderReplayBoard = () => {
   if (!replayBoard) return;
 
-  const fen = replayFenSteps[replayIndex];
+  const fen = replayState.fenSteps[replayState.index];
 
   if (!fen) {
     replayBoard.innerHTML = "";
@@ -4882,15 +4583,15 @@ const renderReplayBoard = () => {
   const boardData = parseFenToBoard(fen);
   const lookup = new Map(boardData.map((e) => [e.square, e]));
   const files =
-    replayPlayerColor === "black"
+    replayState.playerColor === "black"
       ? ["h", "g", "f", "e", "d", "c", "b", "a"]
       : ["a", "b", "c", "d", "e", "f", "g", "h"];
   const ranks =
-    replayPlayerColor === "black"
+    replayState.playerColor === "black"
       ? ["1", "2", "3", "4", "5", "6", "7", "8"]
       : ["8", "7", "6", "5", "4", "3", "2", "1"];
-  const lastMoveFrom = replayIndex > 0 ? replayMoveHistory[replayIndex - 1]?.from : null;
-  const lastMoveTo = replayIndex > 0 ? replayMoveHistory[replayIndex - 1]?.to : null;
+  const lastMoveFrom = replayState.index > 0 ? replayState.moveHistory[replayState.index - 1]?.from : null;
+  const lastMoveTo = replayState.index > 0 ? replayState.moveHistory[replayState.index - 1]?.to : null;
 
   const squares = [];
   ranks.forEach((rank) => files.forEach((file) => squares.push(lookup.get(`${file}${rank}`))));
@@ -4955,19 +4656,19 @@ const renderReplayMoveRows = (moveList = [], activeHalfMoveIndex = -1) => {
 };
 
 const updateReplayControls = () => {
-  const total = Math.max(0, replayFenSteps.length - 1);
-  const hasData = replayFenSteps.length > 0;
+  const total = Math.max(0, replayState.fenSteps.length - 1);
+  const hasData = replayState.fenSteps.length > 0;
 
   if (replayStepLabel) {
     if (!hasData) {
       replayStepLabel.textContent = "No data";
     } else {
-      replayStepLabel.textContent = replayIndex === 0 ? "Start" : `Move ${replayIndex} of ${total}`;
+      replayStepLabel.textContent = replayState.index === 0 ? "Start" : `Move ${replayState.index} of ${total}`;
     }
   }
 
-  if (replayBack) replayBack.disabled = replayIndex <= 0 || !hasData;
-  if (replayForward) replayForward.disabled = replayIndex >= total || !hasData;
+  if (replayBack) replayBack.disabled = replayState.index <= 0 || !hasData;
+  if (replayForward) replayForward.disabled = replayState.index >= total || !hasData;
 };
 
 const scrollReplayActiveMoveIntoView = () => {
@@ -4977,30 +4678,30 @@ const scrollReplayActiveMoveIntoView = () => {
 };
 
 const setReplayStep = (index) => {
-  replayIndex = Math.max(0, Math.min(index, Math.max(0, replayFenSteps.length - 1)));
+  replayState.index = Math.max(0, Math.min(index, Math.max(0, replayState.fenSteps.length - 1)));
   renderReplayBoard();
   if (historyDetailMoves) {
-    historyDetailMoves.innerHTML = renderReplayMoveRows(replayMoveList, replayIndex - 1);
+    historyDetailMoves.innerHTML = renderReplayMoveRows(replayState.moveList, replayState.index - 1);
   }
   updateReplayControls();
   scrollReplayActiveMoveIntoView();
 };
 
-const stepReplay = (delta) => setReplayStep(replayIndex + delta);
+const stepReplay = (delta) => setReplayStep(replayState.index + delta);
 
 const initReplay = (moveList, fenSteps, moveHistory, playerColor) => {
-  replayMoveList = moveList || [];
-  replayFenSteps = fenSteps || [];
-  replayMoveHistory = moveHistory || [];
-  replayPlayerColor = playerColor || "white";
+  replayState.moveList = moveList || [];
+  replayState.fenSteps = fenSteps || [];
+  replayState.moveHistory = moveHistory || [];
+  replayState.playerColor = playerColor || "white";
   setReplayStep(0);
 };
 
 const clearReplay = () => {
-  replayFenSteps = [];
-  replayMoveHistory = [];
-  replayMoveList = [];
-  replayIndex = 0;
+  replayState.fenSteps = [];
+  replayState.moveHistory = [];
+  replayState.moveList = [];
+  replayState.index = 0;
   if (replayBoard) replayBoard.innerHTML = "";
   updateReplayControls();
 };
@@ -5467,7 +5168,7 @@ const dismissGameEndOverlay = () => {
   overlay.setAttribute("aria-hidden", "true");
   // Wipe inner content after the fade-out (if any transition is running)
   setTimeout(() => { overlay.innerHTML = ""; }, 500);
-  gameEndCinematicShownForKey = "";
+  runtimeState.gameEndCinematicShownForKey = "";
 };
 
 const showGameEndOverlay = (gameState) => {
@@ -5545,8 +5246,8 @@ const showGameEndOverlay = (gameState) => {
  */
 const triggerGameEndCinematic = (gameState) => {
   const key = getGameOverBannerKey(gameState);
-  if (!key || gameEndCinematicShownForKey === key) return;
-  gameEndCinematicShownForKey = key;
+  if (!key || runtimeState.gameEndCinematicShownForKey === key) return;
+  runtimeState.gameEndCinematicShownForKey = key;
 
   if (state.boardViewMode === "3d" && arcaneBoard3D?.showGameEndCurtain) {
     // Curtain fires callback at the 600 ms mark; overlay fades in from there
