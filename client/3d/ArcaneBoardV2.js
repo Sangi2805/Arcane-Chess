@@ -68,6 +68,8 @@
       this._modelAssetsReady  = false;
       this._latestBoardState  = null;
       this._positionVersion   = 0;
+      this._activeParticles   = [];
+      this._threatLines       = [];
       this._curtainMesh       = null;
       this.arenaGuardians     = null;
     }
@@ -241,7 +243,7 @@
       this.playerPerspective = nextPerspective;
       if (!this.camera) return;
 
-      this.camera.position.set(0, 9.5, nextPerspective === 'black' ? -8.5 : 8.5);
+      this.camera.position.set(0, 8.5, nextPerspective === 'black' ? -10 : 10);
       this.camera.lookAt(0, 0, 0);
     }
 
@@ -318,10 +320,16 @@
 
     /** Tear down renderer, remove from DOM */
     destroy() {
+      this.clearThreatLines();
       this.clearGameEndCurtain();
       cancelAnimationFrame(this._animFrameId);
       this.container.removeEventListener('click', this._boundClick);
       window.removeEventListener('resize', this._boundResize);
+      this._activeParticles.forEach((particle) => {
+        this.scene.remove(particle.mesh);
+        particle.mesh.material.dispose();
+      });
+      this._activeParticles = [];
       this.scene.traverse(obj => {
         if (obj.geometry) obj.geometry.dispose();
         if (obj.material) {
@@ -363,18 +371,18 @@
     _setupScene() {
       const T = this._T;
       this.scene = new T.Scene();
-      this.scene.fog = new T.FogExp2(0x0a0804, 0.055);
+      this.scene.fog = new T.FogExp2(0x0a0804, 0.032);
       this.scene.background = new T.Color(0x0a0804);
     }
 
     _setupCamera() {
       const T = this._T;
       const { width: w, height: h } = this._getViewportSize();
-      this.camera = new T.PerspectiveCamera(48, w / h, 0.1, 60);
+      this.camera = new T.PerspectiveCamera(58, w / h, 0.1, 60);
       this.camera.position.set(
         0,
-        9.5,
-        this.playerPerspective === 'black' ? -8.5 : 8.5
+        8.5,
+        this.playerPerspective === 'black' ? -10 : 10
       );
       this.camera.lookAt(0, 0, 0);
     }
@@ -398,7 +406,7 @@
       this.scene.add(moon);
 
       // 4 torch lights at board corners
-      const torchPos = [[-5.2,1.8,-5.2],[5.2,1.8,-5.2],[-5.2,1.8,5.2],[5.2,1.8,5.2]];
+      const torchPos = [[-6.2,1.4,-6.2],[6.2,1.4,-6.2],[-6.2,1.4,6.2],[6.2,1.4,6.2]];
       torchPos.forEach((p, i) => {
         const light = new T.PointLight(0xff7820, 1.4, 14);
         light.position.set(...p);
@@ -448,23 +456,23 @@
       this.scene.add(trimTop);
 
       // ── Torch pillars ────────────────────────
-      const torchPos = [[-5.2,0,-5.2],[5.2,0,-5.2],[-5.2,0,5.2],[5.2,0,5.2]];
+      const torchPos = [[-6.2,0,-6.2],[6.2,0,-6.2],[-6.2,0,6.2],[6.2,0,6.2]];
       const pillarMat = new T.MeshLambertMaterial({ color: 0x1e170e });
       torchPos.forEach(p => {
-        const pillar = new T.Mesh(new T.CylinderGeometry(0.16, 0.20, 3.6, 10), pillarMat);
+        const pillar = new T.Mesh(new T.CylinderGeometry(0.16, 0.20, 2.8, 10), pillarMat);
         pillar.position.set(p[0], 1.5, p[2]);
         pillar.castShadow = true;
         this.scene.add(pillar);
 
         // Torch bracket
         const bracket = new T.Mesh(new T.BoxGeometry(0.08, 0.34, 0.08), pillarMat);
-        bracket.position.set(p[0], 3.1, p[2]);
+        bracket.position.set(p[0], 2.5, p[2]);
         this.scene.add(bracket);
 
         // Flame sphere (glowing)
         const flameMat = new T.MeshBasicMaterial({ color: 0xff6010 });
         const flame = new T.Mesh(new T.SphereGeometry(0.12, 8, 8), flameMat);
-        flame.position.set(p[0], 3.36, p[2]);
+        flame.position.set(p[0], 2.72, p[2]);
         this.scene.add(flame);
         this.flameMeshes.push(flame);
 
@@ -488,10 +496,10 @@
       // ── Far walls ────────────────────────────
       const wallMat = new T.MeshLambertMaterial({ color: 0x100c08 });
       [
-        { pos: [-16,5,0],   size: [1,10,32] },
-        { pos: [16,5,0],    size: [1,10,32] },
-        { pos: [0,5,-16],   size: [32,10,1] },
-        { pos: [0,12,0],    size: [32,1,32] },
+        { pos: [-22,7,0],   size: [1,14,48] },
+        { pos: [22,7,0],    size: [1,14,48] },
+        { pos: [0,7,-22],   size: [48,14,1] },
+        { pos: [0,16,0],    size: [48,1,48] },
       ].forEach(({ pos, size }) => {
         const wall = new T.Mesh(new T.BoxGeometry(...size), wallMat);
         wall.position.set(...pos);
@@ -533,7 +541,8 @@
       [
         { x: -GUARDIAN_CORNER_DISTANCE, z: -GUARDIAN_CORNER_DISTANCE },
         { x: GUARDIAN_CORNER_DISTANCE, z: -GUARDIAN_CORNER_DISTANCE },
-        { x: GUARDIAN_CORNER_DISTANCE, z: GUARDIAN_CORNER_DISTANCE }
+        { x: GUARDIAN_CORNER_DISTANCE, z: GUARDIAN_CORNER_DISTANCE },
+        { x: -GUARDIAN_CORNER_DISTANCE, z: GUARDIAN_CORNER_DISTANCE }
       ].forEach(({ x, z }) => {
         const guardian = this._createArenaGuardian();
         guardian.position.set(x, 0, z);
@@ -733,9 +742,9 @@
       const isWhite = color === 'white';
 
       const mat = new T.MeshLambertMaterial({
-        color:    isWhite ? 0xddd0b4 : 0x1c1408,
-        emissive: isWhite ? 0x201808 : 0x080604,
-        emissiveIntensity: 0.4,
+        color:    isWhite ? 0xe8d9b0 : 0x2a1a35,
+        emissive: isWhite ? 0x8a6a10 : 0x3a1a5a,
+        emissiveIntensity: isWhite ? 0.7 : 1.1,
       });
 
       const group = new T.Group();
@@ -754,7 +763,7 @@
 
       // Emissive eye-glow for white pieces (very subtle)
       if (isWhite) {
-        const glowMat = new T.MeshBasicMaterial({ color: 0xd4a840, transparent: true, opacity: 0.18 });
+        const glowMat = new T.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.45 });
         const glow = new T.Mesh(new T.SphereGeometry(0.10, 6, 6), glowMat);
         glow.position.y = this._pieceGlowY(type);
         group.add(glow);
@@ -772,11 +781,11 @@
       }
 
       const material = new T.MeshStandardMaterial({
-        color: color === 'white' ? 0xd9c7a5 : 0x2a241b,
-        emissive: color === 'white' ? 0x1f1408 : 0x0a0704,
-        emissiveIntensity: color === 'white' ? 0.12 : 0.22,
-        roughness: color === 'white' ? 0.44 : 0.62,
-        metalness: color === 'white' ? 0.18 : 0.1
+        color: color === 'white' ? 0xe2cfa0 : 0x2a1a35,
+        emissive: color === 'white' ? 0x7a5c0a : 0x3a1a5a,
+        emissiveIntensity: color === 'white' ? 0.55 : 0.85,
+        roughness: color === 'white' ? 0.3 : 0.4,
+        metalness: color === 'white' ? 0.35 : 0.25
       });
 
       const mesh = new T.Mesh(geometry, material);
@@ -1000,79 +1009,123 @@
     }
 
     _explodePiece(square) {
-      const T     = this._T;
       const entry = this.pieces.get(square);
       if (!entry) return;
 
-      const pos = entry.mesh.position.clone();
-      this.scene.remove(entry.mesh);
+      this.animateCapture(entry.mesh, this.scene);
       this._disposeGroup(entry.mesh);
       this.pieces.delete(square);
+    }
 
-      // Stone chunk particles
-      for (let i = 0; i < 18; i++) {
-        const size = 0.04 + Math.random() * 0.08;
-        const geo  = Math.random() > 0.5
-          ? new T.BoxGeometry(size, size, size)
-          : new T.SphereGeometry(size * 0.6, 4, 4);
-        const mat  = new T.MeshLambertMaterial({ color: 0x6a5838 });
-        const p    = new T.Mesh(geo, mat);
-        p.position.copy(pos).addScalar(0.1 * (Math.random()-0.5));
-        p.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
-
-        const theta = Math.random() * Math.PI * 2;
-        const phi   = Math.random() * Math.PI * 0.7;
-        const speed = 0.06 + Math.random() * 0.09;
-        const vx    = Math.sin(phi)*Math.cos(theta)*speed;
-        const vy    = 0.08 + Math.random()*0.12;
-        const vz    = Math.sin(phi)*Math.sin(theta)*speed;
-        let   life  = 1.0;
-
-        this.scene.add(p);
-
-        const tick = () => {
-          if (life <= 0) {
-            this.scene.remove(p);
-            p.geometry.dispose(); p.material.dispose();
-            return;
-          }
-          life -= 0.028;
-          p.position.x += vx;
-          p.position.y += vy - (1 - life) * 0.022;
-          p.position.z += vz;
-          p.rotation.x += 0.08;
-          p.rotation.y += 0.06;
-          p.material.opacity = Math.max(0, life);
-          p.material.transparent = true;
-          requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
+    animateCapture(piece, scene = this.scene) {
+      console.log("animateCapture called");
+      if (!piece || !scene) {
+        return;
       }
+
+      const T = this._T;
+      const particleCount = 40;
+      const worldPosition = new T.Vector3();
+      piece.getWorldPosition(worldPosition);
+
+      scene.remove(piece);
+
+      for (let i = 0; i < particleCount; i += 1) {
+        const material = new T.SpriteMaterial({
+          color: 0xC9A84C,
+          transparent: true,
+          opacity: 1,
+          depthWrite: false
+        });
+        const mesh = new T.Sprite(material);
+        const size = 0.08 + Math.random() * 0.12;
+        mesh.scale.set(size, size, size);
+        mesh.position.copy(worldPosition);
+        mesh.position.x += (Math.random() - 0.5) * 0.14;
+        mesh.position.y += Math.random() * 0.35;
+        mesh.position.z += (Math.random() - 0.5) * 0.14;
+
+        const direction = new T.Vector3(
+          Math.random() * 2 - 1,
+          Math.random() * 1.5,
+          Math.random() * 2 - 1
+        ).normalize();
+        const speed = 0.04 + Math.random() * 0.07;
+        const velocity = direction.multiplyScalar(speed);
+
+        scene.add(mesh);
+        this._activeParticles.push({
+          mesh,
+          velocity,
+          startTime: performance.now()
+        });
+      }
+    }
+
+    _updateParticles() {
+      const now = performance.now();
+      this._activeParticles = this._activeParticles.filter((p) => {
+        const elapsed = now - p.startTime;
+        const t = elapsed / 600;
+        if (t >= 1) {
+          this.scene.remove(p.mesh);
+          p.mesh.material.dispose();
+          return false;
+        }
+        p.mesh.position.addScaledVector(p.velocity, 0.016);
+        p.mesh.material.opacity = 1 - t;
+        return true;
+      });
+    }
+
+    showThreatLines(legalMoves = []) {
+      this.clearThreatLines();
+      const T = this._T;
+      legalMoves.forEach((sq) => {
+        const toMesh = this.squareMeshes.get(sq);
+        const fromMesh = this.squareMeshes.get(this.selectedSquare);
+        if (!toMesh || !fromMesh) return;
+
+        const points = [
+          new T.Vector3(fromMesh.position.x, 0.18, fromMesh.position.z),
+          new T.Vector3(toMesh.position.x, 0.18, toMesh.position.z)
+        ];
+        const geo = new T.BufferGeometry().setFromPoints(points);
+        const mat = new T.LineBasicMaterial({
+          color: 0xC9A84C,
+          transparent: true,
+          opacity: 0.45,
+          depthTest: false
+        });
+        const line = new T.Line(geo, mat);
+        line.renderOrder = 10;
+        this.scene.add(line);
+        this._threatLines.push(line);
+      });
+    }
+
+    clearThreatLines() {
+      this._threatLines.forEach((line) => {
+        this.scene.remove(line);
+        line.geometry.dispose();
+        line.material.dispose();
+      });
+      this._threatLines = [];
     }
 
     // Camera swings slightly toward the moving piece
     _cameraSwingToMove(fromXZ, toXZ) {
-      const midX = (fromXZ.x + toXZ.x) * 0.15;
-      const midZ = (fromXZ.z + toXZ.z) * 0.08;
-      const dur  = 280;
-      const t0   = performance.now();
-
-      const step = (now) => {
-        const t = Math.min((now - t0) / dur, 1);
-        this.camera.lookAt(midX * t, 0, midZ * t);
-        if (t < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+      // camera swing disabled — caused visible shake on every move
     }
 
     _cameraReturnToOverview(delay) {
       setTimeout(() => {
-        const dur = 500;
+        const dur = 400;
         const t0  = performance.now();
         const step = (now) => {
           const t = Math.min((now - t0) / dur, 1);
           const e = 1 - Math.pow(1 - t, 3);
-          this.camera.lookAt(0, 0, 0);
+          // no-op now that swing is disabled, but keep the RAF for future use
           if (t < 1) requestAnimationFrame(step);
         };
         requestAnimationFrame(step);
@@ -1087,6 +1140,7 @@
       this._animFrameId = requestAnimationFrame(this._boundAnimate);
       const delta = this.clock.getDelta();
       this.torchTime += delta;
+      this._updateParticles();
 
       // Torch flicker
       this.torchLights.forEach(({ light, base, phase }) => {
@@ -1153,7 +1207,8 @@
     }
 
     _onResize() {
-      const { width: w, height: h } = this._getViewportSize();
+      const w = Math.max(this.container.offsetWidth || window.innerWidth, 580);
+      const h = Math.max(this.container.offsetHeight || window.innerHeight, 400);
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(w, h);

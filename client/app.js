@@ -71,6 +71,9 @@ const toggle2dBtn    = document.getElementById("toggle-2d");
 const toggle3dBtn    = document.getElementById("toggle-3d");
 const boardModeLabel = document.getElementById("board-mode-label");
 let   arcaneBoard3D  = null;
+let lastAnimated3DMoveKey = "";
+let is3DMoveAnimating = false;
+let last3DAnimationStartedAt = 0;
 const boardFeedbackBanner = document.getElementById("board-feedback-banner");
 const boardFeedbackTitle = document.getElementById("board-feedback-title");
 const boardFeedbackMessage = document.getElementById("board-feedback-message");
@@ -815,32 +818,75 @@ const syncBoardViewUi = () => {
 };
 
 const syncBoard3D = ({ refreshPerspective = false } = {}) => {
+  const now = performance.now();
+  if (is3DMoveAnimating) {
+    // Safety release if a callback never arrives.
+    if (now - last3DAnimationStartedAt < 900) {
+      return;
+    }
+    is3DMoveAnimating = false;
+  }
+
   syncBoardViewUi();
 
   if (!arcaneBoard3D || state.boardViewMode !== "3d" || !state.game?.board) {
     return;
   }
 
+  const applyBoardSyncState = () => {
+    arcaneBoard3D.setPosition(state.game.board);
+    const legalForSelected =
+      state.selectedSquare && state.game.legalMoves
+        ? (state.game.legalMoves[state.selectedSquare] || []).map((move) => move.to)
+        : [];
+    arcaneBoard3D.highlightSquares(
+      state.selectedSquare,
+      legalForSelected,
+      state.hint?.bestMove || null
+    );
+
+    if (state.game.lastMove) {
+      arcaneBoard3D.setLastMove(
+        state.game.lastMove.from,
+        state.game.lastMove.to
+      );
+    }
+  };
+
   if (refreshPerspective) {
     arcaneBoard3D.setPerspective?.(getBoardPerspectiveColor());
   }
-  arcaneBoard3D.setPosition(state.game.board);
-  const legalForSelected =
-    state.selectedSquare && state.game.legalMoves
-      ? (state.game.legalMoves[state.selectedSquare] || []).map((move) => move.to)
-      : [];
-  arcaneBoard3D.highlightSquares(
-    state.selectedSquare,
-    legalForSelected,
-    state.hint?.bestMove || null
-  );
 
-  if (state.game.lastMove) {
-    arcaneBoard3D.setLastMove(
-      state.game.lastMove.from,
-      state.game.lastMove.to
+  const lastMove = state.game.lastMove;
+  const nextMoveKey = lastMove
+    ? `${lastMove.from}:${lastMove.to}:${lastMove.san || ""}:${lastMove.promotion || ""}`
+    : "";
+  const canAnimateMove =
+    Boolean(lastMove?.from && lastMove?.to) &&
+    typeof arcaneBoard3D.animateMove === "function" &&
+    arcaneBoard3D.pieces instanceof Map &&
+    arcaneBoard3D.pieces.has(lastMove.from) &&
+    now - last3DAnimationStartedAt >= 580;
+
+  if (!is3DMoveAnimating && nextMoveKey && nextMoveKey !== lastAnimated3DMoveKey && canAnimateMove) {
+    is3DMoveAnimating = true;
+    last3DAnimationStartedAt = now;
+
+    arcaneBoard3D.animateMove(
+      lastMove.from,
+      lastMove.to,
+      Boolean(lastMove.captured),
+      () => {
+        applyBoardSyncState();
+        is3DMoveAnimating = false;
+        lastAnimated3DMoveKey = nextMoveKey;
+      }
     );
+
+    return;
   }
+
+  applyBoardSyncState();
 };
 
 const resetBoardViewTo2D = () => {
@@ -888,6 +934,9 @@ const resetBoardViewTo2D = () => {
     arcaneBoard3D.destroy();
     arcaneBoard3D = null;
   }
+  document.getElementById('hud-player-name')?.remove();
+  document.getElementById('hud-opponent-name')?.remove();
+  is3DMoveAnimating = false;
 };
 
 const escapeHtml = (value) =>
@@ -3072,7 +3121,9 @@ const setCoachMessage = (message, explanation = DEFAULT_COACH_EXPLANATION) => {
 const setBusy = (busy, message) => {
   state.busy = busy;
   syncActionButtons();
-  syncBoard3D();
+  if (!is3DMoveAnimating) {
+    syncBoard3D();
+  }
   renderBoardOverlays();
 
   if (message) {
@@ -5130,7 +5181,7 @@ const renderImmersiveHud = () => {
   }
 
   const playerColor = formatColor(state.game.settings?.playerColor);
-  const engineColor = formatColor(state.game.settings?.engineColor);
+  const playerName = getLocalPlayerDisplayName();
   const turnLabel = state.game.turn ? formatColor(state.game.turn) : "-";
   const lastMoveLabel = state.game.lastMove?.san || "None";
   const statusMessage = trimTerminalPeriod(state.game.status?.message) || "Awaiting duel";
@@ -5151,12 +5202,12 @@ const renderImmersiveHud = () => {
 
   if (gameOverCopy) {
     immersiveStatusHeading.textContent = gameOverCopy.message;
-    immersiveStatusMeta.textContent = `${playerColor} vs ${engineColor} • Last move ${lastMoveLabel}`;
+    immersiveStatusMeta.textContent = `${playerName} vs Stockfish`;
     return;
   }
 
-  immersiveStatusHeading.textContent = statusMessage;
-  immersiveStatusMeta.textContent = `${playerColor} vs ${engineColor} • Turn ${turnLabel} • Last move ${lastMoveLabel}`;
+  immersiveStatusHeading.textContent = `${turnLabel} to move · Last: ${lastMoveLabel}`;
+  immersiveStatusMeta.textContent = `${playerName} vs Stockfish`;
 };
 
 const renderBoardSurface = () => {
@@ -6606,6 +6657,13 @@ window.addEventListener("resize", () => {
   arcaneBoard3D?.scheduleResize?.({
     immediate: true
   });
+  if (arcaneBoard3D && state.boardViewMode === "3d") {
+    arcaneBoard3D.camera.aspect = window.innerWidth / window.innerHeight;
+    arcaneBoard3D.camera.updateProjectionMatrix();
+    arcaneBoard3D.renderer.setSize(window.innerWidth, window.innerHeight);
+  } else {
+    arcaneBoard3D?._onResize?.();
+  }
 
   if (state.pendingPromotion?.moveChoices?.length || state.game?.isGameOver) {
     renderBoardOverlays();
@@ -6781,28 +6839,115 @@ const switchTo3D = () => {
 
   arcaneBoard3D = new ArcaneBoardV2(board3dElement);
   arcaneBoard3D.init();
+  requestAnimationFrame(() => {
+    arcaneBoard3D?._onResize?.();
+  });
   arcaneBoard3D.setArenaGuardiansVisible?.(true);
   arcaneBoard3D.setPerspective?.(getBoardPerspectiveColor());
 
   // Sync current board position
   if (state.game && state.game.board) {
-    arcaneBoard3D.setPosition(state.game.board);
-    const legalForSelected = state.selectedSquare && state.game.legalMoves
-      ? (state.game.legalMoves[state.selectedSquare] || []).map((move) => move.to)
-      : [];
-    arcaneBoard3D.highlightSquares(
-      state.selectedSquare,
-      legalForSelected,
-      state.hint?.bestMove || null
-    );
+    if (!is3DMoveAnimating) {
+      arcaneBoard3D.setPosition(state.game.board);
+      const legalForSelected = state.selectedSquare && state.game.legalMoves
+        ? (state.game.legalMoves[state.selectedSquare] || []).map((move) => move.to)
+        : [];
+      arcaneBoard3D.highlightSquares(
+        state.selectedSquare,
+        legalForSelected,
+        state.hint?.bestMove || null
+      );
+    }
   }
   if (state.game && state.game.lastMove) {
-    arcaneBoard3D.setLastMove(state.game.lastMove.from, state.game.lastMove.to);
+    if (!is3DMoveAnimating) {
+      arcaneBoard3D.setLastMove(state.game.lastMove.from, state.game.lastMove.to);
+    }
   }
 
   // Route square clicks through 3D board
   arcaneBoard3D.onSquareClick((square) => {
     handleSquareClick(square);
+  });
+
+  // Remove old nameplates if re-entering 3D
+  document.getElementById('hud-player-name')?.remove();
+  document.getElementById('hud-opponent-name')?.remove();
+
+  const playerColor = getBoardPerspectiveColor();
+  const playerName = getLocalPlayerDisplayName();
+
+  const playerPlate = document.createElement('div');
+  playerPlate.id = 'hud-player-name';
+  playerPlate.style.cssText = `
+    position:absolute; bottom:16px; left:20px;
+    color:#c9a84c; font-size:0.8rem; letter-spacing:0.08em;
+    text-transform:uppercase; pointer-events:none; z-index:1002;
+    text-shadow: 0 0 8px rgba(201,168,76,0.6);
+  `;
+  playerPlate.textContent = `${playerName} · ${playerColor}`;
+  board3dElement.appendChild(playerPlate);
+
+  const opponentPlate = document.createElement('div');
+  opponentPlate.id = 'hud-opponent-name';
+  opponentPlate.style.cssText = `
+    position:absolute; top:16px; left:20px;
+    color:#8a7a5a; font-size:0.8rem; letter-spacing:0.08em;
+    text-transform:uppercase; pointer-events:none; z-index:1002;
+    text-shadow: 0 0 6px rgba(100,80,40,0.5);
+  `;
+  opponentPlate.textContent = `Stockfish · ${playerColor === 'white' ? 'black' : 'white'}`;
+  board3dElement.appendChild(opponentPlate);
+
+  board3dElement.addEventListener('mousemove', (e) => {
+    if (!arcaneBoard3D || state.boardViewMode !== '3d') return;
+    if (!state.game || state.game.isGameOver) return;
+
+    const rect = board3dElement.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Use raycaster to find hovered square
+    if (!arcaneBoard3D.raycaster || !arcaneBoard3D.camera) return;
+    arcaneBoard3D.raycaster.setFromCamera(
+      { x, y }, arcaneBoard3D.camera
+    );
+    const squares = Array.from(arcaneBoard3D.squareMeshes?.values() || []);
+    const pieces  = [];
+    arcaneBoard3D.pieces?.forEach(({ mesh }) => {
+      mesh.traverse(c => { if (c.isMesh) pieces.push(c); });
+    });
+
+    const hits = arcaneBoard3D.raycaster.intersectObjects(
+      [...pieces, ...squares], false
+    );
+    if (!hits.length) {
+      arcaneBoard3D.clearThreatLines?.();
+      return;
+    }
+
+    let hoveredSquare = null;
+    let obj = hits[0].object;
+    while (obj && !obj.userData?.square) obj = obj.parent;
+    if (obj?.userData?.square) hoveredSquare = obj.userData.square;
+
+    if (!hoveredSquare) {
+      arcaneBoard3D.clearThreatLines?.();
+      return;
+    }
+
+    const legalMoves = state.game.legalMoves?.[hoveredSquare] || [];
+    if (!legalMoves.length) {
+      arcaneBoard3D.clearThreatLines?.();
+      return;
+    }
+
+    arcaneBoard3D.selectedSquare = hoveredSquare;
+    arcaneBoard3D.showThreatLines?.(legalMoves.map((move) => move.to));
+  });
+
+  board3dElement.addEventListener('mouseleave', () => {
+    arcaneBoard3D?.clearThreatLines?.();
   });
 };
 

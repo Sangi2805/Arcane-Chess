@@ -159,8 +159,8 @@ input:focus,select:focus{border-color:rgba(184,149,42,.4)!important;outline:none
   justify-items:center!important;
 }
 
-#game-view .board-shell,
-#game-view .board-container{
+body:not(.board-mode-3d) #game-view .board-shell,
+body:not(.board-mode-3d) #game-view .board-container{
   width:min(72vh,640px)!important;
   height:auto!important;
   aspect-ratio:1/1!important;
@@ -2837,3 +2837,5 @@ button,
   white-space: nowrap !important;
   font-size: 11px !important;
 }
+
+
