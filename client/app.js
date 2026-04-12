@@ -394,7 +394,8 @@ const state = {
     continuation: [],
     fen: "",
     summary: "",
-    whyExpanded: false
+    whyExpanded: false,
+    requestedThisTurn: false
   },
   liveChronicle: {
     gameId: null,
@@ -714,6 +715,10 @@ const setWizardState = (nextState) => {
   coachWizardIrisRight?.setAttribute("r", String(visual.irisRight.r));
   coachWizardOrb?.setAttribute("fill", visual.orb);
   coachWizardOrb?.setAttribute("stroke", visual.orbStroke);
+
+  if (nextState === "st-win") {
+    arcaneBoard3D?.triggerSpectatorCelebration?.();
+  }
 };
 
 const isPlayerInCheckState = (gameState = state.game) => {
@@ -2931,8 +2936,12 @@ const clearHintState = () => {
     continuation: [],
     fen: "",
     summary: "",
-    whyExpanded: false
+    whyExpanded: false,
+    freshHint: false,
+    requestedThisTurn: false
   };
+
+  hintWhyButton?.classList.add("hidden");
 };
 
 const applyHintHighlights = () => {
@@ -2954,7 +2963,11 @@ const renderHintPanel = () => {
     return;
   }
 
-  const hasHint = Boolean(state.hint?.bestMove);
+  hintWhyButton.classList.add("hidden");
+
+  const hasHint = Boolean(state.hint?.bestMove) &&
+    state.hint?.freshHint === true;
+  const hasFreshHint = hasHint && Boolean(state.hint?.requestedThisTurn);
   const hasLine = Array.isArray(state.hint?.continuation) && state.hint.continuation.length > 0;
 
   hintWhyButton.textContent = state.hint?.whyExpanded ? "Hide Why" : "Why?";
@@ -2962,10 +2975,12 @@ const renderHintPanel = () => {
     "aria-expanded",
     state.hint?.whyExpanded ? "true" : "false"
   );
-  hintWhyButton.classList.toggle("hidden", !hasHint);
-  hintWhyButton.disabled = !hasHint;
+  if (hasFreshHint) {
+    hintWhyButton.classList.remove("hidden");
+  }
+  hintWhyButton.disabled = !hasFreshHint;
 
-  if (!hasHint || !state.hint?.whyExpanded) {
+  if (!hasFreshHint || !state.hint?.whyExpanded) {
     destroyMiniBoardTooltip();
     hintWhyText.textContent = "";
     hintWhyText.classList.add("hidden");
@@ -6398,7 +6413,9 @@ const requestHint = async () => {
         : [],
       fen: typeof payload.hint?.fen === "string" ? payload.hint.fen : "",
       summary: payload.hint?.summary || "This line improves your position.",
-      whyExpanded: false
+      whyExpanded: false,
+      freshHint: true,
+      requestedThisTurn: true
     };
 
     const hintMove = state.hint.bestMove;

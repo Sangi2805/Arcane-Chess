@@ -72,6 +72,10 @@
       this._threatLines       = [];
       this._curtainMesh       = null;
       this.arenaGuardians     = null;
+      this.spectatorCrowd     = null;
+      this.spectatorList      = [];
+      this.spectatorCelebrating = false;
+      this.spectatorCelebrationStart = 0;
     }
 
     // ─────────────────────────────────────────
@@ -90,6 +94,7 @@
       this._buildEnvironment();
       this._buildBoardSquares();
       this._buildArenaGuardians();
+      this.buildSpectators();
       this._initModelAssets();
       this.container.addEventListener('click', this._boundClick);
       window.addEventListener('resize', this._boundResize);
@@ -250,6 +255,14 @@
     setArenaGuardiansVisible(visible = true) {
       if (!this.arenaGuardians) return;
       this.arenaGuardians.visible = Boolean(visible);
+      if (this.spectatorCrowd) {
+        this.spectatorCrowd.visible = Boolean(visible);
+      }
+    }
+
+    triggerSpectatorCelebration() {
+      this.spectatorCelebrating = true;
+      this.spectatorCelebrationStart = Date.now();
     }
 
     /**
@@ -345,6 +358,8 @@
       this.squareMeshes.clear();
       this.hintIndicators = [];
       this.arenaGuardians = null;
+      this.spectatorCrowd = null;
+      this.spectatorList = [];
     }
 
     // ─────────────────────────────────────────
@@ -682,6 +697,84 @@
       });
 
       return torch;
+    }
+
+    buildSpectators() {
+      const T = this._T;
+      this.spectatorList = [];
+
+      const spectatorCrowd = new T.Group();
+      spectatorCrowd.name = 'spectatorCrowd';
+      const boardMinX = -3.5;
+      const boardMaxX = 3.5;
+      const boardMaxZ = 3.5;
+
+      const createSpectator = (x, y, z, baseRotationY) => {
+        const spectator = new T.Group();
+
+        const body = new T.Mesh(
+          new T.CylinderGeometry(0.08, 0.18, 0.55, 6),
+          new T.MeshLambertMaterial({
+            color: 0x2d1b4e,
+            opacity: 1.0,
+            transparent: false
+          })
+        );
+        body.position.y = 0.275;
+
+        const head = new T.Mesh(
+          new T.SphereGeometry(0.09, 6, 6),
+          new T.MeshLambertMaterial({ color: 0xc8a478 })
+        );
+        head.position.y = 0.60;
+
+        const leftEye = new T.Mesh(
+          new T.SphereGeometry(0.015, 6, 6),
+          new T.MeshBasicMaterial({ color: 0xc9a84c })
+        );
+        leftEye.position.set(-0.025, 0.62, 0.075);
+
+        const rightEye = new T.Mesh(
+          new T.SphereGeometry(0.015, 6, 6),
+          new T.MeshBasicMaterial({ color: 0xc9a84c })
+        );
+        rightEye.position.set(0.025, 0.62, 0.075);
+
+        const hood = new T.Mesh(
+          new T.ConeGeometry(0.11, 0.18, 6),
+          new T.MeshLambertMaterial({ color: 0x2d1b4e })
+        );
+        hood.position.y = 0.68;
+
+        spectator.add(body);
+        spectator.add(head);
+        spectator.add(leftEye);
+        spectator.add(rightEye);
+        spectator.add(hood);
+        spectator.scale.setScalar(0.9);
+        spectator.position.set(x, y, z);
+        spectator.rotation.y = baseRotationY + ((Math.random() * 0.4) - 0.2);
+        spectator.userData.originalY = y;
+
+        spectatorCrowd.add(spectator);
+        this.spectatorList.push(spectator);
+      };
+
+      [-3.5, -2.1, -0.7, 0.7, 2.1, 3.5].forEach((x) => {
+        createSpectator(x, 0, boardMaxZ + 1.8, Math.PI);
+      });
+
+      [-2, 0, 2].forEach((z) => {
+        createSpectator(boardMinX - 1.8, 0, z, Math.PI / 2);
+      });
+
+      [-2, 0, 2].forEach((z) => {
+        createSpectator(boardMaxX + 1.8, 0, z, -Math.PI / 2);
+      });
+
+      this.spectatorCrowd = spectatorCrowd;
+      this.scene.add(this.spectatorCrowd);
+      this.spectatorCrowd.visible = Boolean(this.arenaGuardians?.visible);
     }
 
     // ─────────────────────────────────────────
@@ -1140,6 +1233,7 @@
       const delta = this.clock.getDelta();
       this.torchTime += delta;
       this._updateParticles();
+      const nowMs = Date.now();
 
       // Torch flicker
       this.torchLights.forEach(({ light, base, phase }) => {
@@ -1162,6 +1256,22 @@
       this.indicators.forEach(m => {
         if (m.material) m.material.emissiveIntensity = 0.4 * dotPulse;
       });
+
+      if (this.spectatorCelebrating) {
+        const elapsed = nowMs - this.spectatorCelebrationStart;
+        if (elapsed < 4000) {
+          this.spectatorList.forEach((spectator, index) => {
+            const originalY = Number(spectator.userData.originalY || 0);
+            spectator.position.y =
+              originalY + Math.abs(Math.sin(elapsed * 0.004 + index * 0.5)) * 0.3;
+          });
+        } else {
+          this.spectatorCelebrating = false;
+          this.spectatorList.forEach((spectator) => {
+            spectator.position.y = Number(spectator.userData.originalY || 0);
+          });
+        }
+      }
 
       this.renderer.render(this.scene, this.camera);
     }

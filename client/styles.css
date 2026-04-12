@@ -4596,3 +4596,22 @@ body.board-mode-3d .immersive-hud {
   height: 100% !important;
   display: block !important;
 }
+#immersive-exit-button {
+  white-space: nowrap;
+  min-width: fit-content;
+  padding-left: 10px;
+  padding-right: 10px;
+  font-size: 11px;
+}
+.immersive-control-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.immersive-control-row button {
+  font-size: 10px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  min-width: 0;
+}
