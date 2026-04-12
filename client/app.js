@@ -347,7 +347,6 @@ const state = {
   game: null,
   boardViewMode: "2d",
   viewMode: "2D",
-  board3D: null,
   selectedSquare: null,
   pendingPromotion: null,
   pendingNewGame: false,
@@ -1305,6 +1304,22 @@ const renderMultiplayerLobby = () => {
 
 const setLobbyMode = (mode = "solo") => {
   const nextMode = normalizeLobbyMode(mode);
+  const previousMode = state.lobbyMode;
+
+  if (nextMode === "solo" && previousMode === "multiplayer") {
+    if (state.multiplayer.socket && state.multiplayer.queued) {
+      state.multiplayer.socket.emit("queue:leave", {}, () => {});
+    }
+
+    if (state.multiplayer.roomId) {
+      leaveMultiplayerRoom();
+    }
+
+    applyQueueStatusState({ queued: false });
+    state.multiplayer.roomId = null;
+    state.multiplayer.color = null;
+    state.multiplayer.phase = "idle";
+  }
 
   state.lobbyMode = nextMode;
   window.localStorage.setItem(LOBBY_MODE_STORAGE_KEY, nextMode);
@@ -1421,6 +1436,10 @@ const ensureMultiplayerSocket = () => {
   });
 
   socket.on("multiplayer:state", (socketState) => {
+    if (state.lobbyMode !== "multiplayer" && !state.multiplayer.roomId) {
+      return;
+    }
+
     setApiHealth(true);
     applyMultiplayerSocketState(socketState);
 
@@ -3122,12 +3141,11 @@ const renderClockCard = ({
     ? "Flag"
     : gameState?.isGameOver
       ? `Stopped · ${timeControl.label}`
-      : `${isActive ? "Running" : "Waiting"} · ${timeControl.label}`;
-  metaElement.textContent = flagged
-    ? "Flag"
-    : timeControl.incrementMs
-      ? `+${Math.round(timeControl.incrementMs / 1000)}`
-      : "";
+      : `${isActive ? "Running" : "Waiting"} · ${timeControl.label}${
+          timeControl.incrementMs
+            ? ` · +${Math.round(timeControl.incrementMs / 1000)}`
+            : ""
+        }`;
   metaElement.classList.toggle("hidden", !metaElement.textContent);
   cardElement.dataset.active = isActive ? "true" : "false";
   cardElement.dataset.urgent = isUrgent ? "true" : "false";
@@ -3777,8 +3795,8 @@ const renderPromotionPrompt = () => {
   const boardRect = boardShell.getBoundingClientRect();
   let anchorRect = null;
 
-  if (state.boardViewMode === "3d" && state.board3D?.projectSquare) {
-    const projected = state.board3D.projectSquare(state.pendingPromotion.anchorSquare);
+  if (state.boardViewMode === "3d" && arcaneBoard3D?.projectSquare) {
+    const projected = arcaneBoard3D.projectSquare(state.pendingPromotion.anchorSquare);
 
     if (
       projected &&
@@ -5707,6 +5725,12 @@ const showSignupMode = () => {
 const startNewGame = async () => {
   console.log("Start Duel clicked");
 
+  if (state.pendingNewGame || state.busy) {
+    return;
+  }
+
+  state.pendingNewGame = true;
+
   if (isRealtimeMultiplayerGame()) {
     leaveMultiplayerRoom();
   }
@@ -5714,7 +5738,6 @@ const startNewGame = async () => {
   dismissGameEndOverlay();
   arcaneBoard3D?.clearGameEndCurtain?.();
 
-  state.pendingNewGame = true;
   beginMoveCycle();
   resetFinishedGameResetLifecycle();
   resetGameOverBannerLifecycle();
@@ -6580,7 +6603,7 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", () => {
   destroyMiniBoardTooltip();
-  state.board3D?.scheduleResize?.({
+  arcaneBoard3D?.scheduleResize?.({
     immediate: true
   });
 

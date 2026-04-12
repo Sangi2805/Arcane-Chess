@@ -441,6 +441,10 @@ const clearActiveGame = async (actor, { settings = null } = {}) => {
     await persistCompletedGameIfNeeded(currentGame);
   }
 
+  if (currentGame) {
+    activeGames.delete(normalizedActor.key);
+  }
+
   const nextSettings = normalizeSettings(settings || currentGame?.settings || DEFAULT_SETTINGS);
   const game = createIdleGame({
     actor: normalizedActor,
@@ -465,7 +469,35 @@ const getLiveSerializableState = async (actor) => {
     await persistCompletedGameIfNeeded(game);
   }
 
-  return buildSerializableState(game);
+  const gameState = buildSerializableState(game);
+
+  if (
+    game.hasStarted &&
+    gameState.isGameOver &&
+    game.historyRecorded &&
+    !game.pendingCoachReview &&
+    !game.pendingEngineTurn
+  ) {
+    activeGames.delete(game.actor.key);
+  }
+
+  return gameState;
+};
+
+const discardActiveGame = async (actor, { persistCompleted = true } = {}) => {
+  const normalizedActor = normalizeActor(actor);
+  const currentGame = activeGames.get(normalizedActor.key);
+
+  if (!currentGame) {
+    return false;
+  }
+
+  if (persistCompleted && isGameFinished(currentGame)) {
+    await persistCompletedGameIfNeeded(currentGame);
+  }
+
+  activeGames.delete(normalizedActor.key);
+  return true;
 };
 
 const persistCompletedGameIfNeeded = async (game) => {
@@ -1186,5 +1218,6 @@ module.exports = {
   resignGame,
   saveCurrentGame,
   resumeSavedGame,
-  transferActiveGame
+  transferActiveGame,
+  discardActiveGame
 };

@@ -1,6 +1,6 @@
 const express = require("express");
 
-const { transferActiveGame } = require("../game/gameManager");
+const { transferActiveGame, discardActiveGame } = require("../game/gameManager");
 const {
   AuthenticationError,
   authenticateUser,
@@ -97,6 +97,13 @@ router.post("/login", async (request, response) => {
 
 router.post("/logout", async (request, response) => {
   try {
+    if (request.auth?.authenticated && request.auth.user?.id) {
+      await discardActiveGame({
+        type: "user",
+        userId: String(request.auth.user.id)
+      });
+    }
+
     if (request.auth?.token) {
       const { destroySessionByToken } = require("../services/authService");
       await destroySessionByToken(request.auth.token);
