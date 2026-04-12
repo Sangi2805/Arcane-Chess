@@ -694,12 +694,12 @@
         for (let f = 0; f < 8; f++) {
           const isLight = (r + f) % 2 === 0;
           const sq = FILES[f] + RANKS[r];
-          const baseColor = isLight ? 0xc8b484 : 0x6b4226;
+          const baseColor = isLight ? 0xd4b896 : 0x6b3d2e;
 
-          const mat = new T.MeshLambertMaterial({
+          const mat = new T.MeshStandardMaterial({
             color: baseColor,
-            emissive: new T.Color(0x000000),
-            emissiveIntensity: 0,
+            roughness: 0.6,
+            metalness: 0.0
           });
           const mesh = new T.Mesh(new T.BoxGeometry(1.0, 0.07, 1.0), mat);
           mesh.position.set(-3.5 + f, 0.035, -3.5 + (7 - r));
@@ -781,11 +781,10 @@
       }
 
       const material = new T.MeshStandardMaterial({
-        color: color === 'white' ? 0xe2cfa0 : 0x2a1a35,
-        emissive: color === 'white' ? 0x7a5c0a : 0x3a1a5a,
-        emissiveIntensity: color === 'white' ? 0.55 : 0.85,
-        roughness: color === 'white' ? 0.3 : 0.4,
-        metalness: color === 'white' ? 0.35 : 0.25
+        color: color === 'white' ? 0xe8d5a3 : 0x2c1810,
+        roughness: color === 'white' ? 0.4 : 0.45,
+        metalness: color === 'white' ? 0.15 : 0.1,
+        envMapIntensity: color === 'white' ? 0.6 : 0.5
       });
 
       const mesh = new T.Mesh(geometry, material);

@@ -354,11 +354,17 @@
             </div>
             <p class="lobby-note">Jump directly to saved games or match history in the archive panel.</p>
             <div class="lobby-actions">
-              <button id="hall-resume-button" class="button-secondary" type="button">Resume Game</button>
-              <button id="hall-history-button" class="button-secondary" type="button">Match History</button>
+              <button id="hall-resume-button" class="button-secondary" type="button">Resume Last Game</button>
+              <button id="hall-history-button" class="button-secondary" type="button">View Past Duels</button>
             </div>
             <div class="hall-random-duel-strip" aria-live="polite">
-              <p class="hall-random-wheel-kicker">Arcane Wheel</p>
+              <p class="label">Arcane Wheel</p>
+              <strong style="font-family:'Cinzel',serif; font-size:14px; color:rgba(255,255,255,0.85); display:block; margin-bottom:4px;">
+                Spin a Duel
+              </strong>
+              <p style="font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:10px; line-height:1.5;">
+                Spin to get a random time control and launch instantly.
+              </p>
               <button id="hall-random-time-control-button" class="button-secondary hall-random-time-control-button" type="button">
                 <span class="hall-random-wheel-orbit" aria-hidden="true"></span>
                 <span class="hall-random-wheel-core">Spin a Duel</span>
@@ -663,6 +669,13 @@
       <div id="immersive-hud" class="immersive-hud" aria-hidden="true">
         <div class="immersive-controls">
           <div class="game-actions immersive-control-row">
+            <button
+              id="immersive-fullscreen-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              Fullscreen
+            </button>
             <button
               id="immersive-exit-button"
               class="button-secondary button-small"

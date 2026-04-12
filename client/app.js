@@ -84,6 +84,7 @@ const immersiveControls = immersiveHud?.querySelector(".immersive-controls") || 
 const immersiveStatus = immersiveHud?.querySelector(".immersive-status") || null;
 const immersiveControlsHost = document.getElementById("immersive-controls-host");
 const immersiveExitButton = document.getElementById("immersive-exit-button");
+const immersiveFullscreenButton = document.getElementById('immersive-fullscreen-button');
 const immersiveNewGameButton = document.getElementById("immersive-new-game-button");
 const immersiveOfferDrawButton = document.getElementById("immersive-offer-draw-button");
 const immersiveResignButton = document.getElementById("immersive-resign-button");
@@ -6649,6 +6650,26 @@ continuePlayButton?.addEventListener("click", continueAfterDrawClaim);
 immersiveNewGameButton?.addEventListener("click", startNewGame);
 immersiveOfferDrawButton?.addEventListener("click", offerDraw);
 immersiveResignButton?.addEventListener("click", resignCurrentGame);
+immersiveFullscreenButton?.addEventListener('click', () => {
+  const el = document.getElementById('board-3d') ||
+              document.documentElement;
+  if (!document.fullscreenElement) {
+    el.requestFullscreen().catch(err => {
+      console.log('Fullscreen error:', err);
+    });
+    immersiveFullscreenButton.textContent = 'Exit Fullscreen';
+  } else {
+    document.exitFullscreen();
+    immersiveFullscreenButton.textContent = 'Fullscreen';
+  }
+});
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    immersiveFullscreenButton.textContent = 'Fullscreen';
+    arcaneBoard3D?._onResize?.();
+  }
+});
 
 recordTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
