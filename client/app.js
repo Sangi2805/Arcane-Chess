@@ -782,12 +782,57 @@ const applyWizardStateFromGameState = (gameState = state.game, options = {}) => 
   }
 };
 
+const normalizeBoardViewMode = (mode) => (mode === "3d" ? "3d" : "2d");
+
+const updateBoardModeToggleUi = () => {
+  const is3D = state.boardViewMode === "3d";
+  toggle2dBtn?.classList.toggle("mode-btn-active", !is3D);
+  toggle3dBtn?.classList.toggle("mode-btn-active", is3D);
+
+  if (boardModeLabel) {
+    boardModeLabel.textContent = is3D ? "3D duel interface" : "Duel Interface";
+  }
+};
+
+const setBoardViewModePreference = (mode, { source = "system" } = {}) => {
+  state.boardViewMode = normalizeBoardViewMode(mode);
+  state.viewMode = state.boardViewMode === "3d" ? "3D" : "2D";
+  updateBoardModeToggleUi();
+  syncBoardViewUi();
+  console.log("[board] selected mode changed:", state.boardViewMode, "source:", source);
+};
+
+const validate3DBoardInstance = ({ logFailure = false } = {}) => {
+  const canvas = arcaneBoard3D?.renderer?.domElement || null;
+  const healthy =
+    Boolean(arcaneBoard3D) &&
+    Boolean(arcaneBoard3D?.renderer) &&
+    Boolean(arcaneBoard3D?.camera) &&
+    Boolean(arcaneBoard3D?.scene) &&
+    Boolean(canvas) &&
+    Boolean(board3dElement?.contains(canvas)) &&
+    Number(canvas?.width || 0) > 0 &&
+    Number(canvas?.height || 0) > 0 &&
+    Number(board3dElement?.offsetWidth || 0) > 0 &&
+    Number(board3dElement?.offsetHeight || 0) > 0;
+
+  if (!healthy && logFailure) {
+    console.warn("[board] 3D init failed health check");
+  }
+
+  return healthy;
+};
+
 const syncBoardViewUi = () => {
   const is3D = state.boardViewMode === "3d";
+  const show3DInGameView =
+    is3D &&
+    state.view === "game" &&
+    validate3DBoardInstance();
   state.viewMode = is3D ? "3D" : "2D";
 
   document.body.dataset.boardViewMode = state.boardViewMode;
-  document.body.classList.toggle("board-mode-3d", is3D);
+  document.body.classList.toggle("board-mode-3d", show3DInGameView);
 
   if (shellElement) {
     shellElement.dataset.boardViewMode = state.boardViewMode;
@@ -798,20 +843,20 @@ const syncBoardViewUi = () => {
   }
 
   if (boardElement) {
-    boardElement.classList.toggle("hidden", is3D);
-    boardElement.setAttribute("aria-hidden", is3D ? "true" : "false");
+    boardElement.classList.toggle("hidden", show3DInGameView);
+    boardElement.setAttribute("aria-hidden", show3DInGameView ? "true" : "false");
   }
 
   if (board3dElement) {
-    board3dElement.classList.toggle("hidden", !is3D);
-    board3dElement.setAttribute("aria-hidden", is3D ? "false" : "true");
+    board3dElement.classList.toggle("hidden", !show3DInGameView);
+    board3dElement.setAttribute("aria-hidden", show3DInGameView ? "false" : "true");
   }
 
   if (immersiveHud) {
-    immersiveHud.setAttribute("aria-hidden", is3D ? "false" : "true");
+    immersiveHud.setAttribute("aria-hidden", show3DInGameView ? "false" : "true");
   }
 
-  arcaneBoard3D?.setArenaGuardiansVisible?.(is3D);
+  arcaneBoard3D?.setArenaGuardiansVisible?.(show3DInGameView);
   syncCoachAvatarMode();
   syncImmersiveControlsMount();
   renderImmersiveHud();
@@ -890,8 +935,9 @@ const syncBoard3D = ({ refreshPerspective = false } = {}) => {
 };
 
 const resetBoardViewTo2D = () => {
-  state.boardViewMode = "2d";
-  state.viewMode = "2D";
+  setBoardViewModePreference("2d", {
+    source: "fallback"
+  });
 
   document.body.classList.remove("board-mode-3d");
   document.body.dataset.boardViewMode = "2d";
@@ -922,13 +968,6 @@ const resetBoardViewTo2D = () => {
   syncCoachAvatarMode();
   syncImmersiveControlsMount();
   renderImmersiveHud();
-
-  toggle3dBtn?.classList.remove("mode-btn-active");
-  toggle2dBtn?.classList.add("mode-btn-active");
-
-  if (boardModeLabel) {
-    boardModeLabel.textContent = "Duel Interface";
-  }
 
   if (arcaneBoard3D) {
     arcaneBoard3D.destroy();
@@ -1231,6 +1270,8 @@ function renderView() {
     gameView.style.display = state.view === "game" ? "grid" : "none";
   }
 
+  syncBoardViewUi();
+
   console.log("renderView:", state.view);
   console.log("Hall visible:", lobbyView?.style.display, "Game visible:", gameView?.style.display);
 
@@ -1467,7 +1508,7 @@ const ensureMultiplayerSocket = () => {
     setCoachMessage(payload.message || "Quick play queue request failed.");
   });
 
-  socket.on("match:found", (payload = {}) => {
+  socket.on("match:found", async (payload = {}) => {
     state.multiplayer.queued = false;
     state.multiplayer.queuePosition = null;
     state.multiplayer.queueTimeControlId = null;
@@ -1475,6 +1516,9 @@ const ensureMultiplayerSocket = () => {
 
     state.view = "game";
     renderView();
+    await launchSelectedBoard({
+      trigger: "Quick Play"
+    });
     renderMultiplayerLobby();
     syncActionButtons();
 
@@ -1668,7 +1712,7 @@ const handleQuickPlayClick = async () => {
   await joinMatchmakingQueue();
 };
 
-const rejoinMultiplayerMatch = () => {
+const rejoinMultiplayerMatch = async () => {
   if (!state.multiplayer.roomId) {
     setCoachMessage("No active multiplayer room found.", "Create or join a room to start a live match.");
     return;
@@ -1676,6 +1720,9 @@ const rejoinMultiplayerMatch = () => {
 
   state.view = "game";
   renderView();
+  await launchSelectedBoard({
+    trigger: "Resume Game"
+  });
   syncActionButtons();
   setCoachMessage("Rejoined live match.", "You are back in the active multiplayer board.");
 };
@@ -1691,6 +1738,9 @@ const createMultiplayerRoom = async () => {
     setApiHealth(true);
     state.view = "game";
     renderView();
+    await launchSelectedBoard({
+      trigger: "Create Room"
+    });
     applyMultiplayerSocketState(socketState);
   } catch (error) {
     setApiHealth(false);
@@ -1719,6 +1769,9 @@ const joinMultiplayerRoom = async () => {
     setApiHealth(true);
     state.view = "game";
     renderView();
+    await launchSelectedBoard({
+      trigger: "Join Game"
+    });
     applyMultiplayerSocketState(socketState);
   } catch (error) {
     setApiHealth(false);
@@ -5562,6 +5615,9 @@ const enterGameView = async ({ coachContext = "load-active", fallbackView = "hal
 
   state.view = "game";
   renderView();
+  await launchSelectedBoard({
+    trigger: coachContext === "resume" ? "Resume Game" : "Enter Game"
+  });
   applyGameState(gameState, {
     coachContext
   });
@@ -5825,14 +5881,12 @@ const startNewGame = async () => {
     console.log("Switching to game view");
     state.view = "game";
     renderView();
-
+    render();
     const boardContainer = await waitForBoardContainerReady();
-    if (!boardContainer) {
-      console.log("Skipping board render: game view board container never became visible");
-      return;
+    if (boardContainer && state.boardViewMode === "3d") {
+      await switchTo3D();
     }
 
-    render();
     void refreshCollections();
   } catch (error) {
     state.pendingNewGame = false;
@@ -5879,6 +5933,11 @@ const resumeSavedGame = async (gameId) => {
 
     setApiHealth(true);
     setPersistence(payload.persistence);
+    state.view = "game";
+    renderView();
+    await launchSelectedBoard({
+      trigger: "Resume Game"
+    });
     applyGameState(payload.game, {
       coachContext: "resume"
     });
@@ -6828,21 +6887,54 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ── 2D / 3D TOGGLE ─────────────────────────────────────────
-const switchTo3D = () => {
-  if (arcaneBoard3D) return; // already in 3D
-  state.boardViewMode = "3d";
-  state.viewMode = "3D";
-  syncBoardViewUi();
-  toggle2dBtn?.classList.remove("mode-btn-active");
-  toggle3dBtn?.classList.add("mode-btn-active");
-  if (boardModeLabel) boardModeLabel.textContent = "3D duel interface";
+const switchTo3D = async () => {
+  const boardContainer = await waitForBoardContainerReady();
+  if (!boardContainer || state.view !== "game") {
+    throw new Error("3D board container is not ready in game view.");
+  }
 
-  arcaneBoard3D = new ArcaneBoardV2(board3dElement);
-  arcaneBoard3D.init();
-  requestAnimationFrame(() => {
-    arcaneBoard3D?._onResize?.();
-  });
-  arcaneBoard3D.setArenaGuardiansVisible?.(true);
+  if (!board3dElement) {
+    throw new Error("3D board container is unavailable.");
+  }
+
+  if (board3dElement.offsetWidth <= 0 || board3dElement.offsetHeight <= 0) {
+    throw new Error("3D board container has no visible size.");
+  }
+
+  if (typeof window.ArcaneBoardV2 !== "function") {
+    throw new Error("3D renderer is unavailable.");
+  }
+
+  if (arcaneBoard3D && !validate3DBoardInstance()) {
+    arcaneBoard3D.destroy?.();
+    arcaneBoard3D = null;
+  }
+
+  try {
+    if (!arcaneBoard3D) {
+      const staleCanvases = board3dElement.querySelectorAll("canvas");
+      if (staleCanvases.length) {
+        staleCanvases.forEach((canvas) => canvas.remove());
+      }
+      arcaneBoard3D = new window.ArcaneBoardV2(board3dElement);
+      arcaneBoard3D.init();
+    }
+  } catch (error) {
+    arcaneBoard3D?.destroy?.();
+    arcaneBoard3D = null;
+    console.warn("[board] 3D init failed health check");
+    throw error;
+  }
+
+  if (!validate3DBoardInstance({ logFailure: true })) {
+    arcaneBoard3D?.destroy?.();
+    arcaneBoard3D = null;
+    throw new Error("3D renderer failed health check.");
+  }
+
+  console.log("[board] 3D init passed health check");
+
+  arcaneBoard3D?._onResize?.();
   arcaneBoard3D.setPerspective?.(getBoardPerspectiveColor());
 
   // Sync current board position
@@ -6899,66 +6991,130 @@ const switchTo3D = () => {
   opponentPlate.textContent = `Stockfish · ${playerColor === 'white' ? 'black' : 'white'}`;
   board3dElement.appendChild(opponentPlate);
 
-  board3dElement.addEventListener('mousemove', (e) => {
-    if (!arcaneBoard3D || state.boardViewMode !== '3d') return;
-    if (!state.game || state.game.isGameOver) return;
+  if (!board3dElement.dataset.arcaneHoverBound) {
+    board3dElement.addEventListener('mousemove', (e) => {
+      if (!arcaneBoard3D || state.boardViewMode !== '3d') return;
+      if (!state.game || state.game.isGameOver) return;
 
-    const rect = board3dElement.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const rect = board3dElement.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-    // Use raycaster to find hovered square
-    if (!arcaneBoard3D.raycaster || !arcaneBoard3D.camera) return;
-    arcaneBoard3D.raycaster.setFromCamera(
-      { x, y }, arcaneBoard3D.camera
-    );
-    const squares = Array.from(arcaneBoard3D.squareMeshes?.values() || []);
-    const pieces  = [];
-    arcaneBoard3D.pieces?.forEach(({ mesh }) => {
-      mesh.traverse(c => { if (c.isMesh) pieces.push(c); });
+      // Use raycaster to find hovered square
+      if (!arcaneBoard3D.raycaster || !arcaneBoard3D.camera) return;
+      arcaneBoard3D.raycaster.setFromCamera(
+        { x, y }, arcaneBoard3D.camera
+      );
+      const squares = Array.from(arcaneBoard3D.squareMeshes?.values() || []);
+      const pieces  = [];
+      arcaneBoard3D.pieces?.forEach(({ mesh }) => {
+        mesh.traverse(c => { if (c.isMesh) pieces.push(c); });
+      });
+
+      const hits = arcaneBoard3D.raycaster.intersectObjects(
+        [...pieces, ...squares], false
+      );
+      if (!hits.length) {
+        arcaneBoard3D.clearThreatLines?.();
+        return;
+      }
+
+      let hoveredSquare = null;
+      let obj = hits[0].object;
+      while (obj && !obj.userData?.square) obj = obj.parent;
+      if (obj?.userData?.square) hoveredSquare = obj.userData.square;
+
+      if (!hoveredSquare) {
+        arcaneBoard3D.clearThreatLines?.();
+        return;
+      }
+
+      const legalMoves = state.game.legalMoves?.[hoveredSquare] || [];
+      if (!legalMoves.length) {
+        arcaneBoard3D.clearThreatLines?.();
+        return;
+      }
+
+      arcaneBoard3D.selectedSquare = hoveredSquare;
+      arcaneBoard3D.showThreatLines?.(legalMoves.map((move) => move.to));
     });
 
-    const hits = arcaneBoard3D.raycaster.intersectObjects(
-      [...pieces, ...squares], false
-    );
-    if (!hits.length) {
-      arcaneBoard3D.clearThreatLines?.();
-      return;
-    }
+    board3dElement.addEventListener('mouseleave', () => {
+      arcaneBoard3D?.clearThreatLines?.();
+    });
 
-    let hoveredSquare = null;
-    let obj = hits[0].object;
-    while (obj && !obj.userData?.square) obj = obj.parent;
-    if (obj?.userData?.square) hoveredSquare = obj.userData.square;
-
-    if (!hoveredSquare) {
-      arcaneBoard3D.clearThreatLines?.();
-      return;
-    }
-
-    const legalMoves = state.game.legalMoves?.[hoveredSquare] || [];
-    if (!legalMoves.length) {
-      arcaneBoard3D.clearThreatLines?.();
-      return;
-    }
-
-    arcaneBoard3D.selectedSquare = hoveredSquare;
-    arcaneBoard3D.showThreatLines?.(legalMoves.map((move) => move.to));
-  });
-
-  board3dElement.addEventListener('mouseleave', () => {
-    arcaneBoard3D?.clearThreatLines?.();
-  });
+    board3dElement.dataset.arcaneHoverBound = "true";
+  }
 };
 
 const switchTo2D = () => {
-  if (!arcaneBoard3D) return; // already in 2D
   resetBoardViewTo2D();
-  renderBoard();
+  if (state.view === "game") {
+    renderBoard();
+  }
 };
 
-if (toggle2dBtn) toggle2dBtn.addEventListener("click", switchTo2D);
-if (toggle3dBtn) toggle3dBtn.addEventListener("click", switchTo3D);
+const launchSelectedBoard = async ({ trigger = "game-start" } = {}) => {
+  const requestedMode = normalizeBoardViewMode(state.boardViewMode);
+  console.log("[board] game start requested:", trigger, "mode:", requestedMode);
+
+  if (requestedMode === "2d") {
+    console.log("[board] launching 2D");
+    setBoardViewModePreference("2d", {
+      source: `launch:${trigger}`
+    });
+    switchTo2D();
+    return "2d";
+  }
+
+  console.log("[board] requested 3D launch");
+
+  try {
+    await switchTo3D();
+    setBoardViewModePreference("3d", {
+      source: `launch:${trigger}`
+    });
+    syncBoard3D({
+      refreshPerspective: true
+    });
+    return "3d";
+  } catch (error) {
+    console.warn("[board] 3D init failed health check", error);
+    if (arcaneBoard3D) {
+      arcaneBoard3D.destroy?.();
+      arcaneBoard3D = null;
+    }
+    console.log("[board] fallback to 2D");
+    setBoardViewModePreference("2d", {
+      source: "fallback"
+    });
+    switchTo2D();
+    return "2d";
+  }
+};
+
+const handleBoardModeToggle = (mode) => {
+  if (mode === "3d" && state.view !== "game") {
+    state.boardViewMode = "3d";
+    state.viewMode = "3D";
+    toggle2dBtn?.classList.remove("mode-btn-active");
+    toggle3dBtn?.classList.add("mode-btn-active");
+    return;
+  }
+
+  setBoardViewModePreference(mode, {
+    source: "toggle"
+  });
+
+  if (state.view === "game") {
+    void launchSelectedBoard({
+      trigger: "Mode Toggle"
+    });
+  }
+};
+
+if (toggle2dBtn) toggle2dBtn.addEventListener("click", () => handleBoardModeToggle("2d"));
+if (toggle3dBtn) toggle3dBtn.addEventListener("click", () => handleBoardModeToggle("3d"));
 if (immersiveExitButton) immersiveExitButton.addEventListener("click", switchTo2D);
 
 initialize();
@@ -6974,7 +7130,7 @@ multiplayerCreateRoomButton?.addEventListener("click", () => {
 });
 
 multiplayerRejoinGameButton?.addEventListener("click", () => {
-  rejoinMultiplayerMatch();
+  void rejoinMultiplayerMatch();
 });
 
 multiplayerJoinGameButton?.addEventListener("click", () => {
