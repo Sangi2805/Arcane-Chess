@@ -6,7 +6,6 @@ import {
   COACH_STAGE_GAME_OVER,
   COACH_STAGE_PLAYER_FEEDBACK,
   DEFAULT_COACH_EXPLANATION,
-  DRAW_OUTCOME_LABELS,
   GAME_OVER_BANNER_DURATION_MS,
   GUEST_STORAGE_KEY,
   HALL_RANDOM_TIME_CONTROL_IDS,
@@ -29,6 +28,20 @@ import {
   runtimeState,
   state
 } from "./app/state.js";
+import {
+  escapeHtml,
+  formatClockMs,
+  formatColor,
+  formatHistoryHeadline,
+  formatResult,
+  formatTimeControl,
+  formatTimestamp,
+  getOutcomeLabel,
+  getResolvedTimeControl,
+  normalizeChronicleWhyLines,
+  normalizeHistoryRecord,
+  trimTerminalPeriod
+} from "./app/formatting.js";
 import * as dom from "./app/dom.js";
 
 const {
@@ -688,14 +701,6 @@ const resetBoardViewTo2D = () => {
   document.getElementById('hud-opponent-name')?.remove();
   is3DMoveAnimating = false;
 };
-
-const escapeHtml = (value) =>
-  String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 
 const normalizeLobbyMode = (value) =>
   VALID_LOBBY_MODES.has(value) ? value : "solo";
@@ -1497,66 +1502,6 @@ const focusAuthField = (input) => {
   input?.select?.();
 };
 
-const formatColor = (color) =>
-  color ? `${color.charAt(0).toUpperCase()}${color.slice(1)}` : "-";
-
-const trimTerminalPeriod = (value) =>
-  typeof value === "string" ? value.replace(/\.$/, "") : "";
-
-const getOutcomeLabel = (value = {}) => {
-  if (value.resultLabel) {
-    return value.resultLabel;
-  }
-
-  if (value.status?.outcomeLabel) {
-    return value.status.outcomeLabel;
-  }
-
-  const statusCode = value.status?.code || value.statusCode;
-
-  if (statusCode && DRAW_OUTCOME_LABELS[statusCode]) {
-    return DRAW_OUTCOME_LABELS[statusCode];
-  }
-
-  if (value.result === "draw") {
-    return trimTerminalPeriod(value.status?.message || value.statusMessage) || "Draw";
-  }
-
-  return null;
-};
-
-const formatResult = (result, playerColor, context = {}) => {
-  switch (result) {
-    case "white-win":
-      return playerColor ? (playerColor === "white" ? "Won" : "Lost") : "White won";
-    case "black-win":
-      return playerColor ? (playerColor === "black" ? "Won" : "Lost") : "Black won";
-    case "draw":
-      return getOutcomeLabel({
-        ...context,
-        result
-      }) || "Draw";
-    case "not-started":
-      return "Not started";
-    default:
-      return "In Progress";
-  }
-};
-
-const formatHistoryHeadline = (record = {}) => {
-  const result = formatResult(record.result, record.playerColor, record);
-
-  if (
-    !record.playerColor ||
-    result === "In Progress" ||
-    result === "Not started"
-  ) {
-    return result;
-  }
-
-  return `${result} as ${formatColor(record.playerColor)}`;
-};
-
 const getWinnerFromResult = (result) => {
   if (result === "white-win") {
     return "White";
@@ -1951,23 +1896,6 @@ const getLastPlyIndexFromMoveList = (moveList = []) => {
   return null;
 };
 
-const normalizeChronicleWhyLines = (whyLines = []) =>
-  Array.isArray(whyLines)
-    ? whyLines
-        .map((line = {}) => {
-          const san = Array.isArray(line.san)
-            ? line.san.filter((move) => typeof move === "string" && move.trim().length > 0)
-            : [];
-
-          return {
-            rank: Number(line.rank) || null,
-            eval: typeof line.eval === "number" ? line.eval : null,
-            san
-          };
-        })
-        .filter((line) => line.san.length > 0)
-    : [];
-
 const resetLiveChronicleState = (gameId = null) => {
   state.liveChronicle = {
     gameId,
@@ -2212,39 +2140,6 @@ const getDefaultCoachState = (gameState, context = "default") => {
   });
 };
 
-const formatTimestamp = (value) => {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
-};
-
-const formatTimeControl = (timeControl = null) =>
-  getResolvedTimeControl(timeControl).label;
-
-const normalizeHistoryRecord = (record = {}) => ({
-  result: record.result || "in-progress",
-  resultLabel: record.resultLabel || null,
-  drawReason: record.drawReason || null,
-  difficulty: record.difficulty || record.level || "-",
-  playerColor: record.playerColor || record.playerSide || "-",
-  engineColor: record.engineColor || "-",
-  completedAt: record.completedAt || record.updatedAt || record.createdAt || null,
-  statusCode: record.statusCode || record.status?.code || null,
-  statusMessage:
-    record.statusMessage || record.status?.message || record.statusCode || "-",
-  pgn: record.pgn || record.gamePgn || "",
-  moveList: Array.isArray(record.moveList)
-    ? record.moveList
-    : Array.isArray(record.moves)
-      ? record.moves
-      : []
-});
-
 const readStoredGuest = () => {
   try {
     const storedValue = window.localStorage.getItem(GUEST_STORAGE_KEY);
@@ -2289,26 +2184,6 @@ const getBoardPerspectiveColor = () =>
 
 const getSelectedTimeControlId = () => timeControlSelect?.value || "untimed";
 
-const getResolvedTimeControl = (timeControl = null) => {
-  const id =
-    typeof timeControl === "string"
-      ? timeControl
-      : typeof timeControl?.id === "string"
-        ? timeControl.id
-        : "untimed";
-  const preset = TIME_CONTROL_PRESETS[id] || TIME_CONTROL_PRESETS.untimed;
-
-  return {
-    id,
-    label: timeControl?.label || preset.label,
-    enabled: Boolean(
-      typeof timeControl?.enabled === "boolean" ? timeControl.enabled : preset.enabled
-    ),
-    baseMs: Number(timeControl?.baseMs ?? preset.baseMs ?? 0),
-    incrementMs: Number(timeControl?.incrementMs ?? preset.incrementMs ?? 0)
-  };
-};
-
 const isTimedGameState = (gameState = state.game) =>
   Boolean(gameState?.clockState?.enabled && gameState.clockState.timeControlId !== "untimed");
 
@@ -2335,23 +2210,6 @@ const getClockDisplayState = (clockState = state.game?.clockState) => {
     whiteMs,
     blackMs
   };
-};
-
-const formatClockMs = (milliseconds = 0) => {
-  const clampedMs = Math.max(0, Math.floor(milliseconds));
-  const totalSeconds = Math.ceil(clampedMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const remainderMinutes = minutes % 60;
-    return `${hours}:${String(remainderMinutes).padStart(2, "0")}:${String(
-      seconds
-    ).padStart(2, "0")}`;
-  }
-
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
 const getBoardClockColors = (gameState = state.game) => {
