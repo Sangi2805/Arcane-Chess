@@ -11,7 +11,6 @@ import {
   QUICK_PLAY_TIME_CONTROL_ID,
   THINKING_COACH_EXPLANATION,
   TIME_CONTROL_PRESETS,
-  VALID_LOBBY_MODES,
   VALID_RECORD_VIEWS,
   WIZARD_STATE_CLASSNAMES,
   WIZARD_STATE_LABELS,
@@ -162,6 +161,12 @@ import {
   setSessionState,
   showSignupMode
 } from "./app/auth-session-controller.js";
+import {
+  configureHallActionsDependencies,
+  leaveCompletedMultiplayerGameIfNeeded,
+  normalizeLobbyMode,
+  setLobbyMode
+} from "./app/hall-actions-controller.js";
 import * as dom from "./app/dom.js";
 
 const {
@@ -672,9 +677,6 @@ const resetBoardViewTo2D = () => {
   is3DMoveAnimating = false;
 };
 
-const normalizeLobbyMode = (value) =>
-  VALID_LOBBY_MODES.has(value) ? value : "solo";
-
 const isRealtimeMultiplayerGame = () =>
   Boolean(state.multiplayer.roomId) && state.game?.actorType === "multiplayer";
 
@@ -705,35 +707,6 @@ const getMultiplayerActorPayload = () => {
     guestId: state.guest?.guestId || null,
     displayName: state.guest?.displayName || "Guest"
   };
-};
-
-const setLobbyMode = (mode = "solo") => {
-  const nextMode = normalizeLobbyMode(mode);
-  const previousMode = state.lobbyMode;
-
-  if (nextMode === "solo" && previousMode === "multiplayer") {
-    if (state.multiplayer.socket && state.multiplayer.queued) {
-      state.multiplayer.socket.emit("queue:leave", {}, () => {});
-    }
-
-    if (state.multiplayer.roomId) {
-      leaveMultiplayerRoom();
-    }
-
-    applyQueueStatusState({ queued: false });
-    state.multiplayer.roomId = null;
-    state.multiplayer.color = null;
-    state.multiplayer.phase = "idle";
-  }
-
-  state.lobbyMode = nextMode;
-  persistLobbyMode(nextMode);
-
-  if (nextMode === "multiplayer") {
-    ensureMultiplayerSocket();
-  }
-
-  renderMultiplayerLobby();
 };
 
 const getMultiplayerCoachState = (socketState) => {
@@ -778,19 +751,6 @@ const applyMultiplayerSocketState = (socketState) => {
       coachState: getMultiplayerCoachState(socketState)
     }
   );
-};
-
-const leaveCompletedMultiplayerGameIfNeeded = () => {
-  const hasLiveRoom = Boolean(state.multiplayer.roomId);
-  const gameIsOver = Boolean(state.game?.isGameOver);
-  const noActiveMoves = !state.game?.hasStarted || gameIsOver;
-
-  if (!hasLiveRoom || !noActiveMoves) {
-    return;
-  }
-
-  leaveMultiplayerRoom();
-  applyQueueStatusState({ queued: false });
 };
 
 const applyQueueStatusState = (queueState = {}) => {
@@ -3607,6 +3567,19 @@ configureAuthSessionDependencies({
     setPersistence,
     setRecordView,
     syncActionButtons
+  }
+});
+
+configureHallActionsDependencies({
+  state,
+  realtime: {
+    ensureMultiplayerSocket,
+    leaveMultiplayerRoom
+  },
+  actions: {
+    applyQueueStatusState,
+    persistLobbyMode,
+    renderMultiplayerLobby
   }
 });
 
