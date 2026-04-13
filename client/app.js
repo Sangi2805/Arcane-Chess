@@ -7,18 +7,13 @@ import {
   COACH_STAGE_PLAYER_FEEDBACK,
   DEFAULT_COACH_EXPLANATION,
   GAME_OVER_BANNER_DURATION_MS,
-  GUEST_STORAGE_KEY,
   HALL_RANDOM_TIME_CONTROL_IDS,
-  LOBBY_MODE_STORAGE_KEY,
   PIECES,
   QUICK_PLAY_TIME_CONTROL_ID,
-  RECORD_VIEW_STORAGE_KEY,
   THINKING_COACH_EXPLANATION,
   TIME_CONTROL_PRESETS,
-  VALID_APP_VIEWS,
   VALID_LOBBY_MODES,
   VALID_RECORD_VIEWS,
-  VIEW_STORAGE_KEY,
   WIZARD_STATE_CLASSNAMES,
   WIZARD_STATE_LABELS,
   WIZARD_STATE_VISUALS
@@ -42,6 +37,16 @@ import {
   normalizeHistoryRecord,
   trimTerminalPeriod
 } from "./app/formatting.js";
+import {
+  getSavedView,
+  hasSeenIntroSplash,
+  markIntroSplashSeen,
+  persistGuest,
+  persistLobbyMode,
+  persistRecordView,
+  persistView,
+  readStoredGuest
+} from "./app/storage.js";
 import * as dom from "./app/dom.js";
 
 const {
@@ -195,7 +200,7 @@ const {
 } = dom;
 
 (function() {
-  if (sessionStorage.getItem('ss-intro-seen')) {
+  if (hasSeenIntroSplash()) {
     const s = document.getElementById('ss-intro-splash');
     if (s) s.remove();
     return;
@@ -217,7 +222,7 @@ const {
     sparks.appendChild(el);
   }
   const dismiss = () => {
-    sessionStorage.setItem('ss-intro-seen', '1');
+    markIntroSplashSeen();
     splash.remove();
   };
   splash.addEventListener('click', dismiss);
@@ -708,17 +713,6 @@ const normalizeLobbyMode = (value) =>
 const isRealtimeMultiplayerGame = () =>
   Boolean(state.multiplayer.roomId) && state.game?.actorType === "multiplayer";
 
-const persistView = (view) => {
-  window.localStorage.setItem(VIEW_STORAGE_KEY, view);
-  console.log("Persisting view:", view);
-};
-
-const getSavedView = () => {
-  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
-  console.log("Restored saved view:", savedView);
-  return VALID_APP_VIEWS.has(savedView) ? savedView : null;
-};
-
 const isActiveGameState = (gameState) =>
   Boolean(gameState?.id && gameState?.hasStarted && !gameState?.isGameOver);
 
@@ -1128,7 +1122,7 @@ const setLobbyMode = (mode = "solo") => {
   }
 
   state.lobbyMode = nextMode;
-  window.localStorage.setItem(LOBBY_MODE_STORAGE_KEY, nextMode);
+  persistLobbyMode(nextMode);
 
   if (nextMode === "multiplayer") {
     ensureMultiplayerSocket();
@@ -2140,30 +2134,6 @@ const getDefaultCoachState = (gameState, context = "default") => {
   });
 };
 
-const readStoredGuest = () => {
-  try {
-    const storedValue = window.localStorage.getItem(GUEST_STORAGE_KEY);
-
-    if (!storedValue) {
-      return null;
-    }
-
-    const parsedGuest = JSON.parse(storedValue);
-
-    return parsedGuest?.guestId ? parsedGuest : null;
-  } catch (error) {
-    return null;
-  }
-};
-
-const persistGuest = (guest) => {
-  if (!guest?.guestId) {
-    return;
-  }
-
-  window.localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guest));
-};
-
 const createFallbackGuest = (storedGuest) => {
   const guestId =
     storedGuest?.guestId ||
@@ -2975,7 +2945,7 @@ const request = async (url, options = {}) => {
 const setRecordView = (view) => {
   const normalizedView = VALID_RECORD_VIEWS.has(view) ? view : "moves";
   state.activeRecordView = normalizedView;
-  window.localStorage.setItem(RECORD_VIEW_STORAGE_KEY, normalizedView);
+  persistRecordView(normalizedView);
 
   recordTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.recordView === normalizedView);
@@ -6125,23 +6095,29 @@ const handleSquareClick = (square) => {
 };
 
 const initialize = async () => {
-  renderGuestProfile();
-  renderSessionUi();
   setRecordView(state.activeRecordView);
   syncBoardViewUi();
 
   try {
-    await ensureGuestSession();
     const sessionPayload = await loadSession();
-    const savedView = !sessionPayload?.authenticated ? null : getSavedView();
+    const storedGuest = readStoredGuest();
+    const hasGuestProfile = Boolean(storedGuest?.guestId);
+    const savedView = getSavedView();
+    state.isGuest = !sessionPayload?.authenticated && hasGuestProfile;
+    state.guest = sessionPayload?.authenticated ? null : storedGuest || null;
     const desiredView = sessionPayload?.authenticated
       ? savedView || "hall"
-      : "auth";
+      : hasGuestProfile
+        ? savedView || "hall"
+        : "auth";
 
     state.view = desiredView;
     console.log("Session restore:", state.view, "authenticated:", sessionPayload?.authenticated);
 
-    if (sessionPayload?.authenticated) {
+    renderGuestProfile();
+    renderSessionUi();
+
+    if (sessionPayload?.authenticated || hasGuestProfile) {
       if (desiredView === "game") {
         const restored = await enterGameView({ coachContext: "load-active" });
       } else {
@@ -6150,6 +6126,10 @@ const initialize = async () => {
       }
     } else {
       renderView();
+      state.isGuest = false;
+      state.guest = null;
+      setApiHealth(true);
+      return;
     }
 
     await refreshCollections();
