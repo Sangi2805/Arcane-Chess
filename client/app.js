@@ -51,13 +51,20 @@ import {
   leaveMultiplayerRoom
 } from "./app/realtime.js";
 import {
+  configureRenderViewDependencies,
+  renderGuestProfile,
+  renderLobbyTimeControlButtons,
+  renderMultiplayerLobby,
+  renderSessionUi,
+  renderView
+} from "./app/render-view.js";
+import {
   getSavedView,
   hasSeenIntroSplash,
   markIntroSplashSeen,
   persistGuest,
   persistLobbyMode,
   persistRecordView,
-  persistView,
   readStoredGuest
 } from "./app/storage.js";
 import * as dom from "./app/dom.js";
@@ -755,47 +762,6 @@ const getMultiplayerActorPayload = () => {
   };
 };
 
-const renderMultiplayerRealtimeControls = () => {
-  if (multiplayerRoomIdLabel) {
-    const hasRoom = Boolean(state.multiplayer.roomId);
-    multiplayerRoomIdLabel.classList.toggle("hidden", !hasRoom);
-    multiplayerRoomIdLabel.textContent = hasRoom
-      ? `Room ID: ${state.multiplayer.roomId}`
-      : "";
-  }
-
-  if (multiplayerConnectionStatus) {
-    multiplayerConnectionStatus.classList.toggle("hidden", !state.multiplayer.connected);
-    const queueSuffix = state.multiplayer.queued
-      ? ` queued for Blitz 5${
-          state.multiplayer.queuePosition
-            ? ` (position ${state.multiplayer.queuePosition})`
-            : ""
-        }.`
-      : "";
-    const phaseLabel =
-      state.multiplayer.phase === "active"
-        ? "ready"
-        : state.multiplayer.phase === "waiting"
-          ? "waiting"
-          : state.multiplayer.phase === "queued"
-            ? "queued"
-          : "idle";
-    multiplayerConnectionStatus.textContent = state.multiplayer.connected
-      ? `Socket connected (${phaseLabel})${queueSuffix}`
-      : "";
-  }
-};
-
-const renderLobbyTimeControlButtons = () => {
-  if (!hallRandomTimeControlLabel) {
-    return;
-  }
-
-  const activeTimeControl = getResolvedTimeControl(getSelectedTimeControlId());
-  hallRandomTimeControlLabel.textContent = `Selected: ${activeTimeControl.label}`;
-};
-
 const getAmbientTargetKey = () => (state.view === "game" ? "game" : "hall");
 
 const clearAmbientFade = () => {
@@ -968,151 +934,6 @@ const setAmbientMuted = (muted) => {
   }
 
   updateAmbientToggleLabel();
-};
-
-function renderView() {
-  document.body.classList.toggle("view-auth", state.view === "auth");
-  document.body.classList.toggle("view-hall", state.view === "hall");
-  document.body.classList.toggle("view-game", state.view === "game");
-  document.body.classList.toggle("hall-view", state.view === "hall");
-  persistView(state.view);
-
-  if (authView) {
-    authView.style.display = state.view === "auth" ? "flex" : "none";
-  }
-
-  if (playArea) {
-    playArea.style.display = state.view === "auth" ? "none" : "grid";
-  }
-
-  if (lobbyView) {
-    lobbyView.style.display = state.view === "hall" ? "block" : "none";
-  }
-
-  if (gameView) {
-    gameView.style.display = state.view === "game" ? "grid" : "none";
-  }
-
-  syncBoardViewUi();
-
-  console.log("renderView:", state.view);
-  console.log("Hall visible:", lobbyView?.style.display, "Game visible:", gameView?.style.display);
-
-  syncAmbientTogglePlacement();
-  updateAmbientToggleLabel();
-  void syncAmbientMusic();
-}
-
-const renderMultiplayerLobby = () => {
-  const lobbyMode = normalizeLobbyMode(state.lobbyMode);
-  const persistenceAvailable = Boolean(state.persistence.available);
-  const showGateway = false;
-  const showDashboard = lobbyMode === "multiplayer";
-
-  state.lobbyMode = lobbyMode;
-
-  if (controlsPanel) {
-    controlsPanel.dataset.lobbyMode = lobbyMode;
-  }
-
-  if (soloLobbyButton) {
-    const isActive = lobbyMode === "solo";
-    soloLobbyButton.classList.toggle("cp-mode-btn-active", isActive);
-    soloLobbyButton.setAttribute("aria-pressed", isActive ? "true" : "false");
-  }
-
-  if (multiplayerLobbyButton) {
-    const isActive = lobbyMode === "multiplayer";
-    multiplayerLobbyButton.classList.toggle("cp-mode-btn-active", isActive);
-    multiplayerLobbyButton.setAttribute("aria-pressed", isActive ? "true" : "false");
-  }
-
-  if (multiplayerGateway) {
-    multiplayerGateway.classList.toggle("hidden", !showGateway);
-  }
-
-  if (multiplayerDashboard) {
-    multiplayerDashboard.classList.toggle("hidden", !showDashboard);
-  }
-
-  if (multiplayerPresencePill) {
-    if (showDashboard && state.multiplayer.connected && state.multiplayer.roomId) {
-      multiplayerPresencePill.textContent = "In Match";
-      multiplayerPresencePill.className = "pill pill-ok";
-    } else if (showDashboard && state.multiplayer.connected) {
-      multiplayerPresencePill.textContent = "Online";
-      multiplayerPresencePill.className = "pill pill-ok";
-    } else if (!persistenceAvailable) {
-      multiplayerPresencePill.textContent = "Offline";
-      multiplayerPresencePill.className = "pill pill-error";
-    } else if (showDashboard) {
-      multiplayerPresencePill.textContent = "Ready";
-      multiplayerPresencePill.className = "pill pill-ok";
-    } else {
-      multiplayerPresencePill.textContent = "Preview";
-      multiplayerPresencePill.className = "pill";
-    }
-  }
-
-  if (multiplayerStatusCopy) {
-    if (showDashboard && state.multiplayer.roomId) {
-      multiplayerStatusCopy.textContent =
-        "Live room active. Share the Room ID so your opponent can join and play in real time.";
-    } else if (showDashboard && state.multiplayer.queued) {
-      multiplayerStatusCopy.textContent =
-        "Searching for a Blitz 5 opponent now. Stay on this page while queued.";
-    } else if (showDashboard && state.multiplayer.connected) {
-      multiplayerStatusCopy.textContent =
-        "Live socket connected. Click Online Quick Play to queue instantly for Blitz 5.";
-    } else if (!persistenceAvailable) {
-      multiplayerStatusCopy.textContent =
-        "MongoDB is offline, so presence, invites, and PvP history stay parked until persistence returns.";
-    } else if (showDashboard) {
-      multiplayerStatusCopy.textContent =
-        "Your account is ready for live duels. Create a room or join by Room ID to start.";
-    } else {
-      multiplayerStatusCopy.textContent =
-        "Sign in to unlock the live roster, incoming invites, and cross-device multiplayer archives.";
-    }
-  }
-
-  if (multiplayerPlayerList) {
-    multiplayerPlayerList.innerHTML = showDashboard
-      ? `
-        <article class="lobby-roster-card">
-          <div class="lobby-roster-copy">
-            <strong>${escapeHtml(getSessionDisplayName())}</strong>
-            <span>${
-              state.multiplayer.roomId
-                ? `Room ${escapeHtml(state.multiplayer.roomId)} as ${escapeHtml(
-                    formatColor(state.multiplayer.color || "white")
-                  )}.`
-                : "Connected and ready for live room play."
-            }</span>
-          </div>
-          <span class="pill pill-ok">You</span>
-        </article>
-        <div class="empty-state">
-          <strong>The hall is quiet for now.</strong>
-          <span>Share a Room ID with a friend to start a live duel.</span>
-        </div>
-      `
-      : "";
-  }
-
-  if (multiplayerInviteList) {
-    multiplayerInviteList.innerHTML = showDashboard
-      ? `
-        <div class="empty-state">
-          <strong>No pending challenges.</strong>
-          <span>Incoming and outgoing invites will collect here when the challenge desk opens.</span>
-        </div>
-      `
-      : "";
-  }
-
-  renderMultiplayerRealtimeControls();
-  renderLobbyTimeControlButtons();
 };
 
 const setLobbyMode = (mode = "solo") => {
@@ -2078,85 +1899,6 @@ const setSessionState = (session = {}) => {
   renderGuestProfile();
   renderSessionUi();
   syncActionButtons();
-};
-
-const renderGuestProfile = () => {
-  if (isAuthenticated()) {
-    guestName.textContent = getSessionDisplayName();
-    guestSubtitle.textContent = "Signed in";
-    guestMeta.textContent = "Unfinished and completed games belong to your account.";
-    return;
-  }
-
-  guestName.textContent = state.guest?.displayName || "Playing as Guest";
-  guestSubtitle.textContent = "Guest mode active";
-  guestMeta.textContent = state.persistence.available
-    ? "Save and resume untimed games here without creating an account."
-    : "Saved games and history stay on this browser when persistence is available.";
-};
-
-const renderSessionUi = () => {
-  if (!authSessionHeading) {
-    return;
-  }
-
-  const persistenceAvailable = Boolean(state.persistence.available);
-  const authenticated = isAuthenticated();
-
-  if (authenticated) {
-    if (authSessionHeading) {
-      authSessionHeading.textContent = "Account connected";
-    }
-    if (authSessionPill) {
-      authSessionPill.textContent = "SIGNED IN";
-      authSessionPill.className = "pill pill-ok";
-    }
-    if (authSessionCopy) {
-      authSessionCopy.textContent = persistenceAvailable
-        ? "Saved and completed games now follow your account across devices and browsers."
-        : "Your session is active, but account sync is paused until MongoDB returns.";
-    }
-    if (!authUserDisplay) {
-      console.log("renderSessionUi: missing #auth-user-display");
-    }
-    if (authUserDisplay) {
-      authUserDisplay.textContent = getSessionDisplayName();
-    }
-    // authUserEmail.textContent = state.session.user?.email || "Account email unavailable";
-    if (authGuestView) {
-      authGuestView.classList.add("hidden");
-    }
-    if (authUserView) {
-      authUserView.classList.remove("hidden");
-    }
-    if (hallLogoutButton) {
-      hallLogoutButton.classList.remove("hidden");
-    }
-  } else {
-    if (authSessionHeading) {
-      authSessionHeading.textContent = "Sign in or create an account";
-    }
-    if (authSessionPill) {
-      authSessionPill.textContent = persistenceAvailable ? "Guest" : "Offline";
-      authSessionPill.className = persistenceAvailable ? "pill" : "pill pill-error";
-    }
-    if (authSessionCopy) {
-      authSessionCopy.textContent = persistenceAvailable
-        ? "Accounts sync unfinished and completed games beyond this browser."
-        : "MongoDB is offline, so account sign-in and long-term sync are unavailable right now.";
-    }
-    if (authGuestView) {
-      authGuestView.classList.remove("hidden");
-    }
-    if (authUserView) {
-      authUserView.classList.add("hidden");
-    }
-    if (hallLogoutButton) {
-      hallLogoutButton.classList.add("hidden");
-    }
-  }
-
-  renderMultiplayerLobby();
 };
 
 const syncActionButtons = () => {
@@ -6490,6 +6232,17 @@ const handleBoardModeToggle = (mode) => {
 if (toggle2dBtn) toggle2dBtn.addEventListener("click", () => handleBoardModeToggle("2d"));
 if (toggle3dBtn) toggle3dBtn.addEventListener("click", () => handleBoardModeToggle("3d"));
 if (immersiveExitButton) immersiveExitButton.addEventListener("click", switchTo2D);
+
+configureRenderViewDependencies({
+  getSessionDisplayName,
+  getSelectedTimeControlId,
+  isAuthenticated,
+  normalizeLobbyMode,
+  syncAmbientMusic,
+  syncAmbientTogglePlacement,
+  syncBoardViewUi,
+  updateAmbientToggleLabel
+});
 
 initializeMultiplayerRealtime({
   onConnected: () => {
