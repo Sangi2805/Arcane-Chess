@@ -38,6 +38,13 @@ import {
   trimTerminalPeriod
 } from "./app/formatting.js";
 import {
+  ensureGuestSession,
+  loadHistory,
+  loadSavedGames,
+  loadSession,
+  request
+} from "./app/api.js";
+import {
   getSavedView,
   hasSeenIntroSplash,
   markIntroSplashSeen,
@@ -2911,37 +2918,6 @@ const updateClockLoops = () => {
   runtimeState.clockSyncIntervalId = window.setInterval(syncTimedGameState, CLOCK_SYNC_INTERVAL_MS);
 };
 
-const request = async (url, options = {}) => {
-  const headers = {
-    ...getGuestHeaders(),
-    ...options.headers
-  };
-
-  if (options.body && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    credentials: "include",
-    headers
-  });
-
-  let payload = {};
-
-  try {
-    payload = await response.json();
-  } catch (error) {
-    payload = {};
-  }
-
-  if (!response.ok) {
-    throw new Error(payload.message || "Request failed.");
-  }
-
-  return payload;
-};
-
 const setRecordView = (view) => {
   const normalizedView = VALID_RECORD_VIEWS.has(view) ? view : "moves";
   state.activeRecordView = normalizedView;
@@ -5174,49 +5150,17 @@ const enterGameView = async ({ coachContext = "load-active", fallbackView = "hal
   return true;
 };
 
-const loadSavedGames = async () => {
-  const payload = await request("/api/saves");
-  state.savedGames = payload.items || [];
-  setPersistence(payload.persistence);
-  renderSavedGames();
-};
-
-const loadHistory = async () => {
-  const payload = await request("/api/history");
-  state.history = payload.items || [];
-  setPersistence(payload.persistence);
-  renderHistory();
-};
-
 const refreshCollections = async () => {
-  await Promise.all([loadSavedGames(), loadHistory()]);
-};
+  const [savedGamesPayload, historyPayload] = await Promise.all([
+    loadSavedGames(),
+    loadHistory()
+  ]);
 
-const ensureGuestSession = async () => {
-  const storedGuest = readStoredGuest();
-
-  try {
-    const payload = await request("/api/guest/session", {
-      method: "POST",
-      body: JSON.stringify(storedGuest || {})
-    });
-
-    state.guest = payload.guest;
-    persistGuest(payload.guest);
-    setPersistence(payload.persistence);
-  } catch (error) {
-    const fallbackGuest = createFallbackGuest(storedGuest);
-    state.guest = fallbackGuest;
-    persistGuest(fallbackGuest);
-    setPersistence({
-      available: false,
-      status: "guest-offline"
-    });
-    setCoachMessage(
-      `${error.message} Guest mode has fallen back to local storage only.`,
-      "Move feedback still works, but saved games and history depend on MongoDB."
-    );
-  }
+  state.savedGames = savedGamesPayload.items || [];
+  state.history = historyPayload.items || [];
+  setPersistence(historyPayload.persistence || savedGamesPayload.persistence || state.persistence);
+  renderSavedGames();
+  renderHistory();
 };
 
 const clearAuthInputs = ({ keepEmail = false } = {}) => {
@@ -5244,13 +5188,6 @@ const getAuthTransferMessage = (transferred = {}) => {
 
   const noun = totalTransferred === 1 ? "game" : "games";
   return `${totalTransferred} archived ${noun} moved from this browser guest profile into your account.`;
-};
-
-const loadSession = async () => {
-  const payload = await request("/api/auth/session");
-  setPersistence(payload.persistence);
-  setSessionState(payload);
-  return payload;
 };
 
 const registerAccount = async () => {
@@ -6105,6 +6042,8 @@ const initialize = async () => {
     const savedView = getSavedView();
     state.isGuest = !sessionPayload?.authenticated && hasGuestProfile;
     state.guest = sessionPayload?.authenticated ? null : storedGuest || null;
+    setPersistence(sessionPayload.persistence);
+    setSessionState(sessionPayload);
     const desiredView = sessionPayload?.authenticated
       ? savedView || "hall"
       : hasGuestProfile
@@ -6351,7 +6290,10 @@ authContinueGuestButton?.addEventListener("click", async () => {
   setBusy(true, "Continuing as guest...");
 
   try {
-    await ensureGuestSession();
+    const guestSession = await ensureGuestSession();
+    state.isGuest = true;
+    state.guest = guestSession.guest || null;
+    setPersistence(guestSession.persistence || state.persistence);
     state.view = "hall";
     setLobbyMode("solo");
     renderView();
