@@ -1,19 +1,7 @@
 import {
-  CLOCK_SYNC_INTERVAL_MS,
-  CLOCK_TICK_INTERVAL_MS,
-  COACH_STAGE_ENGINE_FEEDBACK,
-  COACH_STAGE_GAME_OVER,
-  COACH_STAGE_PLAYER_FEEDBACK,
-  DEFAULT_COACH_EXPLANATION,
-  GAME_OVER_BANNER_DURATION_MS,
   HALL_RANDOM_TIME_CONTROL_IDS,
   PIECES,
-  THINKING_COACH_EXPLANATION,
-  TIME_CONTROL_PRESETS,
-  VALID_RECORD_VIEWS,
-  WIZARD_STATE_CLASSNAMES,
-  WIZARD_STATE_LABELS,
-  WIZARD_STATE_VISUALS
+  TIME_CONTROL_PRESETS
 
 } from "./app/constants.js";
 import {
@@ -31,8 +19,6 @@ import {
   formatTimestamp,
 
   getOutcomeLabel,
-  getResolvedTimeControl,
-  normalizeChronicleWhyLines,
   normalizeHistoryRecord,
   trimTerminalPeriod
 } from "./app/formatting.js";
@@ -117,37 +103,20 @@ import {
 } from "./app/storage.js";
 import {
   configureAudioDependencies,
-  getAmbientTargetKey,
-  clearAmbientFade,
   updateAmbientToggleLabel,
   syncAmbientTogglePlacement,
-  fadeAmbientAudio,
-  stopAmbientMusic,
   syncAmbientMusic,
   unlockAmbientMusic,
   setAmbientMuted,
-  ambientTracks,
   ambientState
 } from "./app/audio-controller.js";
 import {
-  clearReplay,
   closeHistoryDetail,
   configureReplayHistoryDependencies,
-  getSavedGameHeadline,
-  initReplay,
   openHistoryDetail,
-  parseFenToBoard,
-  populateHistoryDetail,
   renderHistory,
-  renderReplayBoard,
-  renderReplayMoveRows,
   renderSavedGames,
-  resetHistoryDetail,
-  scrollReplayActiveMoveIntoView,
-  setReplayStep,
-  showHistoryModal,
   stepReplay,
-  updateReplayControls
 } from "./app/replay-history-controller.js";
 import {
   configureAuthSessionDependencies,
@@ -159,8 +128,7 @@ import {
   logoutAccount,
   registerAccount,
   renderAuthMode,
-  setSessionState,
-  showSignupMode
+  setSessionState
 } from "./app/auth-session-controller.js";
 import {
   configureHallActionsDependencies,
@@ -169,30 +137,21 @@ import {
   setLobbyMode
 } from "./app/hall-actions-controller.js";
 import {
-  clearBoardFeedbackTimer,
-  clearCompletedLiveBoard,
-  clearFinishedGameResetTimer,
-  clearGameOverBannerTimer,
   configureUIFeedbackDependencies,
   dismissGameEndOverlay,
   getCheckedKingSquare,
-  getCinematicResultLabel,
-  getCinematicSubtitle,
   getDrawClaimState,
   getGameOverBannerKey,
   getGameOverCopy,
-  getWinnerFromResult,
   hideBoardFeedback,
   hideGameOverBanner,
   isTerminalGameState,
-  PIECE_VALUES,
   render,
   renderBoardFeedback,
   renderClockCard,
   renderImmersiveHud,
   resetFinishedGameResetLifecycle,
   resetGameOverBannerLifecycle,
-  scheduleBoardFeedbackDismissal,
   scheduleFinishedGameReset,
   scheduleGameOverBannerDismissal,
   setApiHealth,
@@ -202,11 +161,8 @@ import {
   syncActionButtons,
   syncControls,
   syncTimedGameState,
-  TERMINAL_STATUS_CODES,
   triggerGameEndCinematic,
-  updateClockLoops,
   updateEvalBar,
-  updateSummary
 } from "./app/ui-feedback-controller.js";
 import {
   applyMultiplayerSocketState,
@@ -218,50 +174,33 @@ import {
   getMultiplayerDisplayName,
   handleQuickPlayClick,
   isRealtimeMultiplayerGame,
-  joinMatchmakingQueue,
   joinMultiplayerRoom,
-  leaveMatchmakingQueue,
   rejoinMultiplayerMatch
 } from "./app/multiplayer-controller.js";
 import {
-  applyChronicleMoveMetadata,
   applyGameState,
-  appendMoveToList,
   beginMoveCycle,
-  buildOptimisticGameState,
-  canApplyCoachStage,
   CHRONICLE_BADGE_SYMBOLS,
   claimAvailableDraw,
-  cloneValue,
   configureGameLifecycleDependencies,
   continueAfterDrawClaim,
-  COACH_CLASSIFICATION_SET,
-  ensureLiveChronicleForGame,
   enterGameView,
   getLastPlyIndexFromMoveList,
-  getPlyColor,
   getPlyIndexForTurnColor,
   initialize,
-  isHumanBlunderFeedback,
   isLocalPlayerPly,
   isMoveCycleActive,
   loadCoachFeedback,
   loadEngineReply,
   loadGame,
-  moveBoardPiece,
   offerDraw,
   PIECE_LABELS,
   refreshCollections,
   requestHint,
-  resetLiveChronicleState,
   resignCurrentGame,
   resumeSavedGame,
-  sanitizeLiveChronicleRatingsForLocalPlayer,
   saveCurrentGame,
-  setCoachStageRank,
-  setCoachStateForGame,
   startNewGame,
-  upsertLocalMoveChronicleRating
 } from "./app/game-lifecycle-controller.js";
 import {
   configureBoardViewDependencies,
@@ -276,16 +215,12 @@ import {
   getSelectedTimeControlId,
   getSquareColorClass,
   handleBoardModeToggle,
-  isTimedGameState,
   launchSelectedBoard,
-  normalizeBoardViewMode,
   renderPromotionPrompt,
   resetBoardViewTo2D,
   setArcaneBoard3D,
-  setBoardViewModePreference,
   syncBoard3D,
   syncBoardViewUi,
-  updateBoardModeToggleUi,
   validate3DBoardInstance,
   waitForBoardContainerReady
 } from "./app/board-view-controller.js";
@@ -1394,10 +1329,6 @@ configureUIFeedbackDependencies({
   }
 });
 
-initialize();
-
-ensureMultiplayerSocket();
-
 multiplayerCreateGameButton?.addEventListener("click", () => {
   void handleQuickPlayClick();
 });
@@ -1470,3 +1401,7 @@ feedbackWhyToggle?.addEventListener("click", () => {
   });
   renderCoachPanel();
 });
+
+initialize();
+
+ensureMultiplayerSocket();
