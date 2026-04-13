@@ -123,8 +123,7 @@ const getResolvedResult = (snapshot, hasStarted, manualOutcome = null) => {
     };
   }
 
-  if (snapshot.isGameOver) {
-    if (snapshot.status.code === "checkmate") {
+  if (snapshot.ruleState?.checkmate) {
       return {
         result: snapshot.turn === "white" ? "black-win" : "white-win",
         resultLabel: snapshot.status.outcomeLabel || "Checkmate",
@@ -134,8 +133,9 @@ const getResolvedResult = (snapshot, hasStarted, manualOutcome = null) => {
         isGameOver: true,
         drawReason: null
       };
-    }
+  }
 
+  if (snapshot.ruleState?.automaticDraw) {
     return {
       result: "draw",
       resultLabel: snapshot.status.outcomeLabel || "Draw",

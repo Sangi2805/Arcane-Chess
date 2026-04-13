@@ -1,4 +1,5 @@
-const { applyMove, restoreChessGame } = require("./chessService");
+const { Chess } = require("chess.js");
+const { applyMove } = require("./chessService");
 const { EngineService } = require("./engineService");
 
 const ANALYSIS_SETTINGS = {
@@ -30,6 +31,12 @@ const RATING_THRESHOLDS = [
 ];
 
 const MATE_PAWN_EQUIVALENT = 100;
+
+const cloneChessFromFen = (fen) => {
+  const chess = new Chess();
+  chess.load(fen);
+  return chess;
+};
 
 const analysisEngine = new EngineService();
 analysisEngine.ensureReady().catch((error) => {
@@ -72,7 +79,7 @@ const formatSuggestedMove = ({ beforeFen, bestMove }) => {
     return null;
   }
 
-  const chess = restoreChessGame({ fen: beforeFen });
+  const chess = cloneChessFromFen(beforeFen);
   const move = applyMove(chess, bestMove);
 
   return move?.san || buildUciMove(bestMove) || null;
@@ -127,7 +134,7 @@ const buildWhyLineSanSequence = ({ beforeFen, uciPv = [] }) => {
     return [];
   }
 
-  const chess = restoreChessGame({ fen: beforeFen });
+  const chess = cloneChessFromFen(beforeFen);
   const sanMoves = [];
 
   for (const uciMove of uciPv.slice(0, WHY_PLY_LIMIT)) {

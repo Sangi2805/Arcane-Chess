@@ -34,11 +34,11 @@ const getResultFromSnapshot = ({ snapshot }) => {
     return snapshot.result;
   }
 
-  if (!snapshot.isGameOver) {
+  if (!snapshot.ruleState?.checkmate && !snapshot.ruleState?.automaticDraw) {
     return "in-progress";
   }
 
-  if (snapshot.status.code === "checkmate") {
+  if (snapshot.ruleState?.checkmate) {
     return snapshot.turn === "white" ? "black-win" : "white-win";
   }
 

@@ -222,7 +222,7 @@ const getClaimDrawOutcome = (drawClaim = {}) => {
 };
 
 const getBoardOutcome = (snapshot) => {
-  if (snapshot.status.code === "checkmate") {
+  if (snapshot.ruleState?.checkmate) {
     return {
       result: snapshot.turn === "white" ? "black-win" : "white-win",
       status: snapshot.status,
@@ -240,7 +240,7 @@ const getBoardOutcome = (snapshot) => {
     };
   }
 
-  if (snapshot.isGameOver) {
+  if (snapshot.ruleState?.automaticDraw) {
     return {
       result: "draw",
       status: snapshot.status,
@@ -314,9 +314,9 @@ const getResolvedGameState = (game, snapshot) => {
   const boardOutcome = getBoardOutcome(snapshot);
   return {
     ...boardOutcome,
-    isGameOver: snapshot.isGameOver,
-    legalMoves: snapshot.isGameOver ? {} : snapshot.legalMoves,
-    turn: snapshot.isGameOver ? null : snapshot.turn
+    isGameOver: Boolean(snapshot.ruleState?.checkmate || snapshot.ruleState?.automaticDraw),
+    legalMoves: snapshot.ruleState?.checkmate || snapshot.ruleState?.automaticDraw ? {} : snapshot.legalMoves,
+    turn: snapshot.ruleState?.checkmate || snapshot.ruleState?.automaticDraw ? null : snapshot.turn
   };
 };
 

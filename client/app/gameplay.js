@@ -11,6 +11,23 @@ import {
 } from "./render-coach.js";
 import { emitMultiplayerEvent } from "./realtime.js";
 
+const TERMINAL_STATUS_CODES = new Set([
+  "checkmate",
+  "resignation",
+  "timeout",
+  "draw-agreed",
+  "draw-repetition",
+  "draw-fivefold-repetition",
+  "draw-insufficient-material",
+  "draw-fifty-move",
+  "draw-seventy-five-move",
+  "draw-timeout-insufficient-material"
+]);
+
+const isTerminalGameState = (gameState) =>
+  Boolean(gameState?.isGameOver) &&
+  (TERMINAL_STATUS_CODES.has(gameState?.status?.code) || gameState?.result === "draw");
+
 let gameplayDeps = {
   beginMoveCycle: () => 0,
   isMoveCycleActive: () => true,
@@ -195,7 +212,7 @@ export const submitMove = async ({ from, to, promotion, previewMove }) => {
 
     gameplayDeps.setBusy(false);
 
-    if (payload.game.isGameOver) {
+    if (isTerminalGameState(payload.game)) {
       void gameplayDeps.refreshCollections();
     }
   } catch (error) {

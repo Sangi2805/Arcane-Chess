@@ -405,7 +405,7 @@ const applyWizardStateFromGameState = (gameState = state.game, options = {}) => 
 
   const source = options.source || "system";
 
-  if (gameState.isGameOver) {
+  if (isTerminalGameState(gameState)) {
     const playerWon =
       (gameState.result === "white-win" && gameState.settings?.playerColor === "white") ||
       (gameState.result === "black-win" && gameState.settings?.playerColor === "black");
@@ -1128,7 +1128,7 @@ const getCheckedKingSquare = (gameState = state.game) => {
 };
 
 const getGameOverCopy = (gameState) => {
-  if (!gameState?.isGameOver) {
+  if (!isTerminalGameState(gameState)) {
     return null;
   }
 
@@ -1160,6 +1160,23 @@ const getGameOverCopy = (gameState) => {
     message: trimTerminalPeriod(gameState.status?.message) || "Draw"
   };
 };
+
+const TERMINAL_STATUS_CODES = new Set([
+  "checkmate",
+  "resignation",
+  "timeout",
+  "draw-agreed",
+  "draw-repetition",
+  "draw-fivefold-repetition",
+  "draw-insufficient-material",
+  "draw-fifty-move",
+  "draw-seventy-five-move",
+  "draw-timeout-insufficient-material"
+]);
+
+const isTerminalGameState = (gameState) =>
+  Boolean(gameState?.isGameOver) &&
+  (TERMINAL_STATUS_CODES.has(gameState?.status?.code) || gameState?.result === "draw");
 
 const beginMoveCycle = () => {
   state.activeMoveCycleId += 1;
@@ -2178,6 +2195,69 @@ const resetFinishedGameResetLifecycle = () => {
   runtimeState.activeFinishedGameResetKey = "";
 };
 
+const clearCompletedLiveBoard = async (gameOverKey) => {
+  if (
+    state.pendingNewGame ||
+    !state.game?.isGameOver ||
+    getGameOverBannerKey(state.game) !== gameOverKey
+  ) {
+    return;
+  }
+
+  try {
+    const gameState = await request("/api/game/reset", {
+      method: "POST"
+    });
+
+    if (
+      state.pendingNewGame ||
+      !state.game?.isGameOver ||
+      getGameOverBannerKey(state.game) !== gameOverKey
+    ) {
+      return;
+    }
+
+    applyGameState(gameState, {
+      coachContext: "idle"
+    });
+  } catch (error) {
+    if (
+      state.pendingNewGame ||
+      !state.game?.isGameOver ||
+      getGameOverBannerKey(state.game) !== gameOverKey
+    ) {
+      return;
+    }
+
+    setApiHealth(false);
+    setCoachMessage(error.message);
+  } finally {
+    if (runtimeState.activeFinishedGameResetKey === gameOverKey && state.game?.isGameOver) {
+      runtimeState.activeFinishedGameResetKey = "";
+    }
+  }
+};
+
+const scheduleFinishedGameReset = (gameState) => {
+  const gameOverKey = getGameOverBannerKey(gameState);
+
+  if (!gameOverKey || state.pendingNewGame) {
+    resetFinishedGameResetLifecycle();
+    return;
+  }
+
+  if (runtimeState.activeFinishedGameResetKey === gameOverKey) {
+    return;
+  }
+
+  clearFinishedGameResetTimer();
+  runtimeState.activeFinishedGameResetKey = gameOverKey;
+  runtimeState.finishedGameResetTimeoutId = window.setTimeout(() => {
+    runtimeState.finishedGameResetTimeoutId = null;
+    void clearCompletedLiveBoard(gameOverKey);
+  }, GAME_OVER_BANNER_DURATION_MS + 80);
+};
+
 const hideBoardFeedback = () => {
   if (!boardFeedbackBanner) {
     return;
@@ -2844,10 +2924,11 @@ const triggerGameEndCinematic = (gameState) => {
 // ── End Game-End Cinematic ────────────────────────────────────────────────────
 
 const applyGameState = (gameState, options = {}) => {
+  console.log("Applying Game State:", gameState);
   state.pendingNewGame = false;
   ensureLiveChronicleForGame(gameState);
   state.game = applyChronicleMoveMetadata(gameState);
-  if (gameState?.isGameOver) {
+  if (isTerminalGameState(gameState)) {
     scheduleFinishedGameReset(gameState);
   } else {
     resetGameOverBannerLifecycle();
@@ -2868,7 +2949,7 @@ const applyGameState = (gameState, options = {}) => {
   applyWizardStateFromGameState(gameState, {
     source: options.wizardSource
   });
-  if (gameState?.isGameOver) {
+  if (isTerminalGameState(gameState)) {
     triggerGameEndCinematic(gameState);
   }
   if (!options.skipRender) {
@@ -3354,7 +3435,7 @@ const continueAfterDrawClaim = async () => {
 
     setApiHealth(true);
 
-    if (payload.game.isGameOver) {
+    if (isTerminalGameState(payload.game)) {
       setCoachStageRank(COACH_STAGE_GAME_OVER);
       applyGameState(payload.game, {
         wizardSource: "engine"
@@ -3504,7 +3585,7 @@ const loadEngineReply = async ({ cycleId, moveToken }) => {
 
     setApiHealth(true);
 
-    if (payload.game.isGameOver) {
+    if (isTerminalGameState(payload.game)) {
       setCoachStageRank(COACH_STAGE_GAME_OVER);
       applyGameState(payload.game, {
         wizardSource: "engine"
@@ -3524,7 +3605,7 @@ const loadEngineReply = async ({ cycleId, moveToken }) => {
 
     setBusy(false);
 
-    if (payload.game.isGameOver) {
+    if (isTerminalGameState(payload.game)) {
       void refreshCollections();
       return;
     }
@@ -4096,6 +4177,7 @@ configureGameplayDependencies({
   loadEngineReply,
   getLastPlyIndexFromMoveList,
   applyGameState,
+  renderGameOverBanner,
   refreshCollections
 });
 
