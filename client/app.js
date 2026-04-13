@@ -96,6 +96,18 @@ import {
   syncCoachAvatarMode
 } from "./app/render-coach.js";
 import {
+  applyHintHighlights,
+  clearPromotionPrompt,
+  clearHintState,
+  clearSelectedSquare,
+  configureGameplayDependencies,
+  getLegalTargets,
+  handleSquareClick,
+  openPromotionPrompt,
+  setSelectedSquare,
+  submitMove
+} from "./app/gameplay.js";
+import {
   getSavedView,
   hasSeenIntroSplash,
   markIntroSplashSeen,
@@ -1600,34 +1612,6 @@ const syncActionButtons = () => {
   }
 };
 
-const clearHintState = () => {
-  state.hint = {
-    bestMove: null,
-    continuation: [],
-    fen: "",
-    summary: "",
-    whyExpanded: false,
-    freshHint: false,
-    requestedThisTurn: false
-  };
-
-  hintWhyButton?.classList.add("hidden");
-};
-
-const applyHintHighlights = () => {
-  if (!state.game) {
-    return;
-  }
-
-  if (state.viewMode === "3D") {
-    syncBoard3D();
-  }
-
-  if (state.viewMode === "2D") {
-    renderBoard();
-  }
-};
-
 const setPersistence = (persistence = {}) => {
   state.persistence = {
     available: Boolean(persistence.available),
@@ -1903,19 +1887,6 @@ const waitForBoardContainerReady = ({ maxFrames = 30 } = {}) =>
     requestAnimationFrame(pollContainer);
   });
 
-const getLegalTargets = () => {
-  if (!state.selectedSquare || !state.game) {
-    return [];
-  }
-
-  const legalTargets = state.game.legalMoves[state.selectedSquare] || [];
-  debugGameplaySync("selection:legal-targets", {
-    selectedSquare: state.selectedSquare,
-    legalTargets
-  });
-  return legalTargets;
-};
-
 const appendMoveToList = (moveList = [], san, color) => {
   const nextMoveList = moveList.map((entry) => ({ ...entry }));
 
@@ -2027,25 +1998,6 @@ const PROMOTION_OPTION_LABELS = {
   n: "Knight"
 };
 
-const clearPromotionPrompt = () => {
-  state.pendingPromotion = null;
-  promotionPanel.classList.add("hidden");
-  promotionPanel.style.left = "";
-  promotionPanel.style.top = "";
-  promotionPanel.style.visibility = "";
-};
-
-const openPromotionPrompt = (moveChoices, anchorSquare) => {
-  state.pendingPromotion = {
-    moveChoices,
-    anchorSquare
-  };
-  setCoachMessage(
-    "Choose a promotion piece.",
-    "Select how the pawn should transform before the move is sent."
-  );
-};
-
 const syncPromotionActionLabels = () => {
   const promotionColor =
     state.game?.settings?.playerColor === "black" ? "black" : "white";
@@ -2065,23 +2017,74 @@ const syncPromotionActionLabels = () => {
   });
 };
 
-const setSelectedSquare = (square) => {
-  state.selectedSquare = square;
-  clearPromotionPrompt();
-  debugGameplaySync("selection:set", {
-    selectedSquare: square,
-    legalMoves: state.game?.legalMoves?.[square] || []
-  });
-};
-
-const clearSelectedSquare = () => {
-  if (state.selectedSquare) {
-    debugGameplaySync("selection:clear", {
-      selectedSquare: state.selectedSquare
-    });
+const renderPromotionPrompt = () => {
+  if (!state.pendingPromotion?.moveChoices?.length || !boardShell || !promotionPanel) {
+    clearPromotionPrompt();
+    return;
   }
-  state.selectedSquare = null;
-  clearPromotionPrompt();
+
+  syncPromotionActionLabels();
+
+  const boardRect = boardShell.getBoundingClientRect();
+  let anchorRect = null;
+
+  if (state.boardViewMode === "3d" && arcaneBoard3D?.projectSquare) {
+    const projected = arcaneBoard3D.projectSquare(state.pendingPromotion.anchorSquare);
+
+    if (
+      projected &&
+      Number.isFinite(projected.x) &&
+      Number.isFinite(projected.y)
+    ) {
+      anchorRect = {
+        left: projected.x,
+        right: projected.x,
+        top: projected.y,
+        bottom: projected.y,
+        width: 0,
+        height: 0
+      };
+    }
+  }
+
+  if (!anchorRect) {
+    const anchorSquare = state.pendingPromotion.anchorSquare;
+    const squareButton = boardElement?.querySelector(`[data-square="${anchorSquare}"]`);
+
+    if (squareButton) {
+      anchorRect = squareButton.getBoundingClientRect();
+    }
+  }
+
+  if (!anchorRect) {
+    promotionPanel.classList.remove("hidden");
+    promotionPanel.style.visibility = "hidden";
+    return;
+  }
+
+  promotionPanel.classList.remove("hidden");
+  promotionPanel.style.visibility = "hidden";
+
+  const panelWidth = promotionPanel.offsetWidth || 220;
+  const panelHeight = promotionPanel.offsetHeight || 180;
+  const centerX = anchorRect.left + (anchorRect.width || 0) / 2;
+
+  const minLeft = boardRect.left + 8;
+  const maxLeft = boardRect.right - panelWidth - 8;
+  const preferredLeft = centerX - panelWidth / 2;
+  const left = Math.min(Math.max(preferredLeft, minLeft), Math.max(minLeft, maxLeft));
+
+  const preferredTop = anchorRect.top - panelHeight - 12;
+  const fallbackTop = anchorRect.bottom + 12;
+  const minTop = boardRect.top + 8;
+  const maxTop = boardRect.bottom - panelHeight - 8;
+  const top = preferredTop >= minTop
+    ? preferredTop
+    : Math.min(Math.max(fallbackTop, minTop), Math.max(minTop, maxTop));
+
+  promotionPanel.style.left = `${Math.round(left)}px`;
+  promotionPanel.style.top = `${Math.round(top)}px`;
+  promotionPanel.style.visibility = "visible";
 };
 
 const clearGameOverBannerTimer = () => {
@@ -2091,6 +2094,52 @@ const clearGameOverBannerTimer = () => {
 
   window.clearTimeout(runtimeState.gameOverBannerTimeoutId);
   runtimeState.gameOverBannerTimeoutId = null;
+};
+
+const resetGameOverBannerLifecycle = () => {
+  clearGameOverBannerTimer();
+  runtimeState.activeGameOverBannerKey = "";
+  runtimeState.dismissedGameOverBannerKey = "";
+};
+
+const getGameOverBannerKey = (gameState) => {
+  const gameOverCopy = getGameOverCopy(gameState);
+
+  if (!gameOverCopy) {
+    return "";
+  }
+
+  return JSON.stringify({
+    gameId: gameState?.id || null,
+    result: gameState?.result || null,
+    statusCode: gameState?.status?.code || null,
+    message: gameOverCopy.message
+  });
+};
+
+const scheduleGameOverBannerDismissal = (bannerKey) => {
+  clearGameOverBannerTimer();
+  runtimeState.gameOverBannerTimeoutId = window.setTimeout(() => {
+    if (runtimeState.activeGameOverBannerKey !== bannerKey) {
+      return;
+    }
+
+    runtimeState.dismissedGameOverBannerKey = bannerKey;
+    runtimeState.activeGameOverBannerKey = "";
+    hideGameOverBanner({
+      resetCopy: true
+    });
+  }, GAME_OVER_BANNER_DURATION_MS);
+};
+
+const hideGameOverBanner = ({ resetCopy = false } = {}) => {
+  gameOverBanner.classList.add("hidden");
+  gameOverBanner.setAttribute("aria-hidden", "true");
+
+  if (resetCopy) {
+    gameOverTitle.textContent = "Game Over";
+    gameOverMessage.textContent = "Result pending.";
+  }
 };
 
 const clearFinishedGameResetTimer = () => {
@@ -2127,189 +2176,6 @@ const scheduleBoardFeedbackDismissal = (feedbackKey, durationMs = 1000) => {
 const resetFinishedGameResetLifecycle = () => {
   clearFinishedGameResetTimer();
   runtimeState.activeFinishedGameResetKey = "";
-};
-
-const resetGameOverBannerLifecycle = () => {
-  clearGameOverBannerTimer();
-  runtimeState.activeGameOverBannerKey = "";
-  runtimeState.dismissedGameOverBannerKey = "";
-};
-
-const getGameOverBannerKey = (gameState) => {
-  const gameOverCopy = getGameOverCopy(gameState);
-
-  if (!gameOverCopy) {
-    return "";
-  }
-
-  return JSON.stringify({
-    gameId: gameState?.id || null,
-    result: gameState?.result || null,
-    statusCode: gameState?.status?.code || null,
-    message: gameOverCopy.message
-  });
-};
-
-const clearCompletedLiveBoard = async (gameOverKey) => {
-  if (isRealtimeMultiplayerGame()) {
-    return;
-  }
-
-  if (
-    state.pendingNewGame ||
-    !state.game?.isGameOver ||
-    getGameOverBannerKey(state.game) !== gameOverKey
-  ) {
-    return;
-  }
-
-  try {
-    const gameState = await request("/api/game/reset", {
-      method: "POST"
-    });
-
-    if (
-      state.pendingNewGame ||
-      !state.game?.isGameOver ||
-      getGameOverBannerKey(state.game) !== gameOverKey
-    ) {
-      return;
-    }
-
-    applyGameState(gameState, {
-      coachContext: "idle"
-    });
-  } catch (error) {
-    if (
-      state.pendingNewGame ||
-      !state.game?.isGameOver ||
-      getGameOverBannerKey(state.game) !== gameOverKey
-    ) {
-      return;
-    }
-
-    setApiHealth(false);
-    setCoachMessage(error.message);
-  } finally {
-    if (runtimeState.activeFinishedGameResetKey === gameOverKey && state.game?.isGameOver) {
-      runtimeState.activeFinishedGameResetKey = "";
-    }
-  }
-};
-
-const scheduleFinishedGameReset = (gameState) => {
-  if (isRealtimeMultiplayerGame()) {
-    resetFinishedGameResetLifecycle();
-    return;
-  }
-
-  const gameOverKey = getGameOverBannerKey(gameState);
-
-  if (!gameOverKey || state.pendingNewGame) {
-    resetFinishedGameResetLifecycle();
-    return;
-  }
-
-  if (runtimeState.activeFinishedGameResetKey === gameOverKey) {
-    return;
-  }
-
-  clearFinishedGameResetTimer();
-  runtimeState.activeFinishedGameResetKey = gameOverKey;
-  runtimeState.finishedGameResetTimeoutId = window.setTimeout(() => {
-    runtimeState.finishedGameResetTimeoutId = null;
-    void clearCompletedLiveBoard(gameOverKey);
-  }, GAME_OVER_BANNER_DURATION_MS + 80);
-};
-
-const scheduleGameOverBannerDismissal = (bannerKey) => {
-  clearGameOverBannerTimer();
-  runtimeState.gameOverBannerTimeoutId = window.setTimeout(() => {
-    if (runtimeState.activeGameOverBannerKey !== bannerKey) {
-      return;
-    }
-
-    runtimeState.dismissedGameOverBannerKey = bannerKey;
-    runtimeState.activeGameOverBannerKey = "";
-    hideGameOverBanner({
-      resetCopy: true
-    });
-  }, GAME_OVER_BANNER_DURATION_MS);
-};
-
-const hideGameOverBanner = ({ resetCopy = false } = {}) => {
-  gameOverBanner.classList.add("hidden");
-  gameOverBanner.setAttribute("aria-hidden", "true");
-
-  if (resetCopy) {
-    gameOverTitle.textContent = "Game Over";
-    gameOverMessage.textContent = "Result pending.";
-  }
-};
-
-const renderPromotionPrompt = () => {
-  if (!state.pendingPromotion?.moveChoices?.length || !boardShell) {
-    clearPromotionPrompt();
-    return;
-  }
-
-  syncPromotionActionLabels();
-
-  const boardRect = boardShell.getBoundingClientRect();
-  let anchorRect = null;
-
-  if (state.boardViewMode === "3d" && arcaneBoard3D?.projectSquare) {
-    const projected = arcaneBoard3D.projectSquare(state.pendingPromotion.anchorSquare);
-
-    if (
-      projected &&
-      Number.isFinite(projected.x) &&
-      Number.isFinite(projected.y)
-    ) {
-      anchorRect = {
-        left: projected.x,
-        right: projected.x,
-        top: projected.y,
-        bottom: projected.y,
-        width: 0,
-        height: 0
-      };
-    }
-  }
-
-  if (!anchorRect) {
-    const anchorSquare = boardElement.querySelector(
-      `[data-square="${state.pendingPromotion.anchorSquare}"]`
-    );
-
-    if (!anchorSquare) {
-      clearPromotionPrompt();
-      return;
-    }
-
-    anchorRect = anchorSquare.getBoundingClientRect();
-  }
-
-  promotionPanel.classList.remove("hidden");
-  promotionPanel.style.visibility = "hidden";
-
-  const panelWidth = promotionPanel.offsetWidth || 196;
-  const panelHeight = promotionPanel.offsetHeight || 148;
-  const margin = 12;
-  const preferredLeft =
-    anchorRect.left - boardRect.left + anchorRect.width / 2 - panelWidth / 2;
-  const maxLeft = Math.max(margin, boardRect.width - panelWidth - margin);
-  const left = Math.min(Math.max(preferredLeft, margin), maxLeft);
-  const anchorIsNearTop = anchorRect.top - boardRect.top < boardRect.height / 2;
-  const preferredTop = anchorIsNearTop
-    ? anchorRect.bottom - boardRect.top + margin
-    : anchorRect.top - boardRect.top - panelHeight - margin;
-  const maxTop = Math.max(margin, boardRect.height - panelHeight - margin);
-  const top = Math.min(Math.max(preferredTop, margin), maxTop);
-
-  promotionPanel.style.left = `${Math.round(left)}px`;
-  promotionPanel.style.top = `${Math.round(top)}px`;
-  promotionPanel.style.visibility = "";
 };
 
 const hideBoardFeedback = () => {
@@ -3673,101 +3539,6 @@ const loadEngineReply = async ({ cycleId, moveToken }) => {
   }
 };
 
-const submitMove = async ({ from, to, promotion, previewMove }) => {
-  if (isRealtimeMultiplayerGame()) {
-    setBusy(true, "Sending move...");
-
-    try {
-      const socketState = await emitMultiplayerEvent("multiplayer:move", {
-        from,
-        to,
-        promotion
-      });
-
-      setApiHealth(true);
-      applyMultiplayerSocketState(socketState);
-    } catch (error) {
-      setApiHealth(false);
-      setCoachMessage(error.message);
-    } finally {
-      setBusy(false);
-    }
-
-    return;
-  }
-
-  const cycleId = beginMoveCycle();
-  setBusy(true);
-  clearHintState();
-  setCoachStageRank(1);
-  clearSelectedSquare();
-  debugGameplaySync("move:submit", {
-    from,
-    to,
-    promotion: promotion || null,
-    previewMove
-  });
-  syncActionButtons();
-  state.coach = getThinkingCoachState();
-  setWizardThinkingState();
-  renderCoachPanel();
-
-  try {
-    const payload = await request("/api/game/move", {
-      method: "POST",
-      body: JSON.stringify({ from, to, promotion })
-    });
-
-    if (!isMoveCycleActive(cycleId)) {
-      return;
-    }
-
-    setApiHealth(true);
-    if (previewMove?.captured) {
-      scheduleWizardReactionState("st-capture", {
-        delayMs: 900,
-        holdMs: 2000
-      });
-    }
-    applyGameState(payload.game, {
-      wizardSource: "human",
-      coachState:
-        payload.pending?.engine
-          ? getThinkingCoachState()
-          : null
-    });
-
-    if (payload.pending?.engine) {
-      const localMovePly = getLastPlyIndexFromMoveList(payload.game?.moveList || []);
-      void loadCoachFeedback({
-        cycleId,
-        moveToken: payload.moveToken,
-        plyIndex: localMovePly
-      });
-      void loadEngineReply({
-        cycleId,
-        moveToken: payload.moveToken
-      });
-      return;
-    }
-
-    setBusy(false);
-
-    if (payload.game.isGameOver) {
-      void refreshCollections();
-    }
-  } catch (error) {
-    if (!isMoveCycleActive(cycleId)) {
-      return;
-    }
-
-    clearSelectedSquare();
-    setApiHealth(false);
-    setCoachMessage(error.message);
-    setBusy(false);
-  }
-};
-
 const requestHint = async () => {
   if (!state.game || isRealtimeMultiplayerGame()) {
     setCoachMessage(
@@ -3814,130 +3585,6 @@ const requestHint = async () => {
   } finally {
     setBusy(false);
   }
-};
-
-const handleSquareClick = (square) => {
-  if (!state.game || state.busy) {
-    return;
-  }
-
-  if (!state.game.hasStarted) {
-    setCoachMessage(
-      "Start a new game or resume a saved one.",
-      "Arcane Coach appears as soon as an active match is underway."
-    );
-    return;
-  }
-
-  if (state.game.isGameOver) {
-    setCoachMessage(
-      "The game is over. Start a new one or review it in history.",
-      "This position is already sealed."
-    );
-    return;
-  }
-
-  const drawClaim = getDrawClaimState(state.game);
-
-  if (state.game.turn !== state.game.settings.playerColor) {
-    if (drawClaim?.available) {
-      setCoachMessage(
-        drawClaim.message,
-        state.game.turn === state.game.settings.engineColor
-          ? "Claim the draw now, or continue play to let the engine answer."
-          : "You may claim the draw before playing on from this position."
-      );
-      return;
-    }
-
-    setCoachMessage(
-      isRealtimeMultiplayerGame() ? "Wait for your opponent to move." : "Wait for Stockfish to move.",
-      isRealtimeMultiplayerGame()
-        ? "The board will update automatically when your opponent plays."
-        : "Use Hint when you want engine guidance for your next move."
-    );
-    return;
-  }
-
-  const squareData = state.game.board.find((entry) => entry.square === square);
-  const ownPiece =
-    squareData?.piece && squareData.piece.color === state.game.settings.playerColor;
-  debugGameplaySync("input:click", {
-    clickedSquare: square,
-    selectedSquare: state.selectedSquare,
-    ownPiece: squareData?.piece || null,
-    turn: state.game.turn,
-    boardViewMode: state.boardViewMode
-  });
-
-  if (!state.selectedSquare) {
-    if (ownPiece && state.game.legalMoves[square]?.length) {
-      setSelectedSquare(square);
-      setWizardThinkingState();
-      setCoachMessage(
-        `Selected ${square}. Choose a legal destination.`,
-        "Highlighted targets show every legal landing square for that piece."
-      );
-      renderBoardSurface();
-    } else {
-      setCoachMessage(
-        "Select one of your pieces with a legal move.",
-        "Only your active pieces with legal targets can be moved right now."
-      );
-    }
-
-    return;
-  }
-
-  if (state.selectedSquare === square) {
-    setSelectedSquare(square);
-    setWizardThinkingState();
-    setCoachMessage(
-      `Selected ${square}.`,
-      "Choose one of the highlighted targets to complete the move."
-    );
-    renderBoardSurface();
-    return;
-  }
-
-  if (ownPiece && state.game.legalMoves[square]?.length) {
-    setSelectedSquare(square);
-    setWizardThinkingState();
-    setCoachMessage(
-      `Selected ${square}.`,
-      "Choose one of the highlighted targets to complete the move."
-    );
-    renderBoardSurface();
-    return;
-  }
-
-  const matchingMoves = getLegalTargets().filter((move) => move.to === square);
-  debugGameplaySync("move:attempt", {
-    from: state.selectedSquare,
-    to: square,
-    matchingMoves
-  });
-
-  if (!matchingMoves.length) {
-    setCoachMessage(
-      "Illegal move. Choose a highlighted destination.",
-      "Only highlighted squares are legal from the current position."
-    );
-    return;
-  }
-
-  if (matchingMoves.length > 1) {
-    openPromotionPrompt(matchingMoves, square);
-    renderBoardSurface();
-    return;
-  }
-
-  submitMove({
-    from: state.selectedSquare,
-    to: square,
-    promotion: matchingMoves[0].promotion || undefined,
-    previewMove: matchingMoves[0]
-  });
 };
 
 const initialize = async () => {
@@ -4432,6 +4079,24 @@ configureRenderBoardDependencies({
 configureRenderCoachDependencies({
   getArcaneBoard3D: () => arcaneBoard3D,
   getDrawClaimState
+});
+
+configureGameplayDependencies({
+  beginMoveCycle,
+  isMoveCycleActive,
+  isRealtimeMultiplayerGame,
+  getDrawClaimState,
+  debugGameplaySync,
+  setBusy,
+  setApiHealth,
+  syncActionButtons,
+  syncBoard3D,
+  applyMultiplayerSocketState,
+  loadCoachFeedback,
+  loadEngineReply,
+  getLastPlyIndexFromMoveList,
+  applyGameState,
+  refreshCollections
 });
 
 initializeMultiplayerRealtime({
