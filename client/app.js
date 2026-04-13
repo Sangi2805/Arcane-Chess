@@ -29,6 +29,157 @@ import {
   runtimeState,
   state
 } from "./app/state.js";
+import * as dom from "./app/dom.js";
+
+const {
+  ambientAudioToggleButton,
+  apiHealth,
+  authContinueGuestButton,
+  authDisplayNameInput,
+  authEmailInput,
+  authGuestView,
+  authPasswordInput,
+  authSessionCopy,
+  authSessionHeading,
+  authSessionPill,
+  authSignupOnlyFields,
+  authUserDisplay,
+  authUserEmail,
+  authUserView,
+  authView,
+  backToHallButton,
+  board3dElement,
+  boardElement,
+  boardFeedbackBanner,
+  boardFeedbackMessage,
+  boardFeedbackTitle,
+  boardModeLabel,
+  boardShell,
+  bottomClockCard,
+  bottomClockLabel,
+  bottomClockMeta,
+  bottomClockSide,
+  bottomClockTime,
+  claimDrawButton,
+  closeHistoryButton,
+  coachAvatarImage,
+  coachBubbleCopy,
+  coachFooter,
+  coachPanel,
+  coachWizardBrowLeft,
+  coachWizardBrowRight,
+  coachWizardIrisLeft,
+  coachWizardIrisRight,
+  coachWizardMouth,
+  coachWizardOrb,
+  coachWizardSvg,
+  colorInputs,
+  continuePlayButton,
+  controlsPanel,
+  dashboardTimeControlButtons,
+  difficultySelect,
+  engineSide,
+  evalBarBlack,
+  evalBarWhite,
+  feedbackBadge,
+  feedbackExplanation,
+  feedbackSuggestion,
+  feedbackText,
+  feedbackThinking,
+  feedbackWhyLines,
+  feedbackWhyToggle,
+  gameOverBanner,
+  gameOverMessage,
+  gameOverTitle,
+  gameView,
+  gatewayCreateButton,
+  gatewayGuestButton,
+  gatewaySignInButton,
+  guestMeta,
+  guestName,
+  guestSubtitle,
+  hallHistoryButton,
+  hallHeroActions,
+  hallLogoutButton,
+  hallRandomTimeControlButton,
+  hallRandomTimeControlLabel,
+  hallResumeButton,
+  historyCount,
+  historyDetailCompleted,
+  historyDetailDifficulty,
+  historyDetailMoves,
+  historyDetailPgn,
+  historyDetailPlayer,
+  historyDetailResult,
+  historyDetailStatus,
+  historyList,
+  historyModal,
+  historyModalCard,
+  hintButton,
+  hintWhyButton,
+  hintWhyText,
+  immersiveControls,
+  immersiveControlsHost,
+  immersiveExitButton,
+  immersiveFullscreenButton,
+  immersiveHud,
+  immersiveNewGameButton,
+  immersiveOfferDrawButton,
+  immersiveResignButton,
+  immersiveStatus,
+  immersiveStatusHeading,
+  immersiveStatusMeta,
+  lobbyView,
+  logoutButton,
+  multiplayerConnectionStatus,
+  multiplayerCreateGameButton,
+  multiplayerCreateRoomButton,
+  multiplayerDashboard,
+  multiplayerGateway,
+  multiplayerInviteList,
+  multiplayerJoinGameButton,
+  multiplayerLobbyButton,
+  multiplayerPlayerList,
+  multiplayerPresencePill,
+  multiplayerRejoinGameButton,
+  multiplayerRoomIdInput,
+  multiplayerRoomIdLabel,
+  multiplayerStatusCopy,
+  moveListElement,
+  newGameButton,
+  offerDrawButton,
+  playArea,
+  playerSide,
+  promotionPanel,
+  recordTabs,
+  recordViews,
+  replayBack,
+  replayBoard,
+  replayForward,
+  replayStepLabel,
+  resignButton,
+  saveGameButton,
+  savedGamesCount,
+  savedGamesList,
+  shellElement,
+  soloLobbyButton,
+  statusText,
+  loginButton,
+  movesPanelHeaderActions,
+  registerButton,
+  timeControlSelect,
+  topClockCard,
+  topClockLabel,
+  topClockMeta,
+  topClockSide,
+  topClockTime,
+  toggle2dBtn,
+  toggle3dBtn,
+  turnIndicator,
+  lastMoveText,
+  wizardSide,
+  wizardStateLabel
+} = dom;
 
 (function() {
   if (sessionStorage.getItem('ss-intro-seen')) {
@@ -60,157 +211,10 @@ import {
   document.addEventListener('keydown', dismiss, { once: true });
 })();
 
-const difficultySelect = document.getElementById("difficulty-select");
-const newGameButton = document.getElementById("new-game-button");
-const hintButton = document.getElementById("hint-button");
-const hintWhyButton = document.getElementById("hint-why-button");
-const hintWhyText = document.getElementById("hint-why-text");
-const saveGameButton = document.getElementById("save-game-button");
-const offerDrawButton = document.getElementById("offer-draw-button");
-const resignButton = document.getElementById("resign-button");
-const shellElement = document.querySelector(".shell");
-const controlsPanel = document.querySelector(".controls-panel");
-const boardShell = document.querySelector(".board-shell");
-const board3dElement = document.getElementById("board-3d");
-const boardElement = document.getElementById("board");
-const toggle2dBtn    = document.getElementById("toggle-2d");
-const toggle3dBtn    = document.getElementById("toggle-3d");
-const boardModeLabel = document.getElementById("board-mode-label");
-let   arcaneBoard3D  = null;
+let arcaneBoard3D = null;
 let lastAnimated3DMoveKey = "";
 let is3DMoveAnimating = false;
 let last3DAnimationStartedAt = 0;
-const boardFeedbackBanner = document.getElementById("board-feedback-banner");
-const boardFeedbackTitle = document.getElementById("board-feedback-title");
-const boardFeedbackMessage = document.getElementById("board-feedback-message");
-const claimDrawButton = document.getElementById("claim-draw-button");
-const continuePlayButton = document.getElementById("continue-play-button");
-const immersiveHud = document.getElementById("immersive-hud");
-const immersiveControls = immersiveHud?.querySelector(".immersive-controls") || null;
-const immersiveStatus = immersiveHud?.querySelector(".immersive-status") || null;
-const immersiveControlsHost = document.getElementById("immersive-controls-host");
-const immersiveExitButton = document.getElementById("immersive-exit-button");
-const immersiveFullscreenButton = document.getElementById('immersive-fullscreen-button');
-const immersiveNewGameButton = document.getElementById("immersive-new-game-button");
-const immersiveOfferDrawButton = document.getElementById("immersive-offer-draw-button");
-const immersiveResignButton = document.getElementById("immersive-resign-button");
-const immersiveStatusHeading = document.getElementById("immersive-status-heading");
-const immersiveStatusMeta = document.getElementById("immersive-status-meta");
-const gameOverBanner = document.getElementById("game-over-banner");
-const gameOverTitle = document.getElementById("game-over-title");
-const gameOverMessage = document.getElementById("game-over-message");
-const moveListElement = document.getElementById("move-list");
-const statusText = document.getElementById("status-text");
-const coachPanel = document.getElementById("coach-panel");
-const coachAvatarImage = document.getElementById("coach-avatar-image");
-const coachWizardSvg = document.getElementById("coach-wizard-svg");
-const wizardSide = document.getElementById("wizard-side");
-const wizardStateLabel = document.getElementById("wizard-state-label");
-const coachWizardMouth = document.getElementById("coach-wizard-mouth");
-const coachWizardBrowLeft = document.getElementById("coach-wizard-brow-left");
-const coachWizardBrowRight = document.getElementById("coach-wizard-brow-right");
-const coachWizardIrisLeft = document.getElementById("coach-wizard-iris-left");
-const coachWizardIrisRight = document.getElementById("coach-wizard-iris-right");
-const coachWizardOrb = document.getElementById("coach-wizard-orb");
-const coachFooter = coachPanel?.querySelector(".coach-footer");
-const coachBubbleCopy = coachPanel?.querySelector(".coach-bubble-copy");
-const feedbackText = document.getElementById("feedback-text");
-const feedbackBadge = document.getElementById("feedback-classification");
-const feedbackExplanation = document.getElementById("feedback-explanation");
-const feedbackSuggestion = document.getElementById("feedback-suggestion");
-const feedbackWhyToggle = document.getElementById("feedback-why-toggle");
-const feedbackWhyLines = document.getElementById("feedback-why-lines");
-const feedbackThinking = document.getElementById("feedback-thinking");
-const playerSide = document.getElementById("player-side");
-const engineSide = document.getElementById("engine-side");
-const turnIndicator = document.getElementById("turn-indicator");
-const lastMoveText = document.getElementById("last-move-text");
-const apiHealth = document.getElementById("api-health");
-const promotionPanel = document.getElementById("promotion-panel");
-const colorInputs = document.querySelectorAll('input[name="player-color"]');
-const guestSubtitle = document.getElementById("guest-subtitle");
-const guestName = document.getElementById("guest-name");
-const guestMeta = document.getElementById("guest-meta");
-const authSessionHeading = document.getElementById("auth-session-heading");
-const authSessionPill = document.getElementById("auth-session-pill");
-const authSessionCopy = document.getElementById("auth-session-copy");
-const authGuestView = document.getElementById("auth-guest-view");
-const authEmailInput = document.getElementById("auth-email");
-const authPasswordInput = document.getElementById("auth-password");
-const authDisplayNameInput = document.getElementById("auth-display-name");
-const loginButton = document.getElementById("login-button");
-const registerButton = document.getElementById("register-button");
-const authContinueGuestButton = document.getElementById("auth-continue-guest-button");
-const authUserView = document.getElementById("auth-user-view");
-const authUserDisplay = document.getElementById("auth-user-display");
-const authUserEmail = document.getElementById("auth-user-email");
-const logoutButton = document.getElementById("logout-button");
-const hallLogoutButton = document.getElementById("hall-logout-button");
-const soloLobbyButton = document.getElementById("solo-lobby-button");
-const multiplayerLobbyButton = document.getElementById("multiplayer-lobby-button");
-const multiplayerGateway = document.getElementById("multiplayer-gateway");
-const multiplayerDashboard = document.getElementById("multiplayer-dashboard");
-const gatewaySignInButton = document.getElementById("gateway-signin-button");
-const gatewayCreateButton = document.getElementById("gateway-create-button");
-const gatewayGuestButton = document.getElementById("gateway-guest-button");
-const multiplayerStatusCopy = document.getElementById("multiplayer-status-copy");
-const multiplayerPresencePill = document.getElementById("multiplayer-presence-pill");
-const multiplayerPlayerList = document.getElementById("multiplayer-player-list");
-const multiplayerInviteList = document.getElementById("multiplayer-invite-list");
-const multiplayerCreateRoomButton = document.getElementById("mp-create-room-button");
-const multiplayerCreateGameButton = document.getElementById("mp-create-game-button");
-const multiplayerRejoinGameButton = document.getElementById("mp-rejoin-game-button");
-const multiplayerRoomIdInput = document.getElementById("mp-room-id-input");
-const multiplayerJoinGameButton = document.getElementById("mp-join-game-button");
-const multiplayerRoomIdLabel = document.getElementById("mp-room-id-label");
-const multiplayerConnectionStatus = document.getElementById("mp-connection-status");
-const hallResumeButton = document.getElementById("hall-resume-button");
-const hallHistoryButton = document.getElementById("hall-history-button");
-const hallRandomTimeControlButton = document.getElementById("hall-random-time-control-button");
-const hallRandomTimeControlLabel = document.getElementById("hall-random-time-label");
-const ambientAudioToggleButton = document.getElementById("ambient-audio-toggle");
-const hallHeroActions = document.querySelector(".hall-hero-actions");
-const movesPanelHeaderActions = document.querySelector(".moves-panel-header-actions");
-const lobbyView = document.getElementById("lobby-view");
-const gameView = document.getElementById("game-view");
-const authView = document.getElementById("auth-view");
-const backToHallButton = document.getElementById("back-to-hall-button");
-const playArea = document.querySelector(".play-area");
-const dashboardTimeControlButtons = document.querySelectorAll("[data-dashboard-time-control]");
-const authSignupOnlyFields = document.querySelectorAll(".signup-only");
-const recordTabs = document.querySelectorAll("[data-record-view]");
-const recordViews = document.querySelectorAll("[data-view-panel]");
-const savedGamesList = document.getElementById("saved-games-list");
-const historyList = document.getElementById("history-list");
-const savedGamesCount = document.getElementById("saved-games-count");
-const historyCount = document.getElementById("history-count");
-const historyModal = document.getElementById("history-modal");
-const historyModalCard = historyModal?.querySelector(".modal-card");
-const closeHistoryButton = document.getElementById("close-history-button");
-const historyDetailResult = document.getElementById("history-detail-result");
-const historyDetailDifficulty = document.getElementById("history-detail-difficulty");
-const historyDetailPlayer = document.getElementById("history-detail-player");
-const historyDetailCompleted = document.getElementById("history-detail-completed");
-const historyDetailStatus = document.getElementById("history-detail-status");
-const historyDetailPgn = document.getElementById("history-detail-pgn");
-const historyDetailMoves = document.getElementById("history-detail-moves");
-const replayBoard = document.getElementById("replay-board");
-const replayBack = document.getElementById("replay-back");
-const replayForward = document.getElementById("replay-forward");
-const replayStepLabel = document.getElementById("replay-step-label");
-const timeControlSelect = document.getElementById("time-control-select");
-const topClockLabel = document.getElementById("top-clock-label");
-const topClockCard = document.getElementById("top-clock-card");
-const topClockSide = document.getElementById("top-clock-side");
-const topClockTime = document.getElementById("top-clock-time");
-const topClockMeta = document.getElementById("top-clock-meta");
-const bottomClockLabel = document.getElementById("bottom-clock-label");
-const bottomClockCard = document.getElementById("bottom-clock-card");
-const bottomClockSide = document.getElementById("bottom-clock-side");
-const bottomClockTime = document.getElementById("bottom-clock-time");
-const bottomClockMeta = document.getElementById("bottom-clock-meta");
-const evalBarBlack = document.getElementById('eval-bar-black');
-const evalBarWhite = document.getElementById('eval-bar-white');
 
 const isGameplayDebugEnabled = () => window.__ARCANE_DEBUG_SYNC !== false;
 const debugGameplaySync = (event, payload = {}) => {
@@ -4994,9 +4998,9 @@ const renderBoardSurface = () => {
   const boardPanel = document.querySelector("#game-view .board-panel");
   const boardStage = document.querySelector("#game-view .board-stage");
   const boardContainerElement = document.querySelector("#game-view .board-container");
-  const boardShell = document.querySelector("#game-view .board-shell");
+  const gameBoardShell = document.querySelector("#game-view .board-shell");
   const boardSurface = document.getElementById("board");
-  const boardContainer = boardContainerElement || boardShell || boardElement?.parentElement || null;
+  const boardContainer = boardContainerElement || gameBoardShell || boardElement?.parentElement || null;
   const boardState = state.game?.board;
   const boardStateFailureReason = getBoardRenderFailureReason(boardState);
   const boardStageRows = Array.from(
