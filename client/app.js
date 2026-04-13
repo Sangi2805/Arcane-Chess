@@ -149,6 +149,19 @@ import {
   stepReplay,
   updateReplayControls
 } from "./app/replay-history-controller.js";
+import {
+  configureAuthSessionDependencies,
+  focusAuthField,
+  getLocalPlayerDisplayName,
+  getSessionDisplayName,
+  isAuthenticated,
+  loginAccount,
+  logoutAccount,
+  registerAccount,
+  renderAuthMode,
+  setSessionState,
+  showSignupMode
+} from "./app/auth-session-controller.js";
 import * as dom from "./app/dom.js";
 
 const {
@@ -928,11 +941,6 @@ const joinMultiplayerRoom = async () => {
   }
 };
 
-const focusAuthField = (input) => {
-  input?.focus();
-  input?.select?.();
-};
-
 const getWinnerFromResult = (result) => {
   if (result === "white-win") {
     return "White";
@@ -1214,18 +1222,6 @@ const upsertLocalMoveChronicleRating = (plyIndex, coachFeedback = {}) => {
   }
 };
 
-const createFallbackGuest = (storedGuest) => {
-  const guestId =
-    storedGuest?.guestId ||
-    `guest_${window.crypto?.randomUUID?.() || Date.now().toString(36)}`;
-  const suffix = guestId.replace("guest_", "").slice(-4).toUpperCase();
-
-  return {
-    guestId,
-    displayName: storedGuest?.displayName || `Guest-${suffix}`
-  };
-};
-
 const getChosenColor = () =>
   document.querySelector('input[name="player-color"]:checked')?.value || "white";
 
@@ -1275,31 +1271,6 @@ const getBoardClockColors = (gameState = state.game) => {
         top: "black",
         bottom: "white"
       };
-};
-
-const isAuthenticated = () =>
-  Boolean(state.session?.authenticated && state.session.user?.id);
-
-const getSessionDisplayName = () =>
-  state.session?.user?.displayName || state.session?.user?.email || "Arcane Player";
-
-const getLocalPlayerDisplayName = () =>
-  isAuthenticated()
-    ? getSessionDisplayName()
-    : state.guest?.displayName || "Guest";
-
-const getGuestHeaders = () =>
-  state.guest?.guestId ? { "X-Guest-Id": state.guest.guestId } : {};
-
-const setSessionState = (session = {}) => {
-  state.session = {
-    authenticated: Boolean(session.authenticated && session.user),
-    user: session.user || null
-  };
-
-  renderGuestProfile();
-  renderSessionUi();
-  syncActionButtons();
 };
 
 const syncActionButtons = () => {
@@ -1559,14 +1530,6 @@ const renderClockCard = ({
   cardElement.dataset.urgent = isUrgent ? "true" : "false";
   cardElement.dataset.untimed = "false";
   rowElement?.setAttribute("data-active", isActive ? "true" : "false");
-};
-
-const renderAuthMode = () => {
-  const signupMode = state.authMode === "signup";
-
-  authSignupOnlyFields.forEach((field) => {
-    field.classList.toggle("hidden", !signupMode);
-  });
 };
 
 const syncTimedGameState = async () => {
@@ -2544,158 +2507,6 @@ const refreshCollections = async () => {
   setPersistence(historyPayload.persistence || savedGamesPayload.persistence || state.persistence);
   renderSavedGames();
   renderHistory();
-};
-
-const clearAuthInputs = ({ keepEmail = false } = {}) => {
-  if (authEmailInput && !keepEmail) {
-    authEmailInput.value = "";
-  }
-
-  if (authPasswordInput) {
-    authPasswordInput.value = "";
-  }
-
-  if (authDisplayNameInput) {
-    authDisplayNameInput.value = "";
-  }
-};
-
-const getAuthTransferMessage = (transferred = {}) => {
-  const totalTransferred =
-    (transferred.savedGamesTransferred || 0) +
-    (transferred.historyGamesTransferred || 0);
-
-  if (!totalTransferred) {
-    return "Account sync is ready. New saves and completed games now belong to your account.";
-  }
-
-  const noun = totalTransferred === 1 ? "game" : "games";
-  return `${totalTransferred} archived ${noun} moved from this browser guest profile into your account.`;
-};
-
-const registerAccount = async () => {
-  setBusy(true, "Creating your Arcane Chess account...");
-
-  try {
-    const payload = await request("/api/auth/register", {
-      method: "POST",
-      body: JSON.stringify({
-        email: authEmailInput?.value?.trim() || "",
-        password: authPasswordInput?.value || "",
-        displayName: authDisplayNameInput?.value?.trim() || ""
-      })
-    });
-
-    setApiHealth(true);
-    setPersistence(payload.persistence);
-    setSessionState(payload);
-    clearAuthInputs({
-      keepEmail: true
-    });
-    state.view = "hall";
-    renderView();
-    await Promise.all([loadGame(), refreshCollections()]);
-    setRecordView("saves");
-    setCoachMessage(
-      "Account created.",
-      getAuthTransferMessage(payload.transferred)
-    );
-      return true;
-  } catch (error) {
-    setApiHealth(false);
-    setCoachMessage(error.message);
-      return false;
-  } finally {
-    setBusy(false);
-  }
-};
-
-const loginAccount = async () => {
-  console.log("loginAccount: start");
-  setBusy(true, "Signing you in...");
-
-  try {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        ...getGuestHeaders(),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email: authEmailInput?.value?.trim() || "",
-        password: authPasswordInput?.value || ""
-      })
-    });
-    console.log("loginAccount: response status", response.status);
-
-    let payload = {};
-    try {
-      payload = await response.json();
-    } catch (parseError) {
-      payload = {};
-    }
-    console.log("loginAccount: payload", payload);
-
-    if (!response.ok) {
-      throw new Error(payload.message || "Request failed.");
-    }
-
-    setApiHealth(true);
-    setPersistence(payload.persistence);
-    setSessionState(payload);
-    clearAuthInputs({
-      keepEmail: true
-    });
-    console.log("Login success -> switching to hall");
-    state.view = "hall";
-    renderView();
-    await Promise.all([loadGame(), refreshCollections()]);
-    setRecordView("saves");
-    setCoachMessage("Signed in.", getAuthTransferMessage(payload.transferred));
-    console.log("loginAccount: success returning true");
-    return true;
-  } catch (error) {
-    console.log("loginAccount: failed", error?.message || error);
-    setApiHealth(false);
-    setCoachMessage(error.message);
-    return false;
-  } finally {
-    setBusy(false);
-  }
-};
-
-const logoutAccount = async () => {
-  setBusy(true, "Returning to guest mode...");
-
-  try {
-    const payload = await request("/api/auth/logout", {
-      method: "POST"
-    });
-
-    setApiHealth(true);
-    setPersistence(payload.persistence);
-    setSessionState(payload);
-    clearAuthInputs();
-    await Promise.all([loadGame(), refreshCollections()]);
-    setRecordView("moves");
-    state.view = "auth";
-    renderView();
-    setCoachMessage(
-      "Signed out.",
-      "You are back in guest mode on this browser. Account archives remain available the next time you sign in."
-    );
-  } catch (error) {
-    setApiHealth(false);
-    setCoachMessage(error.message);
-  } finally {
-    setBusy(false);
-  }
-};
-
-const showSignupMode = () => {
-  state.authMode = "signup";
-  renderAuthMode();
 };
 
 const startNewGame = async () => {
@@ -3769,6 +3580,33 @@ configureReplayHistoryDependencies({
     setApiHealth,
     setCoachMessage,
     setPersistence
+  }
+});
+
+configureAuthSessionDependencies({
+  state,
+  dom: {
+    authDisplayNameInput,
+    authEmailInput,
+    authPasswordInput,
+    authSignupOnlyFields
+  },
+  api: {
+    ensureGuestSession,
+    request
+  },
+  actions: {
+    loadGame,
+    refreshCollections,
+    renderGuestProfile,
+    renderSessionUi,
+    renderView,
+    setApiHealth,
+    setBusy,
+    setCoachMessage,
+    setPersistence,
+    setRecordView,
+    syncActionButtons
   }
 });
 
