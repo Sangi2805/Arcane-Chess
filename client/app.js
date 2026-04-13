@@ -129,6 +129,26 @@ import {
   ambientTracks,
   ambientState
 } from "./app/audio-controller.js";
+import {
+  clearReplay,
+  closeHistoryDetail,
+  configureReplayHistoryDependencies,
+  getSavedGameHeadline,
+  initReplay,
+  openHistoryDetail,
+  parseFenToBoard,
+  populateHistoryDetail,
+  renderHistory,
+  renderReplayBoard,
+  renderReplayMoveRows,
+  renderSavedGames,
+  resetHistoryDetail,
+  scrollReplayActiveMoveIntoView,
+  setReplayStep,
+  showHistoryModal,
+  stepReplay,
+  updateReplayControls
+} from "./app/replay-history-controller.js";
 import * as dom from "./app/dom.js";
 
 const {
@@ -2154,315 +2174,7 @@ const renderBoardFeedback = () => {
 };
 
 
-const getSavedGameHeadline = (game = {}) => {
-  const playerName = getLocalPlayerDisplayName();
-  const isMultiplayerSave = game.actorType === "multiplayer";
-
-  if (isMultiplayerSave) {
-    const opponentName =
-      game.opponentName ||
-      game.opponentDisplayName ||
-      game.opponent ||
-      "Opponent";
-    return `${playerName} vs ${opponentName}`;
-  }
-
-  const difficulty = game.difficulty || "Easy";
-  return `${playerName} vs Stockfish · ${difficulty}`;
-};
-
-const renderSavedGames = () => {
-  savedGamesCount.textContent = `${state.savedGames.length} saved`;
-  const ownerLabel = isAuthenticated() ? "your account" : "this browser";
-
-  if (!state.persistence.available) {
-    savedGamesList.innerHTML = `
-      <div class="empty-state">
-        <strong>MongoDB is unavailable.</strong>
-        <span>Start MongoDB to enable save and resume support.</span>
-      </div>
-    `;
-    return;
-  }
-
-  if (!state.savedGames.length) {
-    savedGamesList.innerHTML = `
-      <div class="empty-state">
-        <strong>No saved games yet.</strong>
-        <span>Use Save Game on any in-progress duel to archive it for later on ${escapeHtml(
-          ownerLabel
-        )}.</span>
-      </div>
-    `;
-    return;
-  }
-
-  savedGamesList.innerHTML = state.savedGames
-    .map(
-      (game) => `
-        <article class="record-card">
-          <div class="record-card-copy">
-            <strong>${escapeHtml(getSavedGameHeadline(game))}</strong>
-            <span>${escapeHtml(game.status.message)}</span>
-            <span>${escapeHtml(game.difficulty)} difficulty - ${escapeHtml(
-              `${game.moveCount} moves`
-            )}</span>
-            <span>${escapeHtml(formatTimeControl(game.timeControl))}</span>
-            <span>Saved ${escapeHtml(formatTimestamp(game.updatedAt))}</span>
-          </div>
-          <button
-            type="button"
-            class="button-secondary button-small"
-            data-resume-game="${escapeHtml(game.gameId)}"
-            ${state.busy ? "disabled" : ""}
-          >
-            Resume
-          </button>
-        </article>
-      `
-    )
-    .join("");
-};
-// ── Replay board ─────────────────────────────────────────────────────────
-
-const parseFenToBoard = (fen) => {
-  const position = fen.split(" ")[0];
-  const rows = position.split("/");
-  const RANK_LABELS = ["8", "7", "6", "5", "4", "3", "2", "1"];
-  const FILE_LABELS = ["a", "b", "c", "d", "e", "f", "g", "h"];
-  const board = [];
-
-  rows.forEach((row, rankIndex) => {
-    const rank = RANK_LABELS[rankIndex];
-    let fileIndex = 0;
-
-    for (const ch of row) {
-      if (ch >= "1" && ch <= "8") {
-        const count = Number(ch);
-
-        for (let i = 0; i < count; i++) {
-          const file = FILE_LABELS[fileIndex + i];
-          board.push({ square: `${file}${rank}`, file, rank, piece: null });
-        }
-
-        fileIndex += count;
-      } else {
-        const file = FILE_LABELS[fileIndex];
-        const color = ch === ch.toUpperCase() ? "white" : "black";
-        const type = ch.toLowerCase();
-        board.push({ square: `${file}${rank}`, file, rank, piece: { type, color } });
-        fileIndex++;
-      }
-    }
-  });
-
-  return board;
-};
-
-const renderReplayBoard = () => {
-  if (!replayBoard) return;
-
-  const fen = replayState.fenSteps[replayState.index];
-
-  if (!fen) {
-    replayBoard.innerHTML = "";
-    return;
-  }
-
-  const boardData = parseFenToBoard(fen);
-  const lookup = new Map(boardData.map((e) => [e.square, e]));
-  const files =
-    replayState.playerColor === "black"
-      ? ["h", "g", "f", "e", "d", "c", "b", "a"]
-      : ["a", "b", "c", "d", "e", "f", "g", "h"];
-  const ranks =
-    replayState.playerColor === "black"
-      ? ["1", "2", "3", "4", "5", "6", "7", "8"]
-      : ["8", "7", "6", "5", "4", "3", "2", "1"];
-  const lastMoveFrom = replayState.index > 0 ? replayState.moveHistory[replayState.index - 1]?.from : null;
-  const lastMoveTo = replayState.index > 0 ? replayState.moveHistory[replayState.index - 1]?.to : null;
-
-  const squares = [];
-  ranks.forEach((rank) => files.forEach((file) => squares.push(lookup.get(`${file}${rank}`))));
-
-  replayBoard.innerHTML = squares
-    .map((entry, index) => {
-      if (!entry) return "";
-      const colorClass = getSquareColorClass(entry.square);
-      const classes = ["square", colorClass];
-      if (entry.square === lastMoveFrom) classes.push("square-last-from");
-      if (entry.square === lastMoveTo) classes.push("square-last-to");
-
-      const fileLabel =
-        index >= 56 ? `<span class="square-label square-file">${entry.file}</span>` : "";
-      const rankLabel =
-        index % 8 === 0 ? `<span class="square-label square-rank">${entry.rank}</span>` : "";
-
-      return `
-        <div class="${classes.join(" ")}" data-square="${entry.square}">
-          ${rankLabel}${fileLabel}
-          ${entry.piece
-            ? `<span class="piece piece-${entry.piece.color}">${PIECES[entry.piece.color][entry.piece.type]}</span>`
-            : ""}
-        </div>
-      `;
-    })
-    .join("");
-};
-
-const renderReplayMoveRows = (moveList = [], activeHalfMoveIndex = -1) => {
-  if (!moveList.length) {
-    return `
-      <div class="empty-state">
-        <strong>No moves were recorded for this game.</strong>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="move-row move-row-head" role="presentation">
-      <span>Turn</span>
-      <span>White</span>
-      <span>Black</span>
-    </div>
-    ${moveList
-      .map((move) => {
-        const whiteMoveIdx = (move.turn - 1) * 2;
-        const blackMoveIdx = (move.turn - 1) * 2 + 1;
-        const highlightWhite = activeHalfMoveIndex === whiteMoveIdx && Boolean(move.white);
-        const highlightBlack = activeHalfMoveIndex === blackMoveIdx && Boolean(move.black);
-
-        return `
-          <div class="move-row ${highlightWhite || highlightBlack ? "move-row-current" : ""}">
-            <strong class="move-turn">${escapeHtml(`${move.turn}.`)}</strong>
-            <span class="move-cell ${highlightWhite ? "move-cell-current" : ""}">${escapeHtml(move.white || "-")}</span>
-            <span class="move-cell ${highlightBlack ? "move-cell-current" : ""}">${escapeHtml(move.black || "-")}</span>
-          </div>
-        `;
-      })
-      .join("")}
-  `;
-};
-
-const updateReplayControls = () => {
-  const total = Math.max(0, replayState.fenSteps.length - 1);
-  const hasData = replayState.fenSteps.length > 0;
-
-  if (replayStepLabel) {
-    if (!hasData) {
-      replayStepLabel.textContent = "No data";
-    } else {
-      replayStepLabel.textContent = replayState.index === 0 ? "Start" : `Move ${replayState.index} of ${total}`;
-    }
-  }
-
-  if (replayBack) replayBack.disabled = replayState.index <= 0 || !hasData;
-  if (replayForward) replayForward.disabled = replayState.index >= total || !hasData;
-};
-
-const scrollReplayActiveMoveIntoView = () => {
-  if (!historyDetailMoves) return;
-  const active = historyDetailMoves.querySelector(".move-cell-current");
-  if (active) active.scrollIntoView({ block: "nearest", behavior: "smooth" });
-};
-
-const setReplayStep = (index) => {
-  replayState.index = Math.max(0, Math.min(index, Math.max(0, replayState.fenSteps.length - 1)));
-  renderReplayBoard();
-  if (historyDetailMoves) {
-    historyDetailMoves.innerHTML = renderReplayMoveRows(replayState.moveList, replayState.index - 1);
-  }
-  updateReplayControls();
-  scrollReplayActiveMoveIntoView();
-};
-
-const stepReplay = (delta) => setReplayStep(replayState.index + delta);
-
-const initReplay = (moveList, fenSteps, moveHistory, playerColor) => {
-  replayState.moveList = moveList || [];
-  replayState.fenSteps = fenSteps || [];
-  replayState.moveHistory = moveHistory || [];
-  replayState.playerColor = playerColor || "white";
-  setReplayStep(0);
-};
-
-const clearReplay = () => {
-  replayState.fenSteps = [];
-  replayState.moveHistory = [];
-  replayState.moveList = [];
-  replayState.index = 0;
-  if (replayBoard) replayBoard.innerHTML = "";
-  updateReplayControls();
-};
-
-const renderHistory = () => {
-  historyCount.textContent = `${state.history.length} recorded`;
-  const ownerLabel = isAuthenticated() ? "your account" : "this browser";
-
-  if (!state.persistence.available) {
-    historyList.innerHTML = `
-      <div class="empty-state">
-        <strong>History is offline.</strong>
-        <span>Completed games will appear here when MongoDB is available.</span>
-      </div>
-    `;
-    return;
-  }
-
-  if (!state.history.length) {
-    historyList.innerHTML = `
-      <div class="empty-state">
-        <strong>No completed games yet.</strong>
-        <span>Finish a duel to store its summary and move record for ${escapeHtml(
-          ownerLabel
-        )}.</span>
-      </div>
-    `;
-    return;
-  }
-
-  historyList.innerHTML = state.history
-    .map(
-      (record) => `
-        <article class="record-card">
-          <div class="record-card-copy">
-            <strong>${escapeHtml(formatHistoryHeadline(record))}</strong>
-            <span>${escapeHtml(record.statusMessage)}</span>
-            <span>${escapeHtml(formatColor(record.playerColor))} vs ${escapeHtml(
-              formatColor(record.engineColor)
-            )}</span>
-            <span>${escapeHtml(record.difficulty)} difficulty - ${escapeHtml(
-              `${record.moveCount} moves`
-            )}</span>
-            <span>${escapeHtml(formatTimeControl(record.timeControl))}</span>
-            <span>Completed ${escapeHtml(formatTimestamp(record.completedAt))}</span>
-          </div>
-          <button
-            type="button"
-            class="button-secondary button-small"
-            data-history-game="${escapeHtml(record.gameId)}"
-            ${state.busy ? "disabled" : ""}
-          >
-            View
-          </button>
-        </article>
-      `
-    )
-    .join("");
-};
-
-const resetHistoryDetail = () => {
-  historyDetailResult.textContent = "-";
-  historyDetailDifficulty.textContent = "-";
-  historyDetailPlayer.textContent = "-";
-  historyDetailCompleted.textContent = "-";
-  historyDetailStatus.textContent = "-";
-  historyDetailPgn.textContent = "-";
-  if (historyDetailMoves) {
-    historyDetailMoves.innerHTML = renderReplayMoveRows([], -1);
-  }
-  clearReplay();
-};
+// Replay + history detail controller extracted to app/replay-history-controller.js
 
 const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
@@ -3275,74 +2987,7 @@ const continueAfterDrawClaim = async () => {
   }
 };
 
-const populateHistoryDetail = (record, fenSteps = [], moveHistory = []) => {
-  const normalizedRecord = normalizeHistoryRecord(record);
-
-  historyDetailResult.textContent = formatResult(
-    normalizedRecord.result,
-    normalizedRecord.playerColor,
-    normalizedRecord
-  );
-  historyDetailDifficulty.textContent = normalizedRecord.difficulty;
-  historyDetailPlayer.textContent = formatColor(normalizedRecord.playerColor);
-  historyDetailCompleted.textContent = formatTimestamp(normalizedRecord.completedAt);
-  historyDetailStatus.textContent = normalizedRecord.statusMessage;
-  historyDetailPgn.textContent = normalizedRecord.pgn || "No PGN available.";
-  initReplay(normalizedRecord.moveList, fenSteps, moveHistory, normalizedRecord.playerColor);
-};
-
-const showHistoryModal = () => {
-  state.historyModalOpen = true;
-  historyModal.classList.remove("hidden");
-  historyModal.setAttribute("aria-hidden", "false");
-  document.body.classList.add("modal-open");
-  closeHistoryButton.focus();
-};
-
-const closeHistoryDetail = () => {
-  state.historyModalOpen = false;
-  state.historyDetailLoading = false;
-  state.activeHistoryRequestId += 1;
-  historyModal.classList.add("hidden");
-  historyModal.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("modal-open");
-};
-
-const openHistoryDetail = async (gameId) => {
-  const requestId = state.activeHistoryRequestId + 1;
-  state.activeHistoryRequestId = requestId;
-  state.historyDetailLoading = true;
-  setCoachMessage(
-    "Opening completed game summary...",
-    "The active board remains unchanged while the history archive loads."
-  );
-  resetHistoryDetail();
-  showHistoryModal();
-
-  try {
-    const payload = await request(`/api/history/${gameId}`);
-
-    if (requestId !== state.activeHistoryRequestId || !state.historyModalOpen) {
-      return;
-    }
-
-    setApiHealth(true);
-    setPersistence(payload.persistence);
-    populateHistoryDetail(payload.record, payload.fenSteps || [], payload.moveHistory || []);
-  } catch (error) {
-    if (requestId !== state.activeHistoryRequestId) {
-      return;
-    }
-
-    setApiHealth(false);
-    closeHistoryDetail();
-    setCoachMessage(error.message);
-  } finally {
-    if (requestId === state.activeHistoryRequestId) {
-      state.historyDetailLoading = false;
-    }
-  }
-};
+// Replay + history detail controller extracted to app/replay-history-controller.js
 
 const loadCoachFeedback = async ({ cycleId, moveToken, plyIndex = null }) => {
   try {
@@ -4084,6 +3729,47 @@ configureAudioDependencies({
   ambientAudioToggleButton,
   movesPanelHeaderActions,
   hallHeroActions
+});
+
+configureReplayHistoryDependencies({
+  state,
+  replayState,
+  dom: {
+    closeHistoryButton,
+    historyCount,
+    historyDetailCompleted,
+    historyDetailDifficulty,
+    historyDetailMoves,
+    historyDetailPgn,
+    historyDetailPlayer,
+    historyDetailResult,
+    historyDetailStatus,
+    historyList,
+    historyModal,
+    replayBack,
+    replayBoard,
+    replayForward,
+    replayStepLabel,
+    savedGamesCount,
+    savedGamesList
+  },
+  helpers: {
+    PIECES,
+    escapeHtml,
+    formatColor,
+    formatHistoryHeadline,
+    formatResult,
+    formatTimeControl,
+    formatTimestamp,
+    getLocalPlayerDisplayName,
+    getSquareColorClass,
+    isAuthenticated,
+    normalizeHistoryRecord,
+    request,
+    setApiHealth,
+    setCoachMessage,
+    setPersistence
+  }
 });
 
 initialize();
