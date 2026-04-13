@@ -8,7 +8,6 @@ import {
   GAME_OVER_BANNER_DURATION_MS,
   HALL_RANDOM_TIME_CONTROL_IDS,
   PIECES,
-  QUICK_PLAY_TIME_CONTROL_ID,
   THINKING_COACH_EXPLANATION,
   TIME_CONTROL_PRESETS,
   VALID_RECORD_VIEWS,
@@ -207,6 +206,21 @@ import {
   updateEvalBar,
   updateSummary
 } from "./app/ui-feedback-controller.js";
+import {
+  applyMultiplayerSocketState,
+  applyQueueStatusState,
+  configureMultiplayerDependencies,
+  createMultiplayerRoom,
+  getMultiplayerActorPayload,
+  getMultiplayerCoachState,
+  getMultiplayerDisplayName,
+  handleQuickPlayClick,
+  isRealtimeMultiplayerGame,
+  joinMatchmakingQueue,
+  joinMultiplayerRoom,
+  leaveMatchmakingQueue,
+  rejoinMultiplayerMatch
+} from "./app/multiplayer-controller.js";
 import * as dom from "./app/dom.js";
 
 const {
@@ -717,230 +731,8 @@ const resetBoardViewTo2D = () => {
   is3DMoveAnimating = false;
 };
 
-const isRealtimeMultiplayerGame = () =>
-  Boolean(state.multiplayer.roomId) && state.game?.actorType === "multiplayer";
-
 const isActiveGameState = (gameState) =>
   Boolean(gameState?.id && gameState?.hasStarted && !gameState?.isGameOver);
-
-const getMultiplayerDisplayName = () => {
-  if (isAuthenticated()) {
-    return getSessionDisplayName();
-  }
-
-  return state.guest?.displayName || state.guest?.name || "Guest";
-};
-
-const getMultiplayerActorPayload = () => {
-  if (isAuthenticated()) {
-    return {
-      actorType: "user",
-      userId: state.session.user.id,
-      guestId: null,
-      displayName: getSessionDisplayName()
-    };
-  }
-
-  return {
-    actorType: "guest",
-    userId: null,
-    guestId: state.guest?.guestId || null,
-    displayName: state.guest?.displayName || "Guest"
-  };
-};
-
-const getMultiplayerCoachState = (socketState) => {
-  if (socketState?.phase === "waiting") {
-    return {
-      message: `Room ${socketState.roomId} created. Waiting for opponent to join.`,
-      explanation: "Share this Room ID with a friend."
-    };
-  }
-
-  if (socketState?.game?.isGameOver) {
-    return {
-      message: "Multiplayer game complete.",
-      explanation: "Create or join another room to continue."
-    };
-  }
-
-  return {
-    message: "Live multiplayer is active.",
-    explanation:
-      socketState?.game?.turn === socketState?.youAre
-        ? "Your turn. Select a piece and make a move."
-        : "Waiting for opponent move."
-  };
-};
-
-const applyMultiplayerSocketState = (socketState) => {
-  if (!socketState?.game) {
-    return;
-  }
-
-  state.multiplayer.roomId = socketState.roomId || state.multiplayer.roomId;
-  state.multiplayer.color = socketState.youAre || state.multiplayer.color;
-  state.multiplayer.phase = socketState.phase || state.multiplayer.phase;
-
-  applyGameState(
-    {
-      ...socketState.game,
-      persistence: state.persistence
-    },
-    {
-      coachState: getMultiplayerCoachState(socketState)
-    }
-  );
-};
-
-const applyQueueStatusState = (queueState = {}) => {
-  state.multiplayer.queued = Boolean(queueState.queued);
-  state.multiplayer.queuePosition =
-    Number.isFinite(queueState.position) && queueState.position > 0
-      ? queueState.position
-      : null;
-  state.multiplayer.queueTimeControlId = state.multiplayer.queued
-    ? QUICK_PLAY_TIME_CONTROL_ID
-    : null;
-
-  if (state.multiplayer.queued) {
-    state.multiplayer.phase = "queued";
-  } else if (!state.multiplayer.roomId) {
-    state.multiplayer.phase = "idle";
-  }
-
-  renderMultiplayerLobby();
-  syncActionButtons();
-};
-
-const joinMatchmakingQueue = async () => {
-  if (state.multiplayer.roomId) {
-    setCoachMessage(
-      "Leave your current room before joining quick play.",
-      "Quick play queue is only available when you are not inside a multiplayer room."
-    );
-    return;
-  }
-
-  setBusy(true, "Joining Blitz 5 quick play queue...");
-
-  try {
-    const queueState = await emitMultiplayerEvent("queue:join", {
-      actor: getMultiplayerActorPayload()
-    });
-
-    setApiHealth(true);
-    applyQueueStatusState(queueState);
-    setCoachMessage(
-      "Queued for Blitz 5 quick play.",
-      "Matchmaking is live. We will drop you into a game as soon as another player queues."
-    );
-  } catch (error) {
-    setApiHealth(false);
-    setCoachMessage(error.message);
-  } finally {
-    setBusy(false);
-  }
-};
-
-const leaveMatchmakingQueue = async () => {
-  setBusy(true, "Leaving quick play queue...");
-
-  try {
-    const queueState = await emitMultiplayerEvent("queue:leave");
-
-    setApiHealth(true);
-    applyQueueStatusState(queueState);
-    setCoachMessage(
-      "Quick play queue canceled.",
-      "You can rejoin Blitz 5 quick play at any time."
-    );
-  } catch (error) {
-    setApiHealth(false);
-    setCoachMessage(error.message);
-  } finally {
-    setBusy(false);
-  }
-};
-
-const handleQuickPlayClick = async () => {
-  if (state.multiplayer.queued) {
-    await leaveMatchmakingQueue();
-    return;
-  }
-
-  await joinMatchmakingQueue();
-};
-
-const rejoinMultiplayerMatch = async () => {
-  if (!state.multiplayer.roomId) {
-    setCoachMessage("No active multiplayer room found.", "Create or join a room to start a live match.");
-    return;
-  }
-
-  state.view = "game";
-  renderView();
-  await launchSelectedBoard({
-    trigger: "Resume Game"
-  });
-  syncActionButtons();
-  setCoachMessage("Rejoined live match.", "You are back in the active multiplayer board.");
-};
-
-const createMultiplayerRoom = async () => {
-  setBusy(true, "Creating multiplayer room...");
-
-  try {
-    const socketState = await emitMultiplayerEvent("multiplayer:create", {
-      displayName: getMultiplayerDisplayName()
-    });
-
-    setApiHealth(true);
-    state.view = "game";
-    renderView();
-    await launchSelectedBoard({
-      trigger: "Create Room"
-    });
-    applyMultiplayerSocketState(socketState);
-  } catch (error) {
-    setApiHealth(false);
-    setCoachMessage(error.message);
-  } finally {
-    setBusy(false);
-  }
-};
-
-const joinMultiplayerRoom = async () => {
-  const roomId = multiplayerRoomIdInput?.value?.trim()?.toUpperCase() || "";
-
-  if (!roomId) {
-    setCoachMessage("Enter a Room ID first.", "Use the ID shared by the host player.");
-    return;
-  }
-
-  setBusy(true, `Joining room ${roomId}...`);
-
-  try {
-    const socketState = await emitMultiplayerEvent("multiplayer:join", {
-      roomId,
-      displayName: getMultiplayerDisplayName()
-    });
-
-    setApiHealth(true);
-    state.view = "game";
-    renderView();
-    await launchSelectedBoard({
-      trigger: "Join Game"
-    });
-    applyMultiplayerSocketState(socketState);
-  } catch (error) {
-    setApiHealth(false);
-    setCoachMessage(error.message);
-  } finally {
-    setBusy(false);
-  }
-};
-
 const beginMoveCycle = () => {
   state.activeMoveCycleId += 1;
   state.activeCoachStageRank = 0;
@@ -2750,6 +2542,38 @@ configureHallActionsDependencies({
     applyQueueStatusState,
     persistLobbyMode,
     renderMultiplayerLobby
+  }
+});
+
+configureMultiplayerDependencies({
+  state,
+  dom: {
+    multiplayerRoomIdInput
+  },
+  api: {
+    request
+  },
+  realtime: {
+    emitMultiplayerEvent,
+    ensureMultiplayerSocket
+  },
+  auth: {
+    isAuthenticated,
+    getSessionDisplayName
+  },
+  ui: {
+    renderMultiplayerLobby,
+    renderView,
+    setApiHealth,
+    setBusy,
+    setCoachMessage,
+    syncActionButtons
+  },
+  game: {
+    applyGameState,
+    launchSelectedBoard,
+    startNewGame,
+    enterGameView
   }
 });
 
