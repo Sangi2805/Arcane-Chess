@@ -45,6 +45,12 @@ import {
   request
 } from "./app/api.js";
 import {
+  emitMultiplayerEvent,
+  ensureMultiplayerSocket,
+  initializeMultiplayerRealtime,
+  leaveMultiplayerRoom
+} from "./app/realtime.js";
+import {
   getSavedView,
   hasSeenIntroSplash,
   markIntroSplashSeen,
@@ -1180,161 +1186,6 @@ const applyMultiplayerSocketState = (socketState) => {
       coachState: getMultiplayerCoachState(socketState)
     }
   );
-};
-
-const ensureMultiplayerSocket = () => {
-  if (state.multiplayer.socket) {
-    return state.multiplayer.socket;
-  }
-
-  if (typeof window.io !== "function") {
-    setCoachMessage("Socket client failed to load.", "Reload the page and try again.");
-    return null;
-  }
-
-  const socket = window.io(window.location.origin, {
-    transports: ["websocket", "polling"]
-  });
-
-  socket.on("connect", () => {
-    console.log("CLIENT CONNECTED:", socket.id);
-    state.multiplayer.connected = true;
-    renderMultiplayerLobby();
-    syncActionButtons();
-    void emitMultiplayerEvent("queue:status-request")
-      .then((queueState) => {
-        applyQueueStatusState(queueState);
-      })
-      .catch(() => {
-        applyQueueStatusState({ queued: false });
-      });
-  });
-
-  socket.on("disconnect", () => {
-    state.multiplayer.connected = false;
-    applyQueueStatusState({ queued: false });
-    renderMultiplayerLobby();
-    syncActionButtons();
-  });
-
-  socket.on("queue:status", (queueState) => {
-    applyQueueStatusState(queueState);
-  });
-
-  socket.on("queue:error", (payload = {}) => {
-    setCoachMessage(payload.message || "Quick play queue request failed.");
-  });
-
-  socket.on("match:found", async (payload = {}) => {
-    state.multiplayer.queued = false;
-    state.multiplayer.queuePosition = null;
-    state.multiplayer.queueTimeControlId = null;
-    state.multiplayer.phase = "active";
-
-    state.view = "game";
-    renderView();
-    await launchSelectedBoard({
-      trigger: "Quick Play"
-    });
-    renderMultiplayerLobby();
-    syncActionButtons();
-
-    setCoachMessage(
-      `Match found: ${payload.opponentName || "Opponent"}`,
-      "Blitz 5 duel ready. Pieces are loading now."
-    );
-  });
-
-  socket.on("multiplayer:state", (socketState) => {
-    if (state.lobbyMode !== "multiplayer" && !state.multiplayer.roomId) {
-      return;
-    }
-
-    setApiHealth(true);
-    applyMultiplayerSocketState(socketState);
-
-    if (socketState?.event === "opponent-disconnected") {
-      const remainingSeconds = Number.isFinite(Date.parse(socketState.reconnectDeadlineAt || ""))
-        ? Math.max(0, Math.ceil((Date.parse(socketState.reconnectDeadlineAt) - Date.now()) / 1000))
-        : 60;
-      setCoachMessage(
-        "Opponent disconnected.",
-        `Waiting ${remainingSeconds}s for reconnection. If they do not return, you win by timeout.`
-      );
-    }
-
-    if (socketState?.event === "disconnect-forfeit") {
-      setCoachMessage(
-        "Reconnect window expired.",
-        "Your opponent did not return in time. The game is awarded by timeout."
-      );
-    }
-
-    if (socketState?.event === "draw-offered") {
-      if (socketState?.offeredBy && socketState.offeredBy !== socketState?.youAre) {
-        setCoachMessage(
-          "Opponent offered a draw.",
-          "Click Offer Draw to accept, or make a move to continue the game."
-        );
-      } else {
-        setCoachMessage(
-          "Draw offer sent.",
-          "Waiting for your opponent to accept, or they can decline by moving."
-        );
-      }
-    }
-
-    if (socketState?.event === "move" && socketState?.drawOfferDeclinedByMove) {
-      setCoachMessage(
-        "Draw offer declined.",
-        "A move was played, so the game continues."
-      );
-    }
-
-    setBusy(false);
-  });
-
-  state.multiplayer.socket = socket;
-  renderMultiplayerLobby();
-  syncActionButtons();
-
-  return socket;
-};
-
-const emitMultiplayerEvent = (eventName, payload = {}) => {
-  const socket = ensureMultiplayerSocket();
-
-  if (!socket) {
-    return Promise.reject(new Error("Multiplayer socket is unavailable."));
-  }
-
-  return new Promise((resolve, reject) => {
-    socket.timeout(7000).emit(eventName, payload, (error, response) => {
-      if (error) {
-        reject(new Error("Multiplayer request timed out."));
-        return;
-      }
-
-      if (!response?.ok) {
-        reject(new Error(response?.message || "Multiplayer request failed."));
-        return;
-      }
-
-      resolve(response.state || null);
-    });
-  });
-};
-
-const leaveMultiplayerRoom = () => {
-  if (!state.multiplayer.socket || !state.multiplayer.roomId) {
-    return;
-  }
-
-  state.multiplayer.socket.emit("multiplayer:leave");
-  state.multiplayer.roomId = null;
-  state.multiplayer.color = null;
-  state.multiplayer.phase = "idle";
-  renderMultiplayerLobby();
 };
 
 const leaveCompletedMultiplayerGameIfNeeded = () => {
@@ -6639,6 +6490,89 @@ const handleBoardModeToggle = (mode) => {
 if (toggle2dBtn) toggle2dBtn.addEventListener("click", () => handleBoardModeToggle("2d"));
 if (toggle3dBtn) toggle3dBtn.addEventListener("click", () => handleBoardModeToggle("3d"));
 if (immersiveExitButton) immersiveExitButton.addEventListener("click", switchTo2D);
+
+initializeMultiplayerRealtime({
+  onConnected: () => {
+    renderMultiplayerLobby();
+    syncActionButtons();
+  },
+  onDisconnected: () => {
+    applyQueueStatusState({ queued: false });
+    renderMultiplayerLobby();
+    syncActionButtons();
+  },
+  onSocketUnavailable: () => {
+    setCoachMessage("Socket client failed to load.", "Reload the page and try again.");
+  },
+  onQueueStatus: (queueState) => {
+    applyQueueStatusState(queueState);
+  },
+  onQueueError: (payload = {}) => {
+    setCoachMessage(payload.message || "Quick play queue request failed.");
+  },
+  onMatchFound: async (payload = {}) => {
+    state.view = "game";
+    renderView();
+    await launchSelectedBoard({
+      trigger: "Quick Play"
+    });
+    renderMultiplayerLobby();
+    syncActionButtons();
+
+    setCoachMessage(
+      `Match found: ${payload.opponentName || "Opponent"}`,
+      "Blitz 5 duel ready. Pieces are loading now."
+    );
+  },
+  onMultiplayerState: (socketState) => {
+    if (state.lobbyMode !== "multiplayer" && !state.multiplayer.roomId) {
+      return;
+    }
+
+    setApiHealth(true);
+    applyMultiplayerSocketState(socketState);
+
+    if (socketState?.event === "opponent-disconnected") {
+      const remainingSeconds = Number.isFinite(Date.parse(socketState.reconnectDeadlineAt || ""))
+        ? Math.max(0, Math.ceil((Date.parse(socketState.reconnectDeadlineAt) - Date.now()) / 1000))
+        : 60;
+      setCoachMessage(
+        "Opponent disconnected.",
+        `Waiting ${remainingSeconds}s for reconnection. If they do not return, you win by timeout.`
+      );
+    }
+
+    if (socketState?.event === "disconnect-forfeit") {
+      setCoachMessage(
+        "Reconnect window expired.",
+        "Your opponent did not return in time. The game is awarded by timeout."
+      );
+    }
+
+    if (socketState?.event === "draw-offered") {
+      if (socketState?.offeredBy && socketState.offeredBy !== socketState?.youAre) {
+        setCoachMessage(
+          "Opponent offered a draw.",
+          "Click Offer Draw to accept, or make a move to continue the game."
+        );
+      } else {
+        setCoachMessage(
+          "Draw offer sent.",
+          "Waiting for your opponent to accept, or they can decline by moving."
+        );
+      }
+    }
+
+    if (socketState?.event === "move" && socketState?.drawOfferDeclinedByMove) {
+      setCoachMessage(
+        "Draw offer declined.",
+        "A move was played, so the game continues."
+      );
+    }
+
+    setBusy(false);
+  }
+});
 
 initialize();
 
