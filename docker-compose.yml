@@ -1,7 +1,7 @@
 services:
   arcane-chess:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
     container_name: arcane-chess-app
     restart: unless-stopped
@@ -13,7 +13,7 @@ services:
       - TRUST_PROXY=true
       - SESSION_COOKIE_SECURE=false
     env_file:
-      - ../.env
+      - ./.env
     depends_on:
       mongodb:
         condition: service_started
