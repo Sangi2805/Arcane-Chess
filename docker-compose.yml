@@ -10,10 +10,13 @@ services:
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/arcane_chess
+      - CLIENT_ORIGIN=http://localhost:3000
       - TRUST_PROXY=true
       - SESSION_COOKIE_SECURE=false
     env_file:
-      - ./.env
+      - ./.env.example
     depends_on:
       mongodb:
         condition: service_started
