@@ -1,0 +1,44 @@
+const mongoose = require("mongoose");
+
+const userSessionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true
+    },
+    tokenHash: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true
+    },
+    expiresAt: {
+      type: Date,
+      required: true
+    },
+    lastSeenAt: {
+      type: Date,
+      default: Date.now
+    },
+    userAgent: {
+      type: String,
+      default: null
+    },
+    ipAddress: {
+      type: String,
+      default: null
+    }
+  },
+  {
+    timestamps: true,
+    versionKey: false
+  }
+);
+
+userSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+module.exports =
+  mongoose.models.UserSession ||
+  mongoose.model("UserSession", userSessionSchema);

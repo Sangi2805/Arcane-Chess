@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arcane Chess</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cinzel+Decorative:wght@400&family=IM+Fell+English:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles-override.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="./3d/ArcaneBoardV2.js"></script>
+  </head>
+  <body>
+    <div id="ss-intro-splash">
+  <div class="intro-radial"></div>
+  <div class="intro-sparks" id="intro-sparks"></div>
+  <div class="intro-ground"></div>
+  <div class="intro-body">
+    <div class="intro-guardian-row">
+      <img src="assets/guardian.svg" class="intro-guardian" width="56" height="128"/>
+      <div class="intro-crest">
+        <svg width="108" height="108" viewBox="0 0 108 108">
+          <circle cx="54" cy="54" r="52" fill="#0a0d12"/>
+          <circle cx="54" cy="54" r="48" fill="none" stroke="#c9a84c" stroke-width="0.8" opacity="0.5"/>
+          <path d="M30 22 L36 32 L54 26 L72 32 L78 22 L74 38 L34 38 Z" fill="#c9a84c" opacity="0.8"/>
+          <text x="10" y="78" font-family="Georgia,serif" font-size="62" fill="#c9a84c" opacity="0.95">S</text>
+          <text x="38" y="78" font-family="Georgia,serif" font-size="62" fill="#c9a84c" opacity="0.3">S</text>
+          <path d="M28 88 Q54 94 80 88" fill="none" stroke="#c9a84c" stroke-width="0.8" opacity="0.5"/>
+        </svg>
+      </div>
+      <img src="assets/guardian.svg" class="intro-guardian mirrored" width="56" height="128"/>
+    </div>
+    <p class="intro-presented">A PRESENTATION BY</p>
+    <h1 class="intro-title">SS GAMES</h1>
+    <div class="intro-divider"></div>
+    <p class="intro-tagline">where strategy meets the arcane</p>
+    <p class="intro-welcome">WELCOME, CHALLENGER</p>
+    <p class="intro-skip">PRESS ENTER TO CONTINUE</p>
+  </div>
+</div>
+    <main class="shell">
+      <section class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Arcane Chess · AI 6001</p>
+          <div class="hero-title-group">
+            <h1>Arcane Chess</h1>
+            <!-- Removed "Challenge Stockfish" subtitle -->
+            <p class="hero-subtitle" id="board-mode-label"></p>
+          </div>
+          <div class="board-mode-toggle">
+            <button id="toggle-2d" class="mode-btn mode-btn-active" type="button">2D</button>
+            <button id="toggle-3d" class="mode-btn" type="button">3D</button>
+          </div>
+        </div>
+
+        <div class="hero-challenge">
+          <span class="label hero-challenge-label">Dark Academia Edition</span>
+          <p class="hero-challenge-text">Masters AI</p>
+        </div>
+      </section>
+
+      <section id="auth-view" class="auth-view">
+        <article class="panel auth-panel">
+          <div class="auth-panel-copy">
+            <p class="eyebrow">Arcane Chess</p>
+            <h2>Welcome back</h2>
+            <p class="panel-subtitle">Sign in to reach the hall, then open a game.</p>
+          </div>
+
+          <div class="cp-acct-strip">
+            <div>
+              <strong id="auth-session-heading" class="cp-acct-name">Sign in or create an account</strong>
+              <span id="auth-session-copy" class="cp-acct-meta">Accounts sync unfinished and completed games beyond this browser.</span>
+            </div>
+              <!-- Removed duplicated auth pill -->
+              <!-- <span id="auth-session-pill" class="pill">Guest</span> -->
+          </div>
+
+          <div id="auth-guest-view" class="cp-auth-form">
+            <label class="cp-field">
+              <span>Email or Username</span>
+              <input
+                id="auth-email"
+                type="email"
+                inputmode="email"
+                autocomplete="username"
+                autocapitalize="none"
+                autocorrect="off"
+                placeholder="mage@arcanechess.dev"
+              />
+            </label>
+            <label class="cp-field">
+              <span>Password</span>
+              <input
+                id="auth-password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="At least 8 characters"
+              />
+            </label>
+              <label class="cp-field signup-only hidden">
+              <span>Display Name</span>
+              <input
+                id="auth-display-name"
+                type="text"
+                autocomplete="nickname"
+                maxlength="40"
+                placeholder="Used when creating an account"
+              />
+            </label>
+            <div id="auth-error-message" class="auth-error-message hidden" role="alert" aria-live="polite"></div>
+            <div class="cp-row">
+              <button id="login-button" class="button-secondary" type="button">Login</button>
+              <button id="register-button" type="button">Create Account</button>
+            </div>
+            <div class="cp-row">
+              <button id="auth-continue-guest-button" class="button-secondary" type="button">
+                Continue as Guest
+              </button>
+            </div>
+          </div>
+
+          <div id="auth-user-view" class="hidden">
+            <p class="card-copy">Signed in as <strong id="auth-user-display">Arcane Player</strong></p>
+            <p id="auth-user-email" class="hall-signed-in-line"></p>
+            <button id="logout-button" class="button-secondary" type="button" style="width:100%">
+              Log Out
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section class="play-area">
+        <div id="lobby-view">
+        <article class="panel controls-panel">
+
+          <div class="hall-hero-heading">
+            <div class="hall-hero-topline">
+              <p class="label">Arcane Command Center</p>
+              <div class="hall-hero-actions">
+                <button id="ambient-audio-toggle" class="button-secondary button-small audio-toggle-button" type="button">
+                  Mute Music
+                </button>
+                <button id="hall-logout-button" class="button-secondary button-small hidden" type="button">
+                  Log Out
+                </button>
+              </div>
+            </div>
+            <div class="hall-hero-copy">
+              <h2>HALL — <span id="guest-name">Playing as Guest</span></h2>
+              <p id="guest-subtitle" class="hall-signed-in-line">Guest mode active</p>
+              <p class="card-copy">Choose your route, prepare a duel, or jump into your archive.</p>
+            </div>
+          </div>
+
+          <!-- Hidden compatibility elements — app.js needs these IDs in the DOM -->
+          <span id="guest-meta" class="hidden" aria-hidden="true"></span>
+
+          <section class="hall-main-grid" aria-label="Hall command cards">
+          <article class="lobby-card hall-card hall-card-solo">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Solo Play</span>
+                <strong>Play vs Stockfish</strong>
+              </div>
+              <span class="pill">Practice</span>
+            </div>
+            <p class="lobby-note">Tune your setup and launch a solo duel against Stockfish.</p>
+
+          <div class="cp-row hall-stockfish-controls">
+            <span class="cp-ilabel">Difficulty</span>
+            <select id="difficulty-select">
+              <option value="easy">Easy</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="hard">Hard</option>
+              <option value="grandmaster">Grand Master</option>
+            </select>
+          </div>
+
+          <!-- Time Control -->
+          <div class="cp-irow hall-time-control">
+            <span class="cp-ilabel">Time Control</span>
+            <select id="time-control-select">
+              <optgroup label="Solo Practice">
+                <option value="untimed">Untimed</option>
+              </optgroup>
+              <optgroup label="Bullet">
+                <option value="bullet-30">30 sec</option>
+                <option value="bullet-1">1 min</option>
+                <option value="bullet-1-1">1 | 1</option>
+                <option value="bullet-2-1">2 | 1</option>
+              </optgroup>
+              <optgroup label="Blitz">
+                <option value="blitz-3">3 min</option>
+                <option value="blitz-3-2">3 | 2</option>
+                <option value="blitz-5">5 min</option>
+                <option value="blitz-5-2">5 | 2</option>
+                <option value="blitz-5-5">5 | 5</option>
+              </optgroup>
+              <optgroup label="Rapid">
+                <option value="rapid-10">10 min</option>
+                <option value="rapid-10-5">10 | 5</option>
+                <option value="rapid-15-10">15 | 10</option>
+                <option value="rapid-20">20 min</option>
+                <option value="rapid-30">30 min</option>
+                <option value="rapid-60">60 min</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- Play As -->
+          <div class="hall-color-control">
+            <div class="cp-ilabel" style="margin-bottom:5px">Play As</div>
+            <fieldset class="cp-pa-row">
+              <legend style="position:absolute;width:1px;height:1px;overflow:hidden">Play As</legend>
+              <label class="cp-pa-opt">
+                <input type="radio" name="player-color" value="white" checked />
+                <span>White</span>
+              </label>
+              <label class="cp-pa-opt">
+                <input type="radio" name="player-color" value="black" />
+                <span>Black</span>
+              </label>
+            </fieldset>
+          </div>
+
+          <button id="new-game-button" class="hall-card-primary-btn" type="button">Start Duel</button>
+          </article>
+
+          <article class="lobby-card hall-card hall-card-multiplayer">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Multiplayer Hall</span>
+                <strong>Create or join a room</strong>
+              </div>
+              <span class="pill">Live</span>
+            </div>
+            <p class="lobby-note">Open a room instantly or join via Room ID for a live duel.</p>
+
+            <div class="cp-mode-switch hall-mode-switch" role="tablist" aria-label="Play route">
+              <button
+                id="multiplayer-lobby-button"
+                class="cp-mode-btn cp-mode-btn-active"
+                type="button"
+                aria-pressed="true"
+              >
+                Multiplayer Hall
+              </button>
+          </div>
+
+          <section id="multiplayer-gateway" class="lobby-card hidden" aria-live="polite">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Entry Layer</span>
+                <strong>Choose your route</strong>
+              </div>
+              <span class="pill">Preview</span>
+            </div>
+            <p class="card-copy">
+              Sign in to unlock live duels, invites, and cross-device PvP history. Guests can
+              stay in the solo archive until they are ready to enter the hall.
+            </p>
+            <div class="lobby-entry-actions">
+              <button id="gateway-signin-button" type="button">Sign In</button>
+              <button id="gateway-create-button" class="button-secondary" type="button">
+                Create Account
+              </button>
+              <button id="gateway-guest-button" class="button-secondary" type="button">
+                Continue as Guest
+              </button>
+            </div>
+          </section>
+
+          <section id="multiplayer-dashboard" class="multiplayer-dashboard hall-multiplayer-dashboard hidden" aria-live="polite">
+            <article class="lobby-card">
+              <div class="lobby-card-header">
+                <div class="lobby-heading">
+                  <span class="label">Command Hall</span>
+                  <strong>Room Controls</strong>
+                </div>
+              </div>
+              <p class="card-copy">
+                Create a private room for a friend, or jump into Blitz 5 quick play.
+              </p>
+              <div class="cp-row" style="margin-top: 10px">
+                <button id="mp-create-room-button" type="button">Create Room</button>
+                <button id="mp-create-game-button" class="button-secondary" type="button">Quick Play · Blitz 5</button>
+                <button id="mp-rejoin-game-button" class="button-secondary" type="button">Rejoin Match</button>
+              </div>
+              <label class="cp-field" style="margin-top: 10px">
+                <span>Join by Room ID</span>
+                <input
+                  id="mp-room-id-input"
+                  type="text"
+                  maxlength="16"
+                  placeholder="Enter Room ID"
+                />
+              </label>
+              <div class="cp-row" style="margin-top: 8px">
+                <button
+                  id="mp-join-game-button"
+                  class="button-secondary"
+                  type="button"
+                >
+                  Join Game
+                </button>
+              </div>
+              <p id="mp-room-id-label" class="lobby-note" style="margin-top: 8px">
+                Room: -
+              </p>
+              <p id="mp-connection-status" class="lobby-note" style="margin-top: 4px">
+                Multiplayer socket: disconnected.
+              </p>
+              
+            </article>
+
+            <article class="lobby-card">
+              <div class="lobby-card-header">
+                <div class="lobby-heading">
+                  <span class="label">Hall of Players</span>
+                  <strong>Presence</strong>
+                </div>
+                <span id="multiplayer-presence-pill" class="pill">Preview</span>
+              </div>
+              <p id="multiplayer-status-copy" class="card-copy">
+                Signed-in players will appear here once presence tracking is connected.
+              </p>
+              <div id="multiplayer-player-list" class="lobby-list"></div>
+            </article>
+
+            <article class="lobby-card">
+              <div class="lobby-card-header">
+                <div class="lobby-heading">
+                  <span class="label">Invites</span>
+                  <strong>Challenge Desk</strong>
+                </div>
+                <span class="pill">Fair Play</span>
+              </div>
+              <p class="lobby-coach-rule">
+                Arcane Coach should stay silent during live PvP and return after the match ends.
+              </p>
+              <div id="multiplayer-invite-list" class="lobby-list"></div>
+            </article>
+          </section>
+          </article>
+
+          <section class="lobby-card hall-card hall-card-archive hall-archive-card" aria-live="polite">
+            <div class="lobby-card-header">
+              <div class="lobby-heading">
+                <span class="label">Archive</span>
+                <strong>Resume &amp; Match History</strong>
+              </div>
+              <span class="pill">Library</span>
+            </div>
+            <p class="lobby-note">Jump directly to saved games or match history in the archive panel.</p>
+            <div class="lobby-actions">
+              <button id="hall-resume-button" class="button-secondary" type="button">Resume Last Game</button>
+              <button id="hall-history-button" class="button-secondary" type="button">View Past Duels</button>
+            </div>
+            <div class="hall-random-duel-strip" aria-live="polite">
+              <p class="label">Arcane Wheel</p>
+              <strong style="font-family:'Cinzel',serif; font-size:14px; color:rgba(255,255,255,0.85); display:block; margin-bottom:4px;">
+                Spin a Duel
+              </strong>
+              <p style="font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:10px; line-height:1.5;">
+                Spin to get a random time control and launch instantly.
+              </p>
+              <button id="hall-random-time-control-button" class="button-secondary hall-random-time-control-button" type="button">
+                <span class="hall-random-wheel-orbit" aria-hidden="true"></span>
+                <span class="hall-random-wheel-core">Spin a Duel</span>
+              </button>
+              <p id="hall-random-time-label" class="lobby-note">Selected: 5 min</p>
+            </div>
+          </section>
+          </section>
+
+        </article>
+        </div>
+
+        <div id="game-view">
+        <article class="panel board-panel">
+          <button id="back-to-hall-button" class="button-secondary button-small board-back-button" type="button">
+            Back to Hall
+          </button>
+          <div class="board-stage">
+              <div class="board-player-row" data-player-row="top">
+                <div class="player-row-copy">
+                  <strong id="top-clock-label" class="player-row-name">Stockfish</strong>
+                  <span id="top-clock-side" class="player-row-meta">Black pieces</span>
+                </div>
+                <div id="top-clock-card" class="clock-display">
+                  <strong id="top-clock-time" class="clock-time">--:--</strong>
+                  <span id="top-clock-meta" class="clock-meta hidden">Clock idle</span>
+                </div>
+              </div>
+
+              <div class="board-shell-wrap">
+                <div class="eval-bar" id="eval-bar">
+                  <div class="eval-bar-black" id="eval-bar-black" style="flex:1"></div>
+                  <div class="eval-bar-white" id="eval-bar-white" style="flex:1"></div>
+                </div>
+                <div class="board-shell-anchor">
+                  <div id="wizard-side" aria-hidden="true">
+                    <svg
+                      id="coach-wizard-svg"
+                      class="coach-wizard-svg st-idle"
+                      viewBox="0 0 220 220"
+                      aria-hidden="true"
+                    >
+                      <defs>
+                        <linearGradient id="wizard-hat-grad" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stop-color="#2e2a43" />
+                          <stop offset="100%" stop-color="#181425" />
+                        </linearGradient>
+                        <radialGradient id="wizard-orb-grad" cx="50%" cy="38%" r="65%">
+                          <stop offset="0%" stop-color="#fff6dc" />
+                          <stop offset="100%" stop-color="#c7a06e" />
+                        </radialGradient>
+                      </defs>
+
+                      <g class="wizard-particles" aria-hidden="true">
+                        <circle cx="36" cy="56" r="6" />
+                        <circle cx="182" cy="62" r="6" />
+                        <circle cx="28" cy="134" r="6" />
+                        <circle cx="192" cy="142" r="6" />
+                        <circle cx="52" cy="192" r="6" />
+                        <circle cx="170" cy="188" r="6" />
+                      </g>
+
+                      <g id="wizard-think-bubbles" class="wizard-think-bubbles" aria-hidden="true">
+                        <circle cx="164" cy="54" r="6" />
+                        <circle cx="182" cy="36" r="8" />
+                        <circle cx="202" cy="18" r="10" />
+                      </g>
+
+                      <g id="wizard-figure" class="wizard-figure">
+                        <g id="wizard-arm-left" class="wizard-arm wizard-arm-left" aria-hidden="true">
+                          <path d="M72 170 Q48 154 44 128" fill="none" stroke="#8a6b4e" stroke-width="9" stroke-linecap="round" />
+                        </g>
+                        <g id="wizard-arm-right" class="wizard-arm wizard-arm-right" aria-hidden="true">
+                          <path d="M148 170 Q172 154 176 128" fill="none" stroke="#8a6b4e" stroke-width="9" stroke-linecap="round" />
+                        </g>
+
+                        <g id="wizard-hat-group" class="wizard-hat-group">
+                          <path d="M46 92 L110 24 L174 92 Z" fill="url(#wizard-hat-grad)" stroke="#4f4768" stroke-width="3" />
+                          <path d="M64 95 H156" stroke="#7f739f" stroke-width="4" stroke-linecap="round" />
+                        </g>
+
+                        <g id="wizard-face-group" class="wizard-face-group">
+                          <ellipse cx="110" cy="132" rx="56" ry="50" fill="#d4c0a2" stroke="#9d886b" stroke-width="3" />
+                          <ellipse cx="87" cy="130" rx="16" ry="12" fill="#f4e4cc" />
+                          <ellipse cx="133" cy="130" rx="16" ry="12" fill="#f4e4cc" />
+
+                          <path id="coach-wizard-brow-left" d="M70 112 Q87 104 100 112" fill="none" stroke="#2f2518" stroke-width="4" stroke-linecap="round" />
+                          <path id="coach-wizard-brow-right" d="M120 112 Q133 104 150 112" fill="none" stroke="#2f2518" stroke-width="4" stroke-linecap="round" />
+
+                          <circle cx="88" cy="130" r="7" fill="#f7f2e7" />
+                          <circle cx="132" cy="130" r="7" fill="#f7f2e7" />
+                          <circle id="coach-wizard-iris-left" cx="88" cy="130" r="4" fill="#6abcf5" />
+                          <circle id="coach-wizard-iris-right" cx="132" cy="130" r="4" fill="#6abcf5" />
+
+                          <path id="coach-wizard-mouth" d="M92 156 Q110 168 128 156" fill="none" stroke="#5e4130" stroke-width="4" stroke-linecap="round" />
+
+                          <ellipse class="wizard-sweat-drop wizard-sweat-drop-left" cx="55" cy="118" rx="3" ry="5" />
+                          <ellipse class="wizard-sweat-drop wizard-sweat-drop-right" cx="164" cy="120" rx="3" ry="5" />
+                        </g>
+
+                        <circle id="coach-wizard-orb" cx="110" cy="195" r="13" fill="url(#wizard-orb-grad)" stroke="#f0c269" stroke-width="2" />
+                      </g>
+                    </svg>
+                    <span id="wizard-state-label" class="wizard-state-label">IDLE</span>
+                  </div>
+
+                  <div class="board-shell">
+                  <div id="board-3d" class="board-3d hidden" aria-hidden="true"></div>
+                  <div id="board" class="board" aria-label="Arcane Chess Board"></div>
+                  <div id="game-end-overlay" class="game-end-overlay hidden" aria-hidden="true" aria-live="assertive"></div>
+                  <div
+                    id="game-over-banner"
+                    class="game-over-banner hidden"
+                    aria-live="polite"
+                    aria-hidden="true"
+                  >
+                    <strong id="game-over-title">Game Over</strong>
+                    <span id="game-over-message">Result pending.</span>
+                  </div>
+                  <div id="promotion-panel" class="promotion-panel promotion-popover hidden">
+                    <span class="label">Choose Promotion</span>
+                    <div class="promotion-actions">
+                      <button type="button" class="button-secondary" data-promotion="q">Queen</button>
+                      <button type="button" class="button-secondary" data-promotion="r">Rook</button>
+                      <button type="button" class="button-secondary" data-promotion="b">Bishop</button>
+                      <button type="button" class="button-secondary" data-promotion="n">Knight</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                id="board-feedback-banner"
+                class="board-feedback hidden"
+                aria-live="polite"
+                aria-hidden="true"
+              >
+                <div class="board-feedback-copy">
+                  <strong id="board-feedback-title">Board Status</strong>
+                  <span id="board-feedback-message">The duel is underway.</span>
+                </div>
+                <div class="board-feedback-actions">
+                  <button
+                    id="claim-draw-button"
+                    type="button"
+                    class="button-secondary button-small hidden"
+                  >
+                    Claim Draw
+                  </button>
+                  <button
+                    id="continue-play-button"
+                    type="button"
+                    class="button-secondary button-small hidden"
+                  >
+                    Continue Play
+                  </button>
+                </div>
+              </div>
+              </div>
+
+              <div class="board-player-row" data-player-row="bottom">
+                <div class="player-row-copy">
+                  <strong id="bottom-clock-label" class="player-row-name">You</strong>
+                  <span id="bottom-clock-side" class="player-row-meta">White pieces</span>
+                </div>
+                <div id="bottom-clock-card" class="clock-display">
+                  <strong id="bottom-clock-time" class="clock-time">--:--</strong>
+                  <span id="bottom-clock-meta" class="clock-meta hidden">Clock idle</span>
+                </div>
+              </div>
+          </div>
+        </article>
+
+        <aside class="support-column">
+          <article id="coach-panel" class="status-group coach-panel" aria-live="polite">
+            <div class="coach-avatar-stage">
+              <div class="coach-avatar-frame" aria-hidden="true">
+                <div class="coach-avatar-effects">
+                  <span class="coach-avatar-halo"></span>
+                  <span class="coach-rune-ring coach-rune-ring-primary"></span>
+                  <span class="coach-rune-ring coach-rune-ring-secondary"></span>
+                  <span class="coach-avatar-scan"></span>
+                  <span class="coach-avatar-flare"></span>
+                </div>
+                <div class="coach-avatar">
+                  <span class="coach-avatar-orb-placeholder" aria-hidden="true"></span>
+                </div>
+              </div>
+            </div>
+            <div class="coach-dialog">
+              <div class="coach-heading">
+                <span class="label">Coach Channel</span>
+                <strong class="coach-title">Arcane Coach</strong>
+                <span id="status-text" class="coach-status-line">Loading game...</span>
+              </div>
+              <div class="coach-speech">
+                <div class="coach-bubble">
+                  <div class="coach-bubble-copy">
+                    <div class="coach-message-row">
+                      <strong id="feedback-text" class="coach-message">Preparing the board.</strong>
+                      <span id="feedback-thinking" class="coach-thinking hidden" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </span>
+                    </div>
+                    <p id="feedback-explanation" class="coach-explanation">
+                      Your coach will review each completed move against Stockfish.
+                    </p>
+                  </div>
+                  <div class="coach-footer">
+                    <span id="feedback-classification" class="feedback-badge hidden">
+                      good
+                    </span>
+                    <button
+                      id="feedback-why-toggle"
+                      class="coach-why-toggle hidden"
+                      type="button"
+                      aria-controls="feedback-why-lines"
+                      aria-expanded="false"
+                    >
+                      Why?
+                    </button>
+                    <p id="feedback-suggestion" class="coach-suggestion hidden">
+                      Better move: Nf3
+                    </p>
+                  </div>
+                  <div class="coach-hint-actions">
+                    <button id="hint-button" class="button-secondary" type="button">Hint</button>
+                    <button id="hint-why-button" class="button-secondary hint-why-button hidden" type="button" disabled>
+                      Why?
+                    </button>
+                  </div>
+                  <p id="hint-why-text" class="hint-why-text hidden"></p>
+                  <div id="feedback-why-lines" class="coach-why-lines hidden" aria-live="polite"></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel moves-panel">
+            <div class="controls-header moves-panel-header">
+              <div class="moves-panel-heading">
+                <h2>Move Chronicle</h2>
+                <p class="panel-subtitle moves-panel-subtitle">
+                  Live turns, saved duels, and finished match history.
+                </p>
+              </div>
+              <div class="moves-panel-header-actions">
+                <span id="api-health" class="pill">API</span>
+              </div>
+            </div>
+
+            <section class="game-command-strip" aria-live="polite">
+              <div class="game-actions game-screen-actions">
+                <button id="save-game-button" class="button-secondary" type="button">Save Game</button>
+                <button id="offer-draw-button" class="button-secondary" type="button">Offer Draw</button>
+                <button id="resign-button" class="button-secondary button-danger" type="button">Resign</button>
+              </div>
+              <div id="immersive-controls-host" class="immersive-controls-host hidden" aria-hidden="true"></div>
+            </section>
+
+            <div class="record-tabs" role="tablist" aria-label="Game records">
+              <button
+                type="button"
+                class="record-tab active"
+                data-record-view="moves"
+              >
+                Moves
+              </button>
+              <button type="button" class="record-tab" data-record-view="saves">
+                Resume
+              </button>
+              <button type="button" class="record-tab" data-record-view="history">
+                History
+              </button>
+            </div>
+
+            <section class="record-view" data-view-panel="moves">
+              <div id="move-list" class="move-list"></div>
+            </section>
+
+            <section class="record-view hidden" data-view-panel="saves">
+              <div class="record-section-header">
+                <span class="label">Resume Game</span>
+                <span id="saved-games-count" class="section-count">0 saved</span>
+              </div>
+              <div id="saved-games-list" class="record-list"></div>
+            </section>
+
+            <section class="record-view hidden" data-view-panel="history">
+              <div class="record-section-header">
+                <span class="label">Completed Games</span>
+                <span id="history-count" class="section-count">0 recorded</span>
+              </div>
+              <div id="history-list" class="record-list"></div>
+            </section>
+          </article>
+        </aside>
+        </div>
+      </section>
+
+      <div id="immersive-hud" class="immersive-hud" aria-hidden="true">
+        <div class="immersive-controls">
+          <div class="game-actions immersive-control-row">
+            <button
+              id="immersive-fullscreen-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              Fullscreen
+            </button>
+            <button
+              id="immersive-exit-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              Return to 2D
+            </button>
+            <button
+              id="immersive-new-game-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              New Game
+            </button>
+            <button
+              id="immersive-offer-draw-button"
+              class="button-secondary button-small"
+              type="button"
+            >
+              Offer Draw
+            </button>
+            <button
+              id="immersive-resign-button"
+              class="button-secondary button-small button-danger"
+              type="button"
+            >
+              Resign
+            </button>
+          </div>
+        </div>
+
+        <div class="immersive-status" role="status" aria-live="polite">
+          <strong id="immersive-status-heading" class="immersive-status-heading">
+            Preparing immersive board...
+          </strong>
+          <span id="immersive-status-meta" class="immersive-status-meta">
+            The duel summary will appear here.
+          </span>
+        </div>
+      </div>
+    </main>
+
+    <div id="history-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-history></div>
+      <div
+        class="modal-card panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-detail-title"
+      >
+        <div class="controls-header modal-header">
+          <h2 id="history-detail-title">Completed Game</h2>
+          <button
+            id="close-history-button"
+            class="button-secondary button-small"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="history-summary-grid">
+          <div class="summary-card">
+            <span class="label">Result</span>
+            <strong id="history-detail-result">-</strong>
+          </div>
+          <div class="summary-card">
+            <span class="label">Difficulty</span>
+            <strong id="history-detail-difficulty">-</strong>
+          </div>
+          <div class="summary-card">
+            <span class="label">Player Side</span>
+            <strong id="history-detail-player">-</strong>
+          </div>
+          <div class="summary-card">
+            <span class="label">Completed</span>
+            <strong id="history-detail-completed">-</strong>
+          </div>
+        </div>
+
+        <div class="replay-layout">
+          <div class="replay-board-column">
+            <div id="replay-board" class="replay-board"></div>
+            <div class="replay-controls">
+              <button id="replay-back" type="button" class="button-secondary button-small" disabled>&#8592; Back</button>
+              <span id="replay-step-label" class="replay-step-label">Start</span>
+              <button id="replay-forward" type="button" class="button-secondary button-small" disabled>Forward &#8594;</button>
+            </div>
+          </div>
+          <div class="replay-sidebar">
+            <div class="history-block replay-sidebar-block">
+              <span class="label">Move List</span>
+              <div id="history-detail-moves" class="history-move-list replay-move-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="history-detail-grid">
+          <div class="history-block">
+            <span class="label">Status</span>
+            <p id="history-detail-status" class="detail-copy">-</p>
+          </div>
+          <div class="history-block">
+            <span class="label">PGN</span>
+            <pre id="history-detail-pgn" class="history-pgn">-</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
