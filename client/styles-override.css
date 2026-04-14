@@ -2818,6 +2818,24 @@ button,
   color: rgba(201, 168, 76, 0.48) !important;
 }
 
+/* Board-mode scoped fixes */
+.shell[data-board-view-mode="2d"] .board-shell::after {
+  content: none !important;
+  box-shadow: none !important;
+}
+
+.shell[data-board-view-mode="2d"] #game-view .board {
+  box-shadow: none !important;
+}
+
+.shell[data-board-view-mode="2d"] #game-view .board-player-row {
+  backdrop-filter: none !important;
+}
+
+.shell[data-board-view-mode="3d"] #game-view .board-player-row {
+  display: none !important;
+}
+
 .hall-random-wheel-kicker {
   margin: 0 !important;
   font-size: 8px !important;
@@ -2836,6 +2854,21 @@ button,
 #mp-create-game-button {
   white-space: nowrap !important;
   font-size: 11px !important;
+}
+
+@media (max-width: 640px) {
+  .immersive-controls[data-mount="panel"] .immersive-control-row button:first-child {
+    white-space: nowrap !important;
+    line-height: normal !important;
+  }
+
+  .immersive-controls[data-mount="panel"] #immersive-exit-button {
+    white-space: normal !important;
+    line-height: 1.1 !important;
+    text-align: center !important;
+    height: auto !important;
+    min-height: 34px !important;
+  }
 }
 
 

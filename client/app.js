@@ -32,8 +32,47 @@ const GUEST_STORAGE_KEY = "arcane-chess-guest-profile";
 const RECORD_VIEW_STORAGE_KEY = "arcane-chess-record-view";
 const LOBBY_MODE_STORAGE_KEY = "arcane-chess-lobby-mode";
 const VIEW_STORAGE_KEY = "arcane-chess-view";
+const MUTED_STORAGE_KEY = "arcane-chess-muted";
+const MULTIPLAYER_ROOM_STORAGE_KEY = "arcane-chess-room-id";
 const VALID_APP_VIEWS = new Set(["auth", "hall", "game"]);
 const QUICK_PLAY_TIME_CONTROL_ID = "blitz-5";
+
+const getStoredBoolean = (key) => {
+  const rawValue = window.localStorage.getItem(key);
+
+  if (rawValue === "true") {
+    return true;
+  }
+
+  if (rawValue === "false") {
+    return false;
+  }
+
+  return null;
+};
+
+const getStoredRoomId = () => {
+  const rawValue = String(window.localStorage.getItem(MULTIPLAYER_ROOM_STORAGE_KEY) || "")
+    .trim()
+    .toUpperCase();
+
+  return rawValue || null;
+};
+
+const setStoredRoomId = (roomId) => {
+  const normalizedRoomId = String(roomId || "").trim().toUpperCase();
+
+  if (!normalizedRoomId) {
+    window.localStorage.removeItem(MULTIPLAYER_ROOM_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(MULTIPLAYER_ROOM_STORAGE_KEY, normalizedRoomId);
+};
+
+const clearStoredRoomId = () => {
+  window.localStorage.removeItem(MULTIPLAYER_ROOM_STORAGE_KEY);
+};
 
 const PIECES = {
   white: {
@@ -358,8 +397,8 @@ const state = {
   savedGames: [],
   history: [],
   persistence: {
-    available: false,
-    status: "disconnected"
+    available: true,
+    status: "connected"
   },
   historyDetailLoading: false,
   historyModalOpen: false,
@@ -372,6 +411,7 @@ const state = {
     connected: false,
     roomId: null,
     color: null,
+    opponentDisplayName: null,
     phase: "idle",
     queued: false,
     queuePosition: null,
@@ -428,7 +468,7 @@ const ambientTracks = {
 };
 
 const ambientState = {
-  muted: false,
+  muted: getStoredBoolean(MUTED_STORAGE_KEY) ?? false,
   unlocked: false,
   activeKey: null,
   transitionId: 0,
@@ -1065,7 +1105,7 @@ const renderMultiplayerRealtimeControls = () => {
             ? "queued"
           : "idle";
     multiplayerConnectionStatus.textContent = state.multiplayer.connected
-      ? `Socket connected (${phaseLabel})${queueSuffix}`
+      ? `Hall link live (${phaseLabel})${queueSuffix}`
       : "";
   }
 };
@@ -1243,6 +1283,7 @@ const unlockAmbientMusic = () => {
 
 const setAmbientMuted = (muted) => {
   ambientState.muted = muted;
+  window.localStorage.setItem(MUTED_STORAGE_KEY, muted ? "true" : "false");
 
   if (muted) {
     stopAmbientMusic();
@@ -1332,7 +1373,7 @@ const renderMultiplayerLobby = () => {
       multiplayerPresencePill.textContent = "Ready";
       multiplayerPresencePill.className = "pill pill-ok";
     } else {
-      multiplayerPresencePill.textContent = "Preview";
+      multiplayerPresencePill.textContent = "Ready";
       multiplayerPresencePill.className = "pill";
     }
   }
@@ -1346,7 +1387,7 @@ const renderMultiplayerLobby = () => {
         "Searching for a Blitz 5 opponent now. Stay on this page while queued.";
     } else if (showDashboard && state.multiplayer.connected) {
       multiplayerStatusCopy.textContent =
-        "Live socket connected. Click Online Quick Play to queue instantly for Blitz 5.";
+        "The duel channel is open. Click Online Quick Play to queue instantly for Blitz 5.";
     } else if (!persistenceAvailable) {
       multiplayerStatusCopy.textContent =
         "MongoDB is offline, so presence, invites, and PvP history stay parked until persistence returns.";
@@ -1414,6 +1455,7 @@ const setLobbyMode = (mode = "solo") => {
     applyQueueStatusState({ queued: false });
     state.multiplayer.roomId = null;
     state.multiplayer.color = null;
+    state.multiplayer.opponentDisplayName = null;
     state.multiplayer.phase = "idle";
   }
 
@@ -1456,9 +1498,23 @@ const applyMultiplayerSocketState = (socketState) => {
     return;
   }
 
+  const myColor = socketState.youAre === "white" || socketState.youAre === "black"
+    ? socketState.youAre
+    : null;
+  const opponentColor = myColor === "white" ? "black" : myColor === "black" ? "white" : null;
+  const opponentNameFromPlayers = opponentColor
+    ? socketState?.players?.[opponentColor]?.name
+    : null;
+  const normalizedOpponentName = String(opponentNameFromPlayers || "").trim();
+  state.multiplayer.opponentDisplayName = normalizedOpponentName || null;
+
   state.multiplayer.roomId = socketState.roomId || state.multiplayer.roomId;
   state.multiplayer.color = socketState.youAre || state.multiplayer.color;
   state.multiplayer.phase = socketState.phase || state.multiplayer.phase;
+
+  if (state.multiplayer.roomId) {
+    setStoredRoomId(state.multiplayer.roomId);
+  }
 
   applyGameState(
     {
@@ -1519,6 +1575,11 @@ const ensureMultiplayerSocket = () => {
     state.multiplayer.queuePosition = null;
     state.multiplayer.queueTimeControlId = null;
     state.multiplayer.phase = "active";
+    state.multiplayer.roomId = payload.roomId || state.multiplayer.roomId;
+
+    if (state.multiplayer.roomId) {
+      setStoredRoomId(state.multiplayer.roomId);
+    }
 
     state.view = "game";
     renderView();
@@ -1622,7 +1683,9 @@ const leaveMultiplayerRoom = () => {
   state.multiplayer.socket.emit("multiplayer:leave");
   state.multiplayer.roomId = null;
   state.multiplayer.color = null;
+  state.multiplayer.opponentDisplayName = null;
   state.multiplayer.phase = "idle";
+  clearStoredRoomId();
   renderMultiplayerLobby();
 };
 
@@ -1718,11 +1781,79 @@ const handleQuickPlayClick = async () => {
   await joinMatchmakingQueue();
 };
 
+let startupRoomRejoinAttempted = false;
+
+const attemptStartupRoomRejoin = async () => {
+  if (startupRoomRejoinAttempted) {
+    return;
+  }
+
+  startupRoomRejoinAttempted = true;
+
+  if (state.multiplayer.roomId) {
+    return;
+  }
+
+  const savedRoomId = getStoredRoomId();
+
+  if (!savedRoomId) {
+    return;
+  }
+
+  const hasIdentity = isAuthenticated() || Boolean(state.guest?.guestId);
+
+  if (!hasIdentity) {
+    return;
+  }
+
+  const socket = ensureMultiplayerSocket();
+
+  if (!socket) {
+    return;
+  }
+
+  const tryRejoin = async () => {
+    try {
+      const socketState = await emitMultiplayerEvent("multiplayer:join", {
+        roomId: savedRoomId,
+        displayName: getMultiplayerDisplayName()
+      });
+
+      setApiHealth(true);
+      state.view = "game";
+      renderView();
+      await launchSelectedBoard({
+        trigger: "Refresh Rejoin"
+      });
+      applyMultiplayerSocketState(socketState);
+    } catch {
+      clearStoredRoomId();
+      state.multiplayer.roomId = null;
+      state.multiplayer.color = null;
+      state.multiplayer.opponentDisplayName = null;
+      state.multiplayer.phase = "idle";
+      renderMultiplayerLobby();
+      syncActionButtons();
+    }
+  };
+
+  if (socket.connected) {
+    await tryRejoin();
+    return;
+  }
+
+  socket.once("connect", () => {
+    void tryRejoin();
+  });
+};
+
 const rejoinMultiplayerMatch = async () => {
   if (!state.multiplayer.roomId) {
     setCoachMessage("No active multiplayer room found.", "Create or join a room to start a live match.");
     return;
   }
+
+  setStoredRoomId(state.multiplayer.roomId);
 
   state.view = "game";
   renderView();
@@ -2592,6 +2723,12 @@ const getResolvedTimeControl = (timeControl = null) => {
         ? timeControl.id
         : "untimed";
   const preset = TIME_CONTROL_PRESETS[id] || TIME_CONTROL_PRESETS.untimed;
+  const baseSeconds = Number.isFinite(Number(timeControl?.baseSeconds))
+    ? Math.max(0, Number(timeControl.baseSeconds))
+    : Math.max(0, Math.round(Number(timeControl?.baseMs ?? preset.baseMs ?? 0) / 1000));
+  const incrementSeconds = Number.isFinite(Number(timeControl?.incrementSeconds))
+    ? Math.max(0, Number(timeControl.incrementSeconds))
+    : Math.max(0, Math.round(Number(timeControl?.incrementMs ?? preset.incrementMs ?? 0) / 1000));
 
   return {
     id,
@@ -2599,8 +2736,10 @@ const getResolvedTimeControl = (timeControl = null) => {
     enabled: Boolean(
       typeof timeControl?.enabled === "boolean" ? timeControl.enabled : preset.enabled
     ),
-    baseMs: Number(timeControl?.baseMs ?? preset.baseMs ?? 0),
-    incrementMs: Number(timeControl?.incrementMs ?? preset.incrementMs ?? 0)
+    baseSeconds,
+    incrementSeconds,
+    baseMs: baseSeconds * 1000,
+    incrementMs: incrementSeconds * 1000
   };
 };
 
@@ -2634,7 +2773,7 @@ const getClockDisplayState = (clockState = state.game?.clockState) => {
 
 const formatClockMs = (milliseconds = 0) => {
   const clampedMs = Math.max(0, Math.floor(milliseconds));
-  const totalSeconds = Math.ceil(clampedMs / 1000);
+  const totalSeconds = Math.floor(clampedMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
 
@@ -2674,6 +2813,17 @@ const getLocalPlayerDisplayName = () =>
   isAuthenticated()
     ? getSessionDisplayName()
     : state.guest?.displayName || "Guest";
+
+const resolveOpponentDisplayName = () => {
+  if (state.game?.actorType === "multiplayer") {
+    const multiplayerOpponentName = String(state.multiplayer?.opponentDisplayName || "").trim();
+    if (multiplayerOpponentName) {
+      return multiplayerOpponentName;
+    }
+  }
+
+  return "Stockfish";
+};
 
 const getGuestHeaders = () =>
   state.guest?.guestId ? { "X-Guest-Id": state.guest.guestId } : {};
@@ -2750,9 +2900,7 @@ const renderSessionUi = () => {
       authSessionPill.className = persistenceAvailable ? "pill" : "pill pill-error";
     }
     if (authSessionCopy) {
-      authSessionCopy.textContent = persistenceAvailable
-        ? "Accounts sync unfinished and completed games beyond this browser."
-        : "MongoDB is offline, so account sign-in and long-term sync are unavailable right now.";
+      authSessionCopy.textContent = getMongoSessionCopy(persistenceAvailable);
     }
     if (authGuestView) {
       authGuestView.classList.remove("hidden");
@@ -3005,6 +3153,34 @@ const setPersistence = (persistence = {}) => {
   syncActionButtons();
 };
 
+const getMongoSessionCopy = (persistenceAvailable) =>
+  persistenceAvailable
+    ? "Sign in to sync your games and continue across devices."
+    : "MongoDB is offline, so account sign-in and sync are unavailable.";
+
+const syncPersistenceFromHealth = async () => {
+  try {
+    const payload = await request("/api/health");
+    const mongoStatus = payload.db || payload.database || payload?.features?.persistence?.status;
+    const mongoConnected =
+      mongoStatus === "connected" || mongoStatus === "mongo-ready" || payload.ready === true;
+
+    setPersistence({
+      available: mongoConnected,
+      status: mongoStatus || (mongoConnected ? "connected" : "disconnected")
+    });
+
+    return mongoConnected;
+  } catch (error) {
+    setPersistence({
+      available: false,
+      status: "disconnected"
+    });
+
+    return false;
+  }
+};
+
 const animateCoachMessage = () => {
   if (!coachBubbleCopy) {
     return;
@@ -3224,17 +3400,16 @@ const renderClockCard = ({
   const playerColor = gameState?.settings?.playerColor || getChosenColor();
   const isPlayerSide = color === playerColor;
   const rowElement = cardElement.closest(".board-player-row");
-  const startingTimeLabel =
-    timeControl.id === "untimed" ? "UNTIMED" : formatClockMs(timeControl.baseMs);
 
   labelElement.textContent = roleLabel;
   sideElement.textContent = `${formatColor(color)} pieces`;
   rowElement?.setAttribute("data-player-side", isPlayerSide ? "self" : "opponent");
+  metaElement.textContent = "";
+  metaElement.hidden = true;
+  metaElement.classList.add("hidden");
 
   if (!clockDisplayState?.enabled) {
-    timeElement.textContent = startingTimeLabel;
-    metaElement.textContent = "";
-    metaElement.classList.toggle("hidden", !metaElement.textContent);
+    timeElement.textContent = "--:--";
     cardElement.dataset.active = "false";
     cardElement.dataset.urgent = "false";
     cardElement.dataset.untimed = timeControl.id === "untimed" ? "true" : "false";
@@ -3253,24 +3428,88 @@ const renderClockCard = ({
       gameState?.status?.code === "draw-timeout-insufficient-material") &&
     clockDisplayState.activeColor === color;
 
-  sideElement.textContent = isActive
-    ? `${formatColor(color)} to move`
-    : `${formatColor(color)} pieces`;
   timeElement.textContent = formatClockMs(remainingMs);
-  metaElement.textContent = flagged
-    ? "Flag"
-    : gameState?.isGameOver
-      ? `Stopped · ${timeControl.label}`
-      : `${isActive ? "Running" : "Waiting"} · ${timeControl.label}${
-          timeControl.incrementMs
-            ? ` · +${Math.round(timeControl.incrementMs / 1000)}`
-            : ""
-        }`;
-  metaElement.classList.toggle("hidden", !metaElement.textContent);
   cardElement.dataset.active = isActive ? "true" : "false";
   cardElement.dataset.urgent = isUrgent ? "true" : "false";
   cardElement.dataset.untimed = "false";
   rowElement?.setAttribute("data-active", isActive ? "true" : "false");
+};
+
+const ensure3DClockNode = (id, positionCss) => {
+  if (!board3dElement) {
+    return null;
+  }
+
+  let node = document.getElementById(id);
+
+  if (!node) {
+    node = document.createElement("div");
+    node.id = id;
+    node.style.cssText = `
+      position:absolute; left:20px; ${positionCss}
+      padding:4px 8px; min-width:72px; box-sizing:border-box;
+      border-radius:999px; pointer-events:none; z-index:1002;
+      text-align:center; font-size:0.76rem; font-weight:600;
+      letter-spacing:0.08em; text-transform:uppercase;
+      color:#f6ead2; background:rgba(10, 9, 12, 0.28);
+      border:1px solid rgba(255, 223, 173, 0.08);
+      text-shadow:0 0 8px rgba(201, 168, 76, 0.45);
+      backdrop-filter: blur(8px);
+    `;
+    board3dElement.appendChild(node);
+  }
+
+  return node;
+};
+
+const render3DClockHud = () => {
+  if (state.boardViewMode !== "3d" || !board3dElement) {
+    return;
+  }
+
+  const gameState = state.game;
+  const boardClockColors = getBoardClockColors(gameState);
+  const clockDisplayState = getClockDisplayState(gameState?.clockState);
+
+  const topClockNode = ensure3DClockNode("hud-opponent-clock", "top:36px;");
+  const bottomClockNode = ensure3DClockNode("hud-player-clock", "bottom:36px;");
+
+  const applyClockNode = (node, color) => {
+    if (!node) {
+      return;
+    }
+
+    const remainingMs = color === "black" ? clockDisplayState?.blackMs : clockDisplayState?.whiteMs;
+    const isActive =
+      Boolean(clockDisplayState?.enabled) &&
+      clockDisplayState?.isRunning &&
+      clockDisplayState?.activeColor === color &&
+      !gameState?.isGameOver;
+    const isUrgent = Boolean(clockDisplayState?.enabled && remainingMs <= 30000);
+    const isUntimed = !clockDisplayState?.enabled;
+
+    node.textContent = isUntimed ? "--:--" : formatClockMs(remainingMs);
+    node.style.color = isUntimed
+      ? "#8a7a5a"
+      : isActive
+        ? "#f0c269"
+        : isUrgent
+          ? "#d46060"
+          : "#f6ead2";
+    node.style.borderColor = isUntimed
+      ? "rgba(255, 223, 173, 0.06)"
+      : isActive
+        ? "rgba(240, 194, 105, 0.2)"
+        : isUrgent
+          ? "rgba(212, 96, 96, 0.24)"
+          : "rgba(255, 223, 173, 0.08)";
+    node.dataset.active = isActive ? "true" : "false";
+    node.dataset.urgent = isUrgent ? "true" : "false";
+    node.dataset.untimed = isUntimed ? "true" : "false";
+  };
+
+  applyClockNode(topClockNode, boardClockColors.top);
+  applyClockNode(bottomClockNode, boardClockColors.bottom);
 };
 
 const renderAuthMode = () => {
@@ -3297,7 +3536,9 @@ const renderClocks = () => {
     timeElement: topClockTime,
     metaElement: topClockMeta,
     roleLabel:
-      boardClockColors.top === playerColor ? getLocalPlayerDisplayName() : "Stockfish",
+      boardClockColors.top === playerColor
+        ? getLocalPlayerDisplayName()
+        : resolveOpponentDisplayName(),
     color: boardClockColors.top,
     clockDisplayState,
     timeControl,
@@ -3313,12 +3554,14 @@ const renderClocks = () => {
     roleLabel:
       boardClockColors.bottom === playerColor
         ? getLocalPlayerDisplayName()
-        : "Stockfish",
+        : resolveOpponentDisplayName(),
     color: boardClockColors.bottom,
     clockDisplayState,
     timeControl,
     gameState
   });
+
+  render3DClockHud();
 };
 
 const syncTimedGameState = async () => {
@@ -5271,12 +5514,12 @@ const renderImmersiveHud = () => {
 
   if (gameOverCopy) {
     immersiveStatusHeading.textContent = gameOverCopy.message;
-    immersiveStatusMeta.textContent = `${playerName} vs Stockfish`;
+    immersiveStatusMeta.textContent = `${playerName} vs ${resolveOpponentDisplayName()}`;
     return;
   }
 
   immersiveStatusHeading.textContent = `${turnLabel} to move · Last: ${lastMoveLabel}`;
-  immersiveStatusMeta.textContent = `${playerName} vs Stockfish`;
+  immersiveStatusMeta.textContent = `${playerName} vs ${resolveOpponentDisplayName()}`;
 };
 
 const renderBoardSurface = () => {
@@ -6566,13 +6809,19 @@ const initialize = async () => {
   renderSessionUi();
   setRecordView(state.activeRecordView);
   syncBoardViewUi();
+  updateAmbientToggleLabel();
+
+  await syncPersistenceFromHealth();
 
   try {
     await ensureGuestSession();
     const sessionPayload = await loadSession();
-    const savedView = !sessionPayload?.authenticated ? null : getSavedView();
+    const savedView = getSavedView();
+    const restoredAuthenticatedView = savedView === "game" || savedView === "hall"
+      ? savedView
+      : "hall";
     const desiredView = sessionPayload?.authenticated
-      ? savedView || "hall"
+      ? restoredAuthenticatedView
       : "auth";
 
     state.view = desiredView;
@@ -6588,6 +6837,8 @@ const initialize = async () => {
     } else {
       renderView();
     }
+
+    await attemptStartupRoomRejoin();
 
     await refreshCollections();
     setApiHealth(true);
@@ -7001,8 +7252,22 @@ const switchTo3D = async () => {
   });
 
   // Remove old nameplates if re-entering 3D
-  document.getElementById('hud-player-name')?.remove();
-  document.getElementById('hud-opponent-name')?.remove();
+  const existingHudPlayerName = document.getElementById('hud-player-name');
+  if (existingHudPlayerName) {
+    existingHudPlayerName.remove();
+  }
+  const existingHudOpponentName = document.getElementById('hud-opponent-name');
+  if (existingHudOpponentName) {
+    existingHudOpponentName.remove();
+  }
+  const existingHudPlayerClock = document.getElementById('hud-player-clock');
+  if (existingHudPlayerClock) {
+    existingHudPlayerClock.remove();
+  }
+  const existingHudOpponentClock = document.getElementById('hud-opponent-clock');
+  if (existingHudOpponentClock) {
+    existingHudOpponentClock.remove();
+  }
 
   const playerColor = getBoardPerspectiveColor();
   const playerName = getLocalPlayerDisplayName();
@@ -7026,8 +7291,10 @@ const switchTo3D = async () => {
     text-transform:uppercase; pointer-events:none; z-index:1002;
     text-shadow: 0 0 6px rgba(100,80,40,0.5);
   `;
-  opponentPlate.textContent = `Stockfish · ${playerColor === 'white' ? 'black' : 'white'}`;
+  opponentPlate.textContent = `${resolveOpponentDisplayName()} · ${playerColor === 'white' ? 'black' : 'white'}`;
   board3dElement.appendChild(opponentPlate);
+
+  render3DClockHud();
 
   if (!board3dElement.dataset.arcaneHoverBound) {
     board3dElement.addEventListener('mousemove', (e) => {

@@ -15,6 +15,7 @@ router.get("/", (request, response) => {
     status: ready ? "ok" : "degraded",
     ready,
     service: "arcane-chess",
+    db: getMongoStatus(),
     database: getMongoStatus(),
     timestamp: new Date().toISOString(),
     features: {
