@@ -45,7 +45,6 @@ import {
 } from "./app/render-view.js";
 import {
   configureRenderBoardDependencies,
-  destroyMiniBoardTooltip,
   renderBoard,
   renderBoardOverlays,
   renderBoardSurface,
@@ -53,7 +52,9 @@ import {
   renderGameOverBanner,
   renderHintPanel,
   renderMoveList,
-  showMiniBoardTooltip,
+  animateMiniBoard,
+  hideMiniBoard,
+  showMiniBoard,
   switchTo2D,
   switchTo3D
 } from "./app/render-board.js";
@@ -678,7 +679,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", () => {
-  destroyMiniBoardTooltip();
+  hideMiniBoard();
   getArcaneBoard3D()?.scheduleResize?.({
     immediate: true
   });
@@ -838,6 +839,7 @@ hallRandomTimeControlButton?.addEventListener("click", () => {
   void startNewGame();
 });
 timeControlSelect?.addEventListener("change", () => {
+  timeControlSelect.dataset.userChanged = "true";
   renderClocks();
   renderMultiplayerLobby();
   renderLobbyTimeControlButtons();
@@ -1358,6 +1360,8 @@ hintButton?.addEventListener("click", (event) => {
   void requestHint();
 });
 
+let hoverActive = false;
+
 hintWhyButton?.addEventListener("click", () => {
   const hasHintLine =
     Array.isArray(state.hint?.continuation) && state.hint.continuation.length > 0;
@@ -1371,20 +1375,43 @@ hintWhyButton?.addEventListener("click", () => {
 });
 
 hintWhyButton?.addEventListener("mouseenter", () => {
-  const continuation = Array.isArray(state.hint?.continuation)
-    ? state.hint.continuation.slice(0, 6)
-    : [];
+  if (!state.hint?.fen || !state.hint?.continuation?.length) {
+    return;
+  }
 
-  showMiniBoardTooltip({
+  hoverActive = true;
+  const continuation = state.hint.continuation.slice(0, 6);
+
+  showMiniBoard({
     anchorElement: hintWhyButton,
-    fen: state.hint?.fen || state.game?.fen || "",
-    continuation,
     label: "Hint Why Line"
   });
+  animateMiniBoard(state.hint.fen, continuation, "Hint Why Line");
+
+  const miniBoardTooltip = document.querySelector(".mini-board-tooltip");
+  if (miniBoardTooltip && miniBoardTooltip.dataset.hoverBound !== "true") {
+    miniBoardTooltip.dataset.hoverBound = "true";
+    miniBoardTooltip.addEventListener("mouseenter", () => {
+      hoverActive = true;
+    });
+    miniBoardTooltip.addEventListener("mouseleave", () => {
+      hoverActive = false;
+      setTimeout(() => {
+        if (!hoverActive) {
+          hideMiniBoard();
+        }
+      }, 250);
+    });
+  }
 });
 
 hintWhyButton?.addEventListener("mouseleave", () => {
-  destroyMiniBoardTooltip();
+  hoverActive = false;
+  setTimeout(() => {
+    if (!hoverActive) {
+      hideMiniBoard();
+    }
+  }, 250);
 });
 
 feedbackWhyToggle?.addEventListener("click", () => {

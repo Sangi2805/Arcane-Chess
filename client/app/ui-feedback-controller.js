@@ -731,7 +731,15 @@ export const syncControls = () => {
 
   difficultySelect.value = state.game.settings.difficulty;
   if (timeControlSelect) {
-    timeControlSelect.value = state.game.settings.timeControl?.id || "untimed";
+    const gameTimeId = state.game.settings.timeControl?.id;
+    if (
+      timeControlSelect &&
+      gameTimeId &&
+      document.activeElement !== timeControlSelect &&
+      timeControlSelect.dataset.userChanged !== "true"
+    ) {
+      timeControlSelect.value = gameTimeId;
+    }
   }
   document
     .querySelectorAll('input[name="player-color"]')

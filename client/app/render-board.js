@@ -674,6 +674,19 @@ const renderMiniBoardPosition = (tooltipState, { lastFrom = "", lastTo = "", gho
   });
 };
 
+let miniBoardUI = null;
+
+const ensureMiniBoardUI = ({ title = "Why line preview" } = {}) => {
+  if (!miniBoardUI) {
+    miniBoardUI = createMiniBoardUI({ title });
+    miniBoardUI.root.style.display = "none";
+    miniBoardUI.root.style.pointerEvents = "auto";
+    document.body.appendChild(miniBoardUI.root);
+  }
+
+  return miniBoardUI;
+};
+
 const positionMiniBoardTooltip = (tooltipElement, anchorElement) => {
   const margin = 10;
   const anchorRect = anchorElement.getBoundingClientRect();
@@ -709,14 +722,26 @@ const clearMiniBoardTooltipTimer = () => {
   }
 };
 
-export const destroyMiniBoardTooltip = () => {
+export const hideMiniBoard = () => {
   clearMiniBoardTooltipTimer();
 
-  if (runtimeState.activeMiniBoardTooltip?.root?.parentNode) {
-    runtimeState.activeMiniBoardTooltip.root.parentNode.removeChild(runtimeState.activeMiniBoardTooltip.root);
+  if (runtimeState.activeMiniBoardTooltip?.root) {
+    runtimeState.activeMiniBoardTooltip.root.style.display = "none";
   }
 
   runtimeState.activeMiniBoardTooltip = null;
+};
+
+export const showMiniBoard = ({ anchorElement, label } = {}) => {
+  const ui = ensureMiniBoardUI({ title: label || "Why line preview" });
+
+  ui.root.style.display = "block";
+
+  if (anchorElement) {
+    positionMiniBoardTooltip(ui.root, anchorElement);
+  }
+
+  return ui.root;
 };
 
 const scheduleMiniBoardStep = (tooltipState, delayMs = MINI_BOARD_STEP_MS) => {
@@ -785,8 +810,8 @@ const scheduleMiniBoardStep = (tooltipState, delayMs = MINI_BOARD_STEP_MS) => {
   }, delayMs);
 };
 
-export const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }) => {
-  if (!anchorElement || !fen || !Array.isArray(continuation) || !continuation.length) {
+export const animateMiniBoard = (fen, continuation, label) => {
+  if (!fen || !Array.isArray(continuation) || !continuation.length) {
     return;
   }
 
@@ -799,16 +824,15 @@ export const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }
     return;
   }
 
-  destroyMiniBoardTooltip();
+  clearMiniBoardTooltipTimer();
+  runtimeState.activeMiniBoardTooltip = null;
   runtimeState.miniBoardHoverToken += 1;
 
   const baseState = getMiniBoardStateFromFen(fen);
-  const ui = createMiniBoardUI({
+  const ui = ensureMiniBoardUI({
     title: label || "Why line preview"
   });
-
-  document.body.appendChild(ui.root);
-  positionMiniBoardTooltip(ui.root, anchorElement);
+  ui.root.style.display = "block";
 
   const tooltipState = {
     id: runtimeState.miniBoardHoverToken,
@@ -828,6 +852,17 @@ export const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }
   runtimeState.activeMiniBoardTooltip = tooltipState;
   renderMiniBoardPosition(tooltipState);
   scheduleMiniBoardStep(tooltipState, 360);
+
+  return ui.root;
+};
+
+export const showMiniBoardTooltip = ({ anchorElement, fen, continuation, label }) => {
+  showMiniBoard({ anchorElement, label });
+  return animateMiniBoard(fen, continuation, label);
+};
+
+export const destroyMiniBoardTooltip = () => {
+  hideMiniBoard();
 };
 
 const getPrimaryWhyLineSan = (whyLines = []) => {

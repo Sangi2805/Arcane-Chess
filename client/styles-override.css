@@ -2535,7 +2535,7 @@ body:not(.board-mode-3d) #game-view .coach-bubble {
 .coach-suggestion,
 #feedback-explanation {
   font-family: var(--requested-coach-font) !important;
-  font-style: italic !important;
+  font-style: normal !important;
   font-size: 13px !important;
   font-weight: 400 !important;
   line-height: 1.42 !important;
