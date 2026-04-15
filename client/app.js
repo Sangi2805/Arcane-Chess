@@ -779,19 +779,15 @@ gatewayGuestButton?.addEventListener("click", () => {
 });
 
 hallResumeButton?.addEventListener("click", () => {
-  void enterGameView({ coachContext: "resume", fallbackView: "hall" }).then((restored) => {
-    if (restored) {
-      setRecordView("saves");
-    }
+  void enterGameView({ coachContext: "resume", fallbackView: "hall" }).then(() => {
+    setRecordView("saves");
   });
 });
 
 hallHistoryButton?.addEventListener("click", () => {
-  void enterGameView({ coachContext: "load-active", fallbackView: "hall" }).then((restored) => {
-    if (restored) {
-      setRecordView("history");
-    }
-  });
+  state.view = "hall";
+  renderView();
+  setRecordView("history");
 });
 
 ambientAudioToggleButton?.addEventListener("click", () => {

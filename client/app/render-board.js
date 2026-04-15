@@ -81,6 +81,11 @@ export const renderClocks = () => {
   const gameState = state.game;
   const boardClockColors = renderBoardDeps.getBoardClockColors(gameState);
   const playerColor = gameState?.settings?.playerColor || "white";
+  const isMultiplayer = gameState?.actorType === "multiplayer";
+  const opponentLabel =
+    isMultiplayer && (state.multiplayer?.opponentDisplayName || gameState?.settings?.opponentDisplayName)
+      ? state.multiplayer?.opponentDisplayName || gameState?.settings?.opponentDisplayName
+      : "Stockfish";
   const timeControl = gameState?.hasStarted
     ? getResolvedTimeControl(gameState.settings?.timeControl)
     : getResolvedTimeControl(renderBoardDeps.getSelectedTimeControlId());
@@ -92,7 +97,7 @@ export const renderClocks = () => {
     sideElement: dom.topClockSide,
     timeElement: dom.topClockTime,
     metaElement: dom.topClockMeta,
-    roleLabel: boardClockColors.top === playerColor ? renderBoardDeps.getLocalPlayerDisplayName() : "Stockfish",
+    roleLabel: boardClockColors.top === playerColor ? renderBoardDeps.getLocalPlayerDisplayName() : opponentLabel,
     color: boardClockColors.top,
     clockDisplayState,
     timeControl,
@@ -105,7 +110,7 @@ export const renderClocks = () => {
     sideElement: dom.bottomClockSide,
     timeElement: dom.bottomClockTime,
     metaElement: dom.bottomClockMeta,
-    roleLabel: boardClockColors.bottom === playerColor ? renderBoardDeps.getLocalPlayerDisplayName() : "Stockfish",
+    roleLabel: boardClockColors.bottom === playerColor ? renderBoardDeps.getLocalPlayerDisplayName() : opponentLabel,
     color: boardClockColors.bottom,
     clockDisplayState,
     timeControl,

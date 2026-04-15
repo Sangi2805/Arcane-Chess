@@ -496,14 +496,15 @@ export const renderClockCard = ({
 
 export const syncTimedGameState = async () => {
   const { state } = uiFeedbackDeps;
-  const { applyGameState, request } = uiFeedbackDeps.callbacks;
+  const { applyGameState, isRealtimeMultiplayerGame, request } = uiFeedbackDeps.callbacks;
 
   if (
     state.clockSyncInFlight ||
     state.busy ||
     !isTimedGameState(state.game) ||
     !state.game?.hasStarted ||
-    state.game?.isGameOver
+    state.game?.isGameOver ||
+    isRealtimeMultiplayerGame()
   ) {
     return;
   }
@@ -653,6 +654,11 @@ export const renderImmersiveHud = () => {
   }
 
   const playerName = getLocalPlayerDisplayName();
+  const opponentName =
+    state.game?.actorType === "multiplayer" &&
+    (state.multiplayer?.opponentDisplayName || state.game?.settings?.opponentDisplayName)
+      ? state.multiplayer?.opponentDisplayName || state.game?.settings?.opponentDisplayName
+      : "Stockfish";
   const turnLabel = state.game.turn ? formatColor(state.game.turn) : "-";
   const lastMoveLabel = state.game.lastMove?.san || "None";
   const gameOverCopy = getGameOverCopy(state.game);
@@ -674,12 +680,12 @@ export const renderImmersiveHud = () => {
 
   if (gameOverCopy) {
     immersiveStatusHeading.textContent = gameOverCopy.message;
-    immersiveStatusMeta.textContent = `${playerName} vs Stockfish`;
+    immersiveStatusMeta.textContent = `${playerName} vs ${opponentName}`;
     return;
   }
 
   immersiveStatusHeading.textContent = `${turnLabel} to move · Last: ${lastMoveLabel}`;
-  immersiveStatusMeta.textContent = `${playerName} vs Stockfish`;
+  immersiveStatusMeta.textContent = `${playerName} vs ${opponentName}`;
 };
 
 export const render = () => {
@@ -732,13 +738,17 @@ export const syncControls = () => {
   difficultySelect.value = state.game.settings.difficulty;
   if (timeControlSelect) {
     const gameTimeId = state.game.settings.timeControl?.id;
+    const isRealtimeMultiplayer = state.game.actorType === "multiplayer";
     if (
       timeControlSelect &&
       gameTimeId &&
       document.activeElement !== timeControlSelect &&
-      timeControlSelect.dataset.userChanged !== "true"
+      (isRealtimeMultiplayer || timeControlSelect.dataset.userChanged !== "true")
     ) {
       timeControlSelect.value = gameTimeId;
+      if (isRealtimeMultiplayer) {
+        delete timeControlSelect.dataset.userChanged;
+      }
     }
   }
   document

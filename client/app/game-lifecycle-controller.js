@@ -524,7 +524,7 @@ export const enterGameView = async ({ coachContext = "load-active", fallbackView
     state.game = null;
     gameLifecycleDeps.callbacks.clearSelectedSquare();
     state.view = fallbackView;
-    gameLifecycleDeps.callbacks.render();
+    gameLifecycleDeps.callbacks.renderView();
     return false;
   }
 

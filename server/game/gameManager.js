@@ -679,7 +679,7 @@ const makePlayerMove = async ({ actor, from, to, promotion }) => {
   }
 
   return {
-    game: buildSerializableState(game),
+    game: buildSerializableState(game, { now: moveTimestamp }),
     moveToken,
     pending: {
       coach: Boolean(game.pendingCoachReview),
@@ -921,7 +921,8 @@ const performEngineMove = async (
   }
 
   return buildSerializableState(game, {
-    coachFeedback
+    coachFeedback,
+    now: moveTimestamp
   });
 };
 

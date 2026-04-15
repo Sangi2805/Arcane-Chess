@@ -29,6 +29,7 @@ export const state = {
     socket: null,
     connected: false,
     roomId: null,
+    opponentDisplayName: null,
     color: null,
     phase: "idle",
     queued: false,

@@ -126,6 +126,14 @@ export const applyMultiplayerSocketState = (socketState) => {
   state.multiplayer.roomId = socketState.roomId || state.multiplayer.roomId;
   state.multiplayer.color = socketState.youAre || state.multiplayer.color;
   state.multiplayer.phase = socketState.phase || state.multiplayer.phase;
+  if (typeof socketState.opponentName === "string" && socketState.opponentName.trim()) {
+    state.multiplayer.opponentDisplayName = socketState.opponentName.trim();
+  } else if (socketState.players && socketState.youAre) {
+    const opponentColor = socketState.youAre === "white" ? "black" : "white";
+    const opponentName = socketState.players[opponentColor]?.name;
+    state.multiplayer.opponentDisplayName =
+      typeof opponentName === "string" && opponentName.trim() ? opponentName.trim() : null;
+  }
 
   multiplayerDeps.game.applyGameState(
     {
@@ -175,7 +183,8 @@ export const joinMatchmakingQueue = async () => {
 
   try {
     const queueState = await multiplayerDeps.realtime.emitMultiplayerEvent("queue:join", {
-      actor: getMultiplayerActorPayload()
+      actor: getMultiplayerActorPayload(),
+      timeControlId: QUICK_PLAY_TIME_CONTROL_ID
     });
 
     multiplayerDeps.ui.setApiHealth(true);

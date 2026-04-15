@@ -1,6 +1,7 @@
 const { randomUUID } = require("crypto");
 
 const { applyMove, createChessGame, serializeGame } = require("../services/chessService");
+const { createClockState, getClockStateView, switchClockTurn } = require("../services/clockService");
 
 const WAITING_STATUS = {
   code: "waiting-opponent",
@@ -177,6 +178,12 @@ const buildPerspectiveState = (room, playerColor) => {
   const hasStarted = hasBothPlayers(room);
   const resolved = getResolvedResult(snapshot, hasStarted, room.manualOutcome || null);
   const timeControl = room.timeControl || UNTYPED_TIME_CONTROL;
+  const clockStateView = hasStarted ? getClockStateView(room.clockState) : null;
+  const clockState = clockStateView
+    ? { ...clockStateView, serverNow: new Date().toISOString() }
+    : null;
+  const opponentColor = playerColor === "white" ? "black" : "white";
+  const opponentDisplayName = room.players[opponentColor]?.name || null;
   const pendingDrawOffer =
     !resolved.isGameOver && room.pendingDrawOffer
       ? {
@@ -199,7 +206,8 @@ const buildPerspectiveState = (room, playerColor) => {
       difficulty: "easy",
       playerColor,
       engineColor: playerColor === "white" ? "black" : "white",
-      timeControl
+      timeControl,
+      opponentDisplayName
     },
     persistence: {
       available: true,
@@ -207,7 +215,7 @@ const buildPerspectiveState = (room, playerColor) => {
     },
     ...snapshot,
     timeControl,
-    clockState: null,
+    clockState,
     turn: resolved.turn,
     legalMoves: resolved.legalMoves,
     isGameOver: resolved.isGameOver,
@@ -222,6 +230,8 @@ const buildPerspectiveState = (room, playerColor) => {
 const emitRoomState = (io, room, extras = {}) => {
   ["white", "black"].forEach((color) => {
     const player = room.players[color];
+    const opponentColor = color === "white" ? "black" : "white";
+    const opponentName = room.players[opponentColor]?.name || null;
 
     if (!player) {
       return;
@@ -230,6 +240,7 @@ const emitRoomState = (io, room, extras = {}) => {
     io.to(player.socketId).emit("multiplayer:state", {
       roomId: room.id,
       youAre: color,
+      opponentName,
       players: getPublicPlayers(room),
       phase: hasBothPlayers(room) ? "active" : "waiting",
       game: buildPerspectiveState(room, color),
@@ -316,6 +327,13 @@ const createRoomFromQueuePair = (io, firstEntry, secondEntry) => {
     return;
   }
 
+  const queuedTimeControlId =
+    firstEntry.timeControlId || secondEntry.timeControlId || BLITZ_FIVE_TIME_CONTROL.id;
+  const matchedTimeControl =
+    queuedTimeControlId === BLITZ_FIVE_TIME_CONTROL.id
+      ? BLITZ_FIVE_TIME_CONTROL
+      : BLITZ_FIVE_TIME_CONTROL;
+
   const roomId = createRoomId();
   const now = new Date().toISOString();
   const room = {
@@ -323,7 +341,8 @@ const createRoomFromQueuePair = (io, firstEntry, secondEntry) => {
     chess: createChessGame(),
     createdAt: now,
     updatedAt: now,
-    timeControl: BLITZ_FIVE_TIME_CONTROL,
+    timeControl: matchedTimeControl,
+    clockState: createClockState(matchedTimeControl, "white"),
     pendingDrawOffer: null,
     players: {
       white: {
@@ -351,14 +370,14 @@ const createRoomFromQueuePair = (io, firstEntry, secondEntry) => {
     roomId,
     youAre: "white",
     opponentName: secondEntry.displayName,
-    timeControl: BLITZ_FIVE_TIME_CONTROL
+    timeControl: matchedTimeControl
   });
 
   secondSocket.emit("match:found", {
     roomId,
     youAre: "black",
     opponentName: firstEntry.displayName,
-    timeControl: BLITZ_FIVE_TIME_CONTROL
+    timeControl: matchedTimeControl
   });
 
   emitRoomState(io, room, {
@@ -724,6 +743,14 @@ const attachRealtimeHub = (io) => {
           throw new Error("Illegal move.");
         }
 
+        if (room.clockState?.enabled) {
+          room.clockState = switchClockTurn(
+            room.clockState,
+            playerColor,
+            room.chess.turn() === "b" ? "black" : "white"
+          );
+        }
+
         room.updatedAt = new Date().toISOString();
 
         const state = {
@@ -771,6 +798,7 @@ const attachRealtimeHub = (io) => {
         const queueEntry = {
           ...actor,
           socketId: socket.id,
+          timeControlId: payload.timeControlId || BLITZ_FIVE_TIME_CONTROL.id,
           queuedAt: Date.now()
         };
 
