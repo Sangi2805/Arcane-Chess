@@ -993,6 +993,10 @@ body.hall-view .play-area {
   min-height: 34px !important;
 }
 
+.hall-card-archive .lobby-actions button:only-child {
+  grid-column: 1 / -1 !important;
+}
+
 .game-command-strip {
   display: grid !important;
   gap: 10px !important;
