@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(wc -l *.js *.html *.css)",
-      "Bash(wc -l 3d/*.js)"
-    ]
-  }
-}
