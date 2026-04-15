@@ -2,7 +2,7 @@ Project Group Members:
 
 Group Member Sangaranarayanan Sangaranarayanan Viswanathan 202583140 ssangaranara@mun.ca
 Group Member Md Shahriar Rashid 202580849 msrashid@mun.ca
-Project URL 
+Project URL : https://github.com/Sangi2805/Arcane-Chess.git
 
 Paste your hosted web application URL here so I can test it : https://groupH.stu.researchatmun.ca
 Project Videos:
